@@ -1,0 +1,1330 @@
+export const CREW_SCHEDULE_DATA = {
+  "year": 2026,
+  "source": "2026_ Crew Schedules (Master).xlsm",
+  "sheet": "Crew - Schedule - 2026",
+  "note": "Imported from Crew - Schedule - 2026. Calendar year is 2026. Day cells are event marks (site In / Out); the app expands each mark forward until the next event. Excel serials and 1900 placeholder dates are ignored.",
+  "sites": {
+    "IQA": "Iqaluit",
+    "POND": "Pond Inlet",
+    "ALRT": "Alert",
+    "KUG": "Kugluktuk",
+    "YK": "Yellowknife",
+    "YEG": "Edmonton",
+    "YF": "Airport / transfer",
+    "Out": "Off rotation",
+    "In": "Arriving",
+    "Transfer": "In transit"
+  },
+  "projects": [
+    {
+      "id": "alert-1184",
+      "name": "Alert - 1184",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "apex-bridge-2418",
+      "name": "Apex Bridge - 2418",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "astro-hill-suites-2025",
+      "name": "Astro Hill Suites - 2025",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "av328",
+      "name": "AV328",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "birchcliff-demos-42-plex",
+      "name": "Birchcliff Demos - 42 Plex",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "blasting-crushing",
+      "name": "Blasting/Crushing",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "cctv",
+      "name": "CCTV",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "cold-patch-multiple",
+      "name": "Cold Patch - Multiple",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "federal-road",
+      "name": "Federal Road",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "fol-site-ryfan",
+      "name": "FOL Site - Ryfan",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "garage-yard",
+      "name": "Garage & Yard",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "kugluktuq-runway-1188-2025",
+      "name": "Kugluktuq Runway - 1188 - 2025",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "lookout-services",
+      "name": "Lookout - Services",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "new-housing",
+      "name": "New Housing",
+      "year": 2026,
+      "source": "schedule-side"
+    },
+    {
+      "id": "northview-demos-1088",
+      "name": "Northview Demos 1088",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "nrc-2308",
+      "name": "NRC - 2308",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "side-1",
+      "name": "Side 1",
+      "year": 2026,
+      "source": "schedule-side"
+    },
+    {
+      "id": "side-2",
+      "name": "Side 2",
+      "year": 2026,
+      "source": "schedule-side"
+    },
+    {
+      "id": "trigram-2025",
+      "name": "Trigram - 2025",
+      "year": 2026,
+      "source": "required-staff"
+    },
+    {
+      "id": "wtp-slab-extension",
+      "name": "WTP Slab Extension",
+      "year": 2026,
+      "source": "required-staff"
+    }
+  ],
+  "people": [
+    {
+      "id": "bernie-labourers",
+      "name": "Bernie",
+      "role": "Labourers",
+      "homeSites": [
+        "ALRT",
+        "IQA"
+      ],
+      "projectIds": [
+        "side-2"
+      ],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-04-27",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-06-25",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-07-13",
+          "mark": "ALRT"
+        },
+        {
+          "date": "2026-07-14",
+          "mark": "ALRT"
+        },
+        {
+          "date": "2026-08-18",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-30",
+          "mark": "IQA"
+        }
+      ]
+    },
+    {
+      "id": "brad-rubia-labourers",
+      "name": "Brad Rubia",
+      "role": "Labourers",
+      "homeSites": [
+        "KUG",
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-08-04",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-05",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-17",
+          "mark": "YEG"
+        },
+        {
+          "date": "2026-08-19",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-21",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-10-17",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "javi-labourers",
+      "name": "Javi",
+      "role": "Labourers",
+      "homeSites": [
+        "ALRT",
+        "IQA"
+      ],
+      "projectIds": [
+        "side-2"
+      ],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-05-01",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-06-25",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-07-13",
+          "mark": "ALRT"
+        },
+        {
+          "date": "2026-07-14",
+          "mark": "ALRT"
+        },
+        {
+          "date": "2026-08-18",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-31",
+          "mark": "IQA"
+        }
+      ]
+    },
+    {
+      "id": "jf-labourers",
+      "name": "JF",
+      "role": "Labourers",
+      "homeSites": [
+        "IQA"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-05-12",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-07-02",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-12",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-05",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "kevin-barrieau-labourers",
+      "name": "Kevin Barrieau",
+      "role": "Labourers",
+      "homeSites": [
+        "IQA"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": []
+    },
+    {
+      "id": "louis-labourers",
+      "name": "Louis",
+      "role": "Labourers",
+      "homeSites": [
+        "IQA"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-04-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-06-10",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-10",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "marc-olivier-labourers",
+      "name": "Marc Olivier",
+      "role": "Labourers",
+      "homeSites": [
+        "IQA"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-10-16",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-24",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "marjorie-labourers",
+      "name": "Marjorie",
+      "role": "Labourers",
+      "homeSites": [
+        "IQA"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-06-06",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-25",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-09-13",
+          "mark": "IQA"
+        }
+      ]
+    },
+    {
+      "id": "natanael-lachance-labourers",
+      "name": "Natanael Lachance",
+      "role": "Labourers",
+      "homeSites": [
+        "IQA"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-10-16",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-24",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-11-06",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-11-08",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "nicholas-labourers",
+      "name": "Nicholas",
+      "role": "Labourers",
+      "homeSites": [
+        "ALRT",
+        "IQA"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-06-15",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-07-07",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-07-13",
+          "mark": "ALRT"
+        },
+        {
+          "date": "2026-07-14",
+          "mark": "ALRT"
+        },
+        {
+          "date": "2026-08-21",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-31",
+          "mark": "IQA"
+        }
+      ]
+    },
+    {
+      "id": "shakira-labourers",
+      "name": "Shakira",
+      "role": "Labourers",
+      "homeSites": [
+        "KUG",
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-09-01",
+          "mark": "Transfer"
+        },
+        {
+          "date": "2026-10-17",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-18",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-19",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-10-20",
+          "mark": "KUG"
+        }
+      ]
+    },
+    {
+      "id": "eric-jacobsen-managers",
+      "name": "Eric Jacobsen",
+      "role": "Managers",
+      "homeSites": [
+        "IQA",
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": "2026-05-26",
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-05-07",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-05-26",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-06-04",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-07-06",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-07-08",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-26",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-08-28",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-09-17",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-21",
+          "mark": "IQA"
+        }
+      ]
+    },
+    {
+      "id": "maegan-ellison-managers",
+      "name": "Maegan Ellison",
+      "role": "Managers",
+      "homeSites": [
+        "ALRT"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": "2026-06-11",
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-06-08",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-06-11",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-03",
+          "mark": "ALRT"
+        },
+        {
+          "date": "2026-08-19",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "simon-plourde-managers",
+      "name": "Simon Plourde",
+      "role": "Managers",
+      "homeSites": [
+        "ALRT",
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-05-31",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-06-01",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-06-02",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-07-13",
+          "mark": "ALRT"
+        },
+        {
+          "date": "2026-07-14",
+          "mark": "ALRT"
+        },
+        {
+          "date": "2026-08-31",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-09-02",
+          "mark": "POND"
+        }
+      ]
+    },
+    {
+      "id": "william-matthews-managers",
+      "name": "William Matthews",
+      "role": "Managers",
+      "homeSites": [
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-09-14",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-21",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "mike-reid-mechanics",
+      "name": "Mike Reid",
+      "role": "Mechanics",
+      "homeSites": [
+        "KUG",
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": "2026-06-19",
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-06-19",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-06-20",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-20",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-04",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-05",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-17",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-08-21",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-14",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-09-22",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-10-19",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-11-09",
+          "mark": "In"
+        }
+      ]
+    },
+    {
+      "id": "shannon-mechanics",
+      "name": "Shannon",
+      "role": "Mechanics",
+      "homeSites": [
+        "IQA"
+      ],
+      "projectIds": [],
+      "inDate": "2026-05-25",
+      "outDate": "2026-06-22",
+      "rotationDays": 28,
+      "events": [
+        {
+          "date": "2026-05-09",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-05-25",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-06-02",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-06-23",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-06-24",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-26",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-08-27",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-09-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-09-13",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-09-15",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-16",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-22",
+          "mark": "IQA"
+        }
+      ]
+    },
+    {
+      "id": "carson-gemtec-operators-truck-drivers",
+      "name": "Carson (Gemtec)",
+      "role": "Operators / Truck Drivers",
+      "homeSites": [
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-09-25",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-10-14",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "dean-melvin-operators-truck-drivers",
+      "name": "Dean Melvin",
+      "role": "Operators / Truck Drivers",
+      "homeSites": [
+        "IQA",
+        "POND"
+      ],
+      "projectIds": [
+        "side-1"
+      ],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-04-13",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-04-27",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-06-08",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-06-22",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-17",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-31",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-14",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-10-29",
+          "mark": "IQA"
+        }
+      ]
+    },
+    {
+      "id": "elmer-gosse-operators-truck-drivers",
+      "name": "Elmer Gosse",
+      "role": "Operators / Truck Drivers",
+      "homeSites": [
+        "KUG",
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-05-31",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-06-01",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-20",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-15",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-17",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-26",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "kirk-operators-truck-drivers",
+      "name": "Kirk",
+      "role": "Operators / Truck Drivers",
+      "homeSites": [
+        "KUG",
+        "POND"
+      ],
+      "projectIds": [
+        "side-1"
+      ],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-03-30",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-04-13",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-05-25",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-06-08",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-20",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-14",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-17",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-10-12",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-10-27",
+          "mark": "IQA"
+        }
+      ]
+    },
+    {
+      "id": "rob-operators-truck-drivers",
+      "name": "Rob",
+      "role": "Operators / Truck Drivers",
+      "homeSites": [
+        "IQA",
+        "POND"
+      ],
+      "projectIds": [
+        "side-1"
+      ],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-05-05",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-07-26",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-10",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-26",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-10-06",
+          "mark": "IQA"
+        }
+      ]
+    },
+    {
+      "id": "sam-m-operators-truck-drivers",
+      "name": "Sam M",
+      "role": "Operators / Truck Drivers",
+      "homeSites": [
+        "KUG",
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-04-06",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-04-20",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-05-18",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-05-31",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-06-01",
+          "mark": "YF"
+        },
+        {
+          "date": "2026-06-02",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-20",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-07-24",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-07-25",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-23",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-26",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-26",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-10-08",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-10-19",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-10-20",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-29",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "stacey-turner-operators-truck-drivers",
+      "name": "Stacey Turner",
+      "role": "Operators / Truck Drivers",
+      "homeSites": [
+        "KUG",
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-06-08",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-20",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-04",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-05",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-17",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-08-19",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-22",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-10",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "stephen-turner-operators-truck-drivers",
+      "name": "Stephen Turner",
+      "role": "Operators / Truck Drivers",
+      "homeSites": [
+        "KUG",
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-06-08",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-20",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-04",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-05",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-17",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-08-19",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-22",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-10",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "thomas-gemtec-operators-truck-drivers",
+      "name": "Thomas (Gemtec)",
+      "role": "Operators / Truck Drivers",
+      "homeSites": [
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-07-14",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-28",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-25",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "trevor-anstey-operators-truck-drivers",
+      "name": "Trevor Anstey",
+      "role": "Operators / Truck Drivers",
+      "homeSites": [
+        "KUG",
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-05-31",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-06-01",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-20",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-04",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-05",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-17",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-08-19",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-21",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-12",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-09-24",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-10-17",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "andrew-murphy-surveyors",
+      "name": "Andrew Murphy",
+      "role": "Surveyors",
+      "homeSites": [
+        "IQA"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-06-29",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-06-30",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-10",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-28",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-12",
+          "mark": "Out"
+        }
+      ]
+    },
+    {
+      "id": "bryan-hay-surveyors",
+      "name": "Bryan Hay",
+      "role": "Surveyors",
+      "homeSites": [
+        "IQA"
+      ],
+      "projectIds": [
+        "new-housing"
+      ],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-04-27",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-06-08",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-06-22",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-20",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-31",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-05",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-10-20",
+          "mark": "IQA"
+        }
+      ]
+    },
+    {
+      "id": "william-matthews-surveyors",
+      "name": "William Matthews",
+      "role": "Surveyors",
+      "homeSites": [
+        "IQA"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": null,
+      "events": [
+        {
+          "date": "2026-10-13",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-20",
+          "mark": "Out"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "people": 30,
+    "projects": 20,
+    "datedColumns": 389,
+    "dateSpan": [
+      "2026-01-01",
+      "2026-12-31"
+    ],
+    "markValues": {
+      "Out": 61,
+      "IQA": 53,
+      "KUG": 23,
+      "POND": 21,
+      "YK": 9,
+      "ALRT": 9,
+      "YF": 1,
+      "Transfer": 1,
+      "YEG": 1,
+      "In": 1
+    }
+  }
+} as const;
