@@ -25,10 +25,13 @@ jobs:
       - name: Pack the app
         run: |
           mkdir -p release
-          cp -a .next package.json package-lock.json next.config.ts tsconfig.json release/
-          if [ -d public ]; then cp -a public release/; fi
-          cd release
-          npm ci --omit=dev
+          # Standalone server + static assets (reliable on Azure App Service)
+          cp -a .next/standalone/. release/
+          mkdir -p release/.next
+          cp -a .next/static release/.next/static
+          if [ -d public ]; then cp -a public release/public; fi
+          # Azure runs `npm start` — point it at the standalone server.
+          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('release/package.json','utf8')); p.scripts={...(p.scripts||{}), start:'node server.js'}; fs.writeFileSync('release/package.json', JSON.stringify(p,null,2));"
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
@@ -37,3 +40,5 @@ jobs:
           slot-name: 'Production'
           package: release
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_662351FE02174430ACF464A374872DB5 }}
+          clean: true
+          restart: true
