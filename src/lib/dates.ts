@@ -37,3 +37,17 @@ export function formatMedium(iso: string) {
     year: "numeric",
   });
 }
+
+/** Monday–Sunday week containing `iso` (local). */
+export function weekBounds(iso: string) {
+  const date = parseISODate(iso);
+  const day = date.getDay(); // 0 Sun … 6 Sat
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const start = addDays(iso, mondayOffset);
+  const end = addDays(start, 6);
+  return { start, end };
+}
+
+export function shiftWeek(iso: string, weeks: number) {
+  return addDays(iso, weeks * 7);
+}

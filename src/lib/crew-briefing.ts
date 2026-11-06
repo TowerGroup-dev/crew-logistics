@@ -65,7 +65,7 @@ function actionFor(row: CrewSnapshot, opsBook: CrewOpsBook): BriefingAction | nu
   if (row.overdue && bookingNeedsAttention(ops.returnFlight)) {
     return {
       level: "Urgent",
-      text: `Return flight outstanding for ${row.person.name} — planned departure ${row.plannedOut ? formatMedium(row.plannedOut) : "unknown"} has passed.`,
+      text: `Return flight outstanding for ${row.person.name}. Planned departure ${row.plannedOut ? formatMedium(row.plannedOut) : "unknown"} has passed.`,
       owner,
       personId: row.person.id,
     };
@@ -89,7 +89,7 @@ function actionFor(row: CrewSnapshot, opsBook: CrewOpsBook): BriefingAction | nu
   if (row.dueSoon) {
     return {
       level: "Upcoming",
-      text: `${row.person.name} leaves in ${row.daysUntilOut} day${row.daysUntilOut === 1 ? "" : "s"} — confirm replacement if needed.`,
+      text: `${row.person.name} leaves in ${row.daysUntilOut} day${row.daysUntilOut === 1 ? "" : "s"}. Confirm replacement if needed.`,
       owner,
       personId: row.person.id,
     };
@@ -207,7 +207,7 @@ export function buildCrewBriefing(input: {
           ? actions
               .map(
                 (action) =>
-                  `<li style="margin:0 0 8px"><strong>${escapeHtml(action.level)}</strong> — ${escapeHtml(action.text)} <span style="color:#5a6578">· ${escapeHtml(action.owner)}</span></li>`,
+                  `<li style="margin:0 0 8px"><strong>${escapeHtml(action.level)}</strong>: ${escapeHtml(action.text)} <span style="color:#5a6578">· ${escapeHtml(action.owner)}</span></li>`,
               )
               .join("")
           : "<li>No urgent crew logistics actions this morning.</li>"}

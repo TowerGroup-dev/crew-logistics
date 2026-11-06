@@ -6,6 +6,12 @@ export type CrewNotifySettings = {
   lastBriefingAt: string | null;
   lastBriefingFingerprint: string | null;
   sentAlertFingerprints: string[];
+  /** Days before departure to begin replacement / travel planning. */
+  reminderPlanDays: number;
+  /** Days before departure to check flight + accommodation. */
+  reminderCheckDays: number;
+  /** Days before departure to escalate missing confirmations. */
+  reminderEscalateDays: number;
 };
 
 const STORAGE_KEY = "tower-arctic-crew-notify";
@@ -19,7 +25,16 @@ export function defaultNotifySettings(): CrewNotifySettings {
     lastBriefingAt: null,
     lastBriefingFingerprint: null,
     sentAlertFingerprints: [],
+    reminderPlanDays: 14,
+    reminderCheckDays: 7,
+    reminderEscalateDays: 3,
   };
+}
+
+function clampDays(value: unknown, fallback: number) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(42, Math.max(1, Math.round(n)));
 }
 
 export function readNotifySettings(value: unknown): CrewNotifySettings {
@@ -36,6 +51,9 @@ export function readNotifySettings(value: unknown): CrewNotifySettings {
     sentAlertFingerprints: Array.isArray(raw.sentAlertFingerprints)
       ? raw.sentAlertFingerprints.filter((item): item is string => typeof item === "string").slice(-200)
       : [],
+    reminderPlanDays: clampDays(raw.reminderPlanDays, base.reminderPlanDays),
+    reminderCheckDays: clampDays(raw.reminderCheckDays, base.reminderCheckDays),
+    reminderEscalateDays: clampDays(raw.reminderEscalateDays, base.reminderEscalateDays),
   };
 }
 

@@ -2,21 +2,88 @@ import { CREW_SCHEDULE_DATA } from "@/lib/crew-schedule-data";
 import { bookingNeedsAttention, type CrewPersonOps } from "@/lib/crew-ops";
 import { addDays, daysBetween } from "@/lib/dates";
 
+/** Sheet noise that is not a camp assignment (keep local to avoid import cycles). */
+const NON_SITE_MARKS = new Set([
+  "IN",
+  "OUT",
+  "TRANSFER",
+  "TBC",
+  "YEG",
+  "YF",
+  "YK",
+  "YFB",
+  "YYZ",
+  "YOW",
+  "YYC",
+  "YUL",
+  "OFF",
+  "HOME",
+  "TRAVEL",
+  "TRANSIT",
+]);
+
+function worksiteFromMarkLocal(mark: string | null | undefined): string | null {
+  if (!mark) return null;
+  for (const part of mark.split(/[/|,]/)) {
+    const code = part.trim().toUpperCase();
+    if (code.length >= 2 && !NON_SITE_MARKS.has(code)) return code;
+  }
+  return null;
+}
+
 /** Default on-site rotation when the sheet does not set a per-person value. */
 export const DEFAULT_ROTATION_DAYS = 42;
 
 /** Days before planned Out when replacement / return travel needs attention (2-week window). */
 export const RETURN_SOON_DAYS = 14;
 
+/** Days on site when the person is flagged 4 weeks out (review required). */
+export const FOUR_WEEK_TRACK_DAYS = 28;
+
+/** Built-in schedule years (app is the source of truth, not Excel). */
+export const CREW_AVAILABLE_YEARS = [2026] as const;
+
 export type CrewEvent = {
   date: string;
   mark: string;
 };
 
+/**
+ * One on-site stretch read from the sheet: arrive (In) on `from`, leave (Out) on `out`.
+ * `departure` says where the Out date came from: typed OUT ("marked"), the end of the shaded cells
+ * ("shading-ended" / "travel-cell"), or nothing yet ("open").
+ */
+export type CrewStint = {
+  site: string;
+  sites: string[];
+  from: string;
+  out: string | null;
+  arrival: string;
+  departure: string | null;
+  tentative: boolean;
+  note?: string;
+  /** Role for this stretch only, can differ from the person's usual roles. */
+  role?: string;
+};
+
+/** Historical booking row from the "Crew - Flights - 2026" sheet. */
+export type CrewFlight = {
+  arriveIqa: string | null;
+  arriveRef: string | null;
+  departIqa: string | null;
+  departRef: string | null;
+  camp: string | null;
+  carService: string | null;
+  note: string | null;
+};
+
 export type CrewPerson = {
   id: string;
   name: string;
+  /** Primary role used for grouping / filters. */
   role: string;
+  /** All roles when the sheet lists the same person under more than one trade. */
+  roles: string[];
   homeSites: string[];
   /** Projects this person can work on at the same time. */
   projectIds: string[];
@@ -26,13 +93,118 @@ export type CrewPerson = {
   events: CrewEvent[];
   /** True when added in the app rather than imported from the sheet. */
   manual?: boolean;
+  /** False when the person's row is hidden on the sheet (not on the current schedule). */
+  active?: boolean;
+  sheetRow?: number;
+  /** On-site stretches read from the sheet (marks + shading). Preferred over events for In/Out dates. */
+  stints?: CrewStint[];
+  fullName?: string;
+  flights?: CrewFlight[];
+  agreementSigned?: boolean;
+  /** Things on the sheet that look inconsistent for this person. */
+  warnings?: string[];
+  /** Extra sheet row ids folded into this person (multi-role merge). */
+  aliases?: string[];
 };
+
+export function roleLabel(person: Pick<CrewPerson, "role" | "roles">) {
+  const roles = person.roles?.length ? person.roles : [person.role];
+  return roles.join(" / ");
+}
+
+function roleRank(value: string) {
+  const index = (CREW_ROLE_ORDER as readonly string[]).indexOf(value);
+  return index === -1 ? CREW_ROLE_ORDER.length : index;
+}
+
+function mergeEvents(events: CrewEvent[]) {
+  const byDate = new Map<string, string>();
+  for (const event of [...events].sort((a, b) => a.date.localeCompare(b.date))) {
+    byDate.set(event.date, event.mark);
+  }
+  return [...byDate.entries()].map(([date, mark]) => ({ date, mark }));
+}
+
+/** One roster row per person name, multi-role sheet rows become roles[]. */
+export function mergePeopleByName(people: CrewPerson[]): CrewPerson[] {
+  const groups = new Map<string, CrewPerson[]>();
+  for (const person of people) {
+    const key = person.name.trim().toLowerCase();
+    const list = groups.get(key) ?? [];
+    list.push(person);
+    groups.set(key, list);
+  }
+
+  return [...groups.values()].map((group) => {
+    if (group.length === 1) {
+      const sole = group[0]!;
+      const roles = sole.roles?.length ? sole.roles : [sole.role];
+      return { ...sole, roles, role: roles[0] ?? sole.role };
+    }
+
+    const sorted = [...group].sort(
+      (a, b) => roleRank(a.role) - roleRank(b.role) || a.id.localeCompare(b.id),
+    );
+    const primary = sorted[0]!;
+    const roles = [
+      ...new Set(sorted.flatMap((person) => (person.roles?.length ? person.roles : [person.role]))),
+    ].sort((a, b) => roleRank(a) - roleRank(b) || a.localeCompare(b));
+
+    const homeSites = [...new Set(sorted.flatMap((person) => person.homeSites))];
+    const projectIds = [...new Set(sorted.flatMap((person) => person.projectIds))];
+    const events = mergeEvents(sorted.flatMap((person) => person.events));
+    const stints = sorted.flatMap((person) => person.stints ?? []);
+    const flights = sorted.flatMap((person) => person.flights ?? []);
+    const warnings = [...new Set(sorted.flatMap((person) => person.warnings ?? []))];
+    const aliases = sorted.slice(1).map((person) => person.id);
+
+    const latestIn = sorted
+      .map((person) => person.inDate)
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? null;
+    const latestOut = sorted
+      .map((person) => person.outDate)
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? null;
+
+    return {
+      ...primary,
+      role: roles[0] ?? primary.role,
+      roles,
+      homeSites,
+      projectIds,
+      inDate: latestIn,
+      outDate: latestOut,
+      rotationDays: primary.rotationDays ?? sorted.find((person) => person.rotationDays != null)?.rotationDays ?? null,
+      events,
+      stints: stints.length ? stints : undefined,
+      flights: flights.length ? flights : undefined,
+      warnings: warnings.length ? warnings : undefined,
+      aliases: aliases.length ? aliases : undefined,
+      active: sorted.some((person) => person.active !== false),
+      agreementSigned: sorted.some((person) => person.agreementSigned),
+    };
+  });
+}
 
 export type CrewProject = {
   id: string;
   name: string;
   year?: number;
   source?: string;
+  region?: string | null;
+  active?: boolean;
+  starred?: boolean;
+  /** Date ranges the project is shaded as active on the sheet's project timeline. */
+  windows?: { from: string | null; to: string | null }[];
+  /** Per-person IN / OUT on this job. */
+  assignments?: { personId: string; from: string | null; to: string | null }[];
+  /** Crew needed by role, from the "Required Staff" sheet. */
+  needs?: Record<string, number>;
+  parent?: string;
+  startsOn?: string | null;
 };
 
 export type CrewDutyStatus =
@@ -80,7 +252,13 @@ export type CrewSnapshot = {
   daysUntilOut: number | null;
   overdue: boolean;
   dueSoon: boolean;
+  /** True when on site 4+ weeks, 4 weeks out, review required. */
+  fourWeeksOut: boolean;
   alerts: CrewAlert[];
+  /** Where plannedOut came from: typed OUT, end of shading on the sheet, or In + rotation length. */
+  outSource: "typed" | "shading" | "rotation" | null;
+  /** Arrival typed as "In" (site not set yet) or similar tentative entry. */
+  tentative: boolean;
 };
 
 export type CrewScheduleData = {
@@ -93,36 +271,130 @@ export type CrewScheduleData = {
   people: CrewPerson[];
 };
 
+const HOUSING_SLOT_IDS = new Set(["side-1", "side-2", "new-housing"]);
+
+export function isHousingSlot(projectId: string) {
+  return HOUSING_SLOT_IDS.has(projectId);
+}
+
+const ROLE_ALIASES: Record<string, string> = {
+  Managers: "Manager",
+  Surveyors: "Surveyor",
+  "Operators / Truck Drivers": "Operator/Truck Driver",
+  "Operators/Truck Drivers": "Operator/Truck Driver",
+  Labourers: "Labourer",
+  Mechanics: "Mechanic",
+};
+
+export function normalizeRole(role: string) {
+  return ROLE_ALIASES[role] ?? role;
+}
+
+export const CREW_ROLE_ORDER = [
+  "Manager",
+  "Surveyor",
+  "Operator/Truck Driver",
+  "Labourer",
+  "Mechanic",
+] as const;
+
 export const CREW_SCHEDULE: CrewScheduleData = {
   year: CREW_SCHEDULE_DATA.year,
   source: CREW_SCHEDULE_DATA.source,
   sheet: "sheet" in CREW_SCHEDULE_DATA ? String(CREW_SCHEDULE_DATA.sheet) : undefined,
-  note: CREW_SCHEDULE_DATA.note,
+  note: "note" in CREW_SCHEDULE_DATA ? String(CREW_SCHEDULE_DATA.note) : undefined,
   sites: { ...CREW_SCHEDULE_DATA.sites },
-  projects: ("projects" in CREW_SCHEDULE_DATA ? CREW_SCHEDULE_DATA.projects : []).map((project) => ({
-    id: project.id,
-    name: project.name,
-    year: "year" in project ? Number(project.year) : CREW_SCHEDULE_DATA.year,
-    source: "source" in project ? String(project.source) : "import",
-  })),
-  people: CREW_SCHEDULE_DATA.people.map((person) => ({
-    id: person.id,
-    name: person.name,
-    role: person.role,
-    homeSites: [...person.homeSites],
-    projectIds: "projectIds" in person ? [...person.projectIds] : [],
-    inDate: person.inDate,
-    outDate: person.outDate,
-    rotationDays: person.rotationDays,
-    events: person.events.map((event) => ({ date: event.date, mark: event.mark })),
-  })),
+  // Visible project-timeline rows only (17 on the sheet).
+  projects: ("projects" in CREW_SCHEDULE_DATA ? CREW_SCHEDULE_DATA.projects : [])
+    .filter((project) => {
+      const row = project as {
+        source?: string;
+        active?: boolean;
+      };
+      if (row.source !== "project-timeline") return false;
+      if (row.active === false) return false;
+      return true;
+    })
+    .map((project) => {
+      const row = project as unknown as {
+        id: string;
+        name: string;
+        year?: number;
+        source?: string;
+        region?: string | null;
+        active?: boolean;
+        starred?: boolean;
+        windows?: { from: string | null; to: string | null }[];
+        needs?: Record<string, number>;
+        parent?: string;
+        startsOn?: string | null;
+      };
+      return {
+        id: row.id,
+        name: row.name,
+        year: row.year ?? CREW_SCHEDULE_DATA.year,
+        source: row.source ?? "import",
+        region: row.region,
+        active: row.active,
+        starred: row.starred,
+        windows: row.windows?.map((window) => ({ from: window.from, to: window.to })),
+        needs: row.needs ? { ...row.needs } : undefined,
+        parent: row.parent,
+        startsOn: row.startsOn,
+      };
+    }),
+  // Only visible CREW rows from the sheet (hidden Excel rows are finished / not on this roster).
+  // Same name under multiple trades → one person with roles[].
+  people: mergePeopleByName(
+    CREW_SCHEDULE_DATA.people
+      .filter((person) => !("active" in person) || Boolean(person.active))
+      .map((person) => {
+        const role = normalizeRole(person.role);
+        return {
+          id: person.id,
+          name: person.name,
+          role,
+          roles: [role],
+          homeSites: [...person.homeSites],
+          projectIds: ("projectIds" in person ? [...person.projectIds] : []).filter((id) => !isHousingSlot(id)),
+          inDate: person.inDate,
+          outDate: person.outDate,
+          rotationDays: person.rotationDays,
+          events: person.events.map((event) => ({ date: event.date, mark: event.mark })),
+          active: true,
+          sheetRow: "sheetRow" in person ? Number(person.sheetRow) : undefined,
+          stints: "stints" in person ? person.stints.map((stint) => ({ ...stint, sites: [...stint.sites] })) : undefined,
+          fullName: "fullName" in person ? String(person.fullName) : undefined,
+          flights: "flights" in person ? person.flights.map((flight) => ({ ...flight })) : undefined,
+          agreementSigned: "agreementSigned" in person ? Boolean(person.agreementSigned) : undefined,
+          warnings: "warnings" in person ? [...person.warnings] : undefined,
+        };
+      }),
+  ),
 };
 
-export const CREW_ROLES = [...new Set(CREW_SCHEDULE.people.map((person) => person.role))];
+export const CREW_ROLES = [
+  ...CREW_ROLE_ORDER.filter((role) =>
+    CREW_SCHEDULE.people.some((person) => (person.roles?.length ? person.roles : [person.role]).includes(role)),
+  ),
+  ...[
+    ...new Set(
+      CREW_SCHEDULE.people.flatMap((person) =>
+        (person.roles?.length ? person.roles : [person.role]).map((role) => normalizeRole(role)),
+      ),
+    ),
+  ].filter((role) => !(CREW_ROLE_ORDER as readonly string[]).includes(role)),
+];
 export const CREW_PROJECTS = CREW_SCHEDULE.projects;
 
 export function projectLabel(projects: CrewProject[], projectId: string) {
   return projects.find((project) => project.id === projectId)?.name ?? projectId;
+}
+
+/** Project ids that belong on the 17-project list, never Housing slots. */
+export function scheduleProjectIds(ids: string[], projects: CrewProject[]) {
+  const allowed = new Set(projects.map((project) => project.id));
+  return ids.filter((id) => allowed.has(id) && !isHousingSlot(id));
 }
 
 const CAMP_SITES = new Set(["IQA"]);
@@ -206,8 +478,194 @@ export function personSegments(person: CrewPerson) {
   return segments;
 }
 
+const SITE_REGION: Record<string, string> = {
+  IQA: "Iqaluit",
+  POND: "Pond Inlet",
+  ALRT: "Alert",
+  KUG: "Kugluktuk",
+};
+
+function rangesOverlap(aFrom: string, aTo: string, bFrom: string | null, bTo: string | null) {
+  const from = bFrom || aFrom;
+  const to = bTo || aTo;
+  return from <= aTo && to >= aFrom;
+}
+
+export type ProjectPhase = "completed" | "ongoing" | "future";
+
+/** Earliest start / latest finish across windows (and startsOn). */
+export function projectSpan(project: CrewProject) {
+  const windows = project.windows?.length
+    ? project.windows
+    : project.startsOn
+      ? [{ from: project.startsOn, to: null as string | null }]
+      : [];
+  let from: string | null = null;
+  let to: string | null = null;
+  let openEnded = windows.length === 0;
+  for (const window of windows) {
+    if (window.from && (!from || window.from < from)) from = window.from;
+    if (!window.to) openEnded = true;
+    else if (!to || window.to > to) to = window.to;
+  }
+  if (openEnded) to = null;
+  return { from, to };
+}
+
+export function projectPhase(project: CrewProject, today: string): ProjectPhase {
+  const { from, to } = projectSpan(project);
+  if (to && to < today) return "completed";
+  if (from && from > today) return "future";
+  return "ongoing";
+}
+
+function projectOverlapsDay(project: CrewProject, day: string) {
+  const windows = project.windows?.length
+    ? project.windows
+    : project.startsOn
+      ? [{ from: project.startsOn, to: null as string | null }]
+      : [];
+  if (windows.length === 0) return false;
+  return windows.some((window) => rangesOverlap(day, day, window.from, window.to));
+}
+
+/**
+ * Single current job for a person as of `today`.
+ * Prefers an assigned ongoing project; otherwise one timeline match at site.
+ * Blank when nothing is active today (does not list every historical project).
+ */
+export function currentProjectForPerson(
+  person: CrewPerson,
+  today: string,
+  site: string | null = null,
+  projects: CrewProject[] = CREW_PROJECTS,
+): CrewProject | null {
+  const byId = new Map(projects.map((project) => [project.id, project]));
+  const assigned = person.projectIds.map((id) => byId.get(id)).filter((project): project is CrewProject => Boolean(project));
+
+  const activeAssigned = assigned
+    .filter((project) => {
+      const seat = project.assignments?.find((row) => row.personId === person.id);
+      if (seat) {
+        const from = seat.from || "0000-01-01";
+        const to = seat.to || "9999-12-31";
+        return from <= today && to >= today;
+      }
+      return projectOverlapsDay(project, today) || projectPhase(project, today) === "ongoing";
+    })
+    .sort((a, b) => {
+      const aSeat = a.assignments?.find((row) => row.personId === person.id);
+      const bSeat = b.assignments?.find((row) => row.personId === person.id);
+      const aFrom = aSeat?.from || projectSpan(a).from || "";
+      const bFrom = bSeat?.from || projectSpan(b).from || "";
+      return bFrom.localeCompare(aFrom);
+    });
+  if (activeAssigned[0]) return activeAssigned[0];
+
+  if (site) {
+    const region = SITE_REGION[site] || site;
+    const timeline = projects
+      .filter((project) => {
+        if (project.region && project.region !== region) return false;
+        return projectOverlapsDay(project, today);
+      })
+      .sort((a, b) => (projectSpan(b).from || "").localeCompare(projectSpan(a).from || ""));
+    if (timeline[0]) return timeline[0];
+  }
+
+  return null;
+}
+
+/** Assigned projects, or timeline projects at that site overlapping the dates. */
+export function workForAssignment(
+  person: CrewPerson,
+  site: string,
+  from: string,
+  to: string,
+  projects: CrewProject[] = CREW_PROJECTS,
+) {
+  const current = currentProjectForPerson(person, from, site, projects);
+  return current ? [current.name] : [];
+}
+
+export function workLabelForAssignment(
+  person: CrewPerson,
+  site: string,
+  from: string,
+  to: string,
+  projects: CrewProject[] = CREW_PROJECTS,
+) {
+  return workForAssignment(person, site, from, to, projects).join(" · ");
+}
+
+/** On-site bars for the year tape (Out stretches are left blank). */
+export function yearOnSiteBars(person: CrewPerson, year = CREW_SCHEDULE.year) {
+  const yearStart = `${year}-01-01`;
+  const yearEnd = `${year}-12-31`;
+  const yearDays = daysBetween(yearStart, yearEnd) + 1;
+
+  const raw =
+    person.stints && person.stints.length > 0
+      ? person.stints
+          .map((stint) => {
+            const site =
+              worksiteFromMarkLocal(stint.site) ||
+              stint.sites.map(worksiteFromMarkLocal).find(Boolean) ||
+              null;
+            if (!site) return null;
+            return {
+              from: stint.from,
+              to: stint.out ? addDays(stint.out, -1) : yearEnd,
+              site,
+              role: stint.role,
+            };
+          })
+          .filter((row): row is NonNullable<typeof row> => Boolean(row))
+      : personSegments(person)
+          .filter((segment) => !isOffRotation(segment.mark) && worksiteFromMarkLocal(segment.mark))
+          .map((segment) => ({
+            from: segment.from,
+            to: segment.to,
+            site: worksiteFromMarkLocal(segment.mark) || segment.mark,
+            role: undefined as string | undefined,
+          }));
+
+  return raw
+    .map((bar) => {
+      const from = bar.from < yearStart ? yearStart : bar.from;
+      const to = bar.to > yearEnd ? yearEnd : bar.to;
+      if (to < yearStart || from > yearEnd || to < from) return null;
+      const start = daysBetween(yearStart, from);
+      const end = daysBetween(yearStart, to) + 1;
+      return {
+        from,
+        to,
+        site: bar.site,
+        role: bar.role,
+        work: bar.role || workLabelForAssignment(person, bar.site, from, to),
+        leftPct: (start / yearDays) * 100,
+        widthPct: Math.max(((end - start) / yearDays) * 100, 0.35),
+      };
+    })
+    .filter((bar): bar is NonNullable<typeof bar> => Boolean(bar));
+}
+
+export function yearTodayMarker(iso: string, year = CREW_SCHEDULE.year) {
+  const yearStart = `${year}-01-01`;
+  const yearEnd = `${year}-12-31`;
+  if (iso < yearStart || iso > yearEnd) return null;
+  const yearDays = daysBetween(yearStart, yearEnd) + 1;
+  return (daysBetween(yearStart, iso) / yearDays) * 100;
+}
+
+/** Sheet rule: "Rotation set = 6*7" for crew, "Mechanic = 7*4". */
+export const MECHANIC_ROTATION_DAYS = 28;
+
 export function rotationFor(person: CrewPerson) {
-  return person.rotationDays ?? DEFAULT_ROTATION_DAYS;
+  if (person.rotationDays) return person.rotationDays;
+  return person.role === "Mechanic" || person.role === "Mechanics"
+    ? MECHANIC_ROTATION_DAYS
+    : DEFAULT_ROTATION_DAYS;
 }
 
 function dutyFromMark(mark: string | null, hasUpcoming: boolean): CrewDutyStatus {
@@ -220,7 +678,7 @@ function dutyFromMark(mark: string | null, hasUpcoming: boolean): CrewDutyStatus
   return "on_site";
 }
 
-/** Physical site only — never treats Out / Off rotation as a location. */
+/** Physical site only, never treats Out / Off rotation as a location. */
 function primarySite(mark: string | null) {
   if (!mark || isOffRotation(mark)) return null;
   const key = mark.toLowerCase();
@@ -243,8 +701,49 @@ export function resolvePlannedOut(person: CrewPerson, plannedIn: string) {
   return addDays(plannedIn, rotationDays);
 }
 
+/** Planned Out for a sheet stint; falls back to In + rotation when the sheet has no end yet. */
+function stintOut(person: CrewPerson, stint: CrewStint) {
+  return stint.out ?? addDays(stint.from, rotationFor(person));
+}
+
+function stintOutSource(stint: CrewStint): "typed" | "shading" | "rotation" {
+  if (!stint.out) return "rotation";
+  return stint.departure === "marked" ? "typed" : "shading";
+}
+
+/** Stint covering `iso` (arrival day included, Out day excluded), else the next one. */
+export function stintFor(person: CrewPerson, iso: string) {
+  const stints = person.stints ?? [];
+  const current = stints.find((stint) => stint.from <= iso && (!stint.out || iso < stint.out)) ?? null;
+  if (current) return { stint: current, upcoming: false };
+  const next = stints.find((stint) => stint.from > iso) ?? null;
+  return next ? { stint: next, upcoming: true } : null;
+}
+
 /** Current or next on-site stretch: In = arrive at site, Out = leave site. */
 export function currentStretch(person: CrewPerson, iso: string) {
+  if (person.stints && person.stints.length > 0) {
+    const found = stintFor(person, iso);
+    if (!found) {
+      return {
+        plannedIn: null as string | null,
+        plannedOut: null as string | null,
+        mark: statusOnDate(person, iso),
+        upcoming: false,
+        outSource: null as "typed" | "shading" | "rotation" | null,
+        tentative: false,
+      };
+    }
+    return {
+      plannedIn: found.stint.from,
+      plannedOut: stintOut(person, found.stint),
+      mark: found.upcoming ? found.stint.site : statusOnDate(person, iso),
+      upcoming: found.upcoming,
+      outSource: stintOutSource(found.stint) as "typed" | "shading" | "rotation" | null,
+      tentative: found.stint.tentative,
+    };
+  }
+
   const segments = personSegments(person);
   const current = segments.find((segment) => segment.from <= iso && segment.to >= iso) ?? null;
   if (current && !isOffRotation(current.mark)) {
@@ -253,6 +752,8 @@ export function currentStretch(person: CrewPerson, iso: string) {
       plannedOut: resolvePlannedOut(person, current.from),
       mark: current.mark,
       upcoming: false,
+      outSource: "rotation" as "typed" | "shading" | "rotation" | null,
+      tentative: false,
     };
   }
 
@@ -263,6 +764,8 @@ export function currentStretch(person: CrewPerson, iso: string) {
       plannedOut: resolvePlannedOut(person, nextOn.from),
       mark: nextOn.mark,
       upcoming: true,
+      outSource: "rotation" as "typed" | "shading" | "rotation" | null,
+      tentative: false,
     };
   }
 
@@ -272,6 +775,8 @@ export function currentStretch(person: CrewPerson, iso: string) {
       plannedOut: resolvePlannedOut(person, person.inDate),
       mark: null as string | null,
       upcoming: true,
+      outSource: "rotation" as "typed" | "shading" | "rotation" | null,
+      tentative: false,
     };
   }
 
@@ -283,6 +788,8 @@ export function currentStretch(person: CrewPerson, iso: string) {
         plannedOut: resolvePlannedOut(person, person.inDate),
         mark: current?.mark ?? null,
         upcoming: false,
+        outSource: "rotation" as "typed" | "shading" | "rotation" | null,
+        tentative: false,
       };
     }
   }
@@ -292,6 +799,8 @@ export function currentStretch(person: CrewPerson, iso: string) {
     plannedOut: null as string | null,
     mark: current?.mark ?? null,
     upcoming: false,
+    outSource: null as "typed" | "shading" | "rotation" | null,
+    tentative: false,
   };
 }
 
@@ -336,6 +845,7 @@ export function crewSnapshot(person: CrewPerson, iso: string, ops?: CrewPersonOp
   const overdue = Boolean(activeOnSite && daysUntilOut != null && daysUntilOut < 0 && !actualOut);
   // Due soon is driven only by planned/expected Out date, never by rotation %.
   const dueSoon = Boolean(activeOnSite && daysUntilOut != null && daysUntilOut >= 0 && daysUntilOut <= RETURN_SOON_DAYS);
+  const fourWeeksOut = Boolean(activeOnSite && daysOnSite != null && daysOnSite >= FOUR_WEEK_TRACK_DAYS);
 
   const alerts: CrewAlert[] = [];
   if (overdue) alerts.push("overdue");
@@ -369,7 +879,10 @@ export function crewSnapshot(person: CrewPerson, iso: string, ops?: CrewPersonOp
     daysUntilOut,
     overdue,
     dueSoon,
+    fourWeeksOut,
     alerts,
+    outSource: ops?.plannedOutOverride ? "typed" : stretch.outSource,
+    tentative: stretch.tentative,
   };
 }
 

@@ -1,8 +1,7 @@
 import { slugProject, type CrewProject } from "@/lib/crew-roster";
 
-/** Active Tower Arctic jobs for Food / crew ops — year 2026. */
+/** Visible project-timeline rows on Crew - Schedule - 2026 (no Housing slots, no region headers). */
 export const TOWER_ACTIVE_PROJECTS: { name: string; region: string }[] = [
-  { name: "1430 - Iqaluit", region: "Iqaluit" },
   { name: "Quarry", region: "Iqaluit" },
   { name: "Trigram", region: "Iqaluit" },
   { name: "46 Plex", region: "Iqaluit" },
@@ -21,6 +20,13 @@ export const TOWER_ACTIVE_PROJECTS: { name: string; region: string }[] = [
   { name: "IDP Project (Pond)", region: "Pond Inlet" },
   { name: "NCCD deficiencies", region: "Pond Inlet" },
 ];
+
+/** Housing table slots, shown on people, not as filterable projects. */
+export const HOUSING_SLOT_LABELS: Record<string, string> = {
+  "side-1": "Housing · Side 1",
+  "side-2": "Housing · Side 2",
+  "new-housing": "Housing · New Housing",
+};
 
 export function catalogProjects(year: number): CrewProject[] {
   return TOWER_ACTIVE_PROJECTS.map((project) => ({

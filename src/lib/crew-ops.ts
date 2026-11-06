@@ -21,11 +21,22 @@ export type CrewPersonOps = {
   plannedOutOverride: string | null;
   outboundFlight: CrewBookingStatus;
   returnFlight: CrewBookingStatus;
+  /** Katrina books outbound between these dates (inclusive). */
+  outboundBookFrom: string | null;
+  outboundBookTo: string | null;
+  /** Katrina books inbound / return between these dates (inclusive). */
+  returnBookFrom: string | null;
+  returnBookTo: string | null;
   flightNotes: string;
   accommodation: CrewBookingStatus;
   accommodationNotes: string;
   confirmation: string;
   updates: CrewUpdate[];
+  /** Person covering the next stretch when this rotation ends (optional). */
+  incomingReplacementId: string | null;
+  /** Inclusive handover / overlap window with the replacement. */
+  handoverFrom: string | null;
+  handoverTo: string | null;
 };
 
 export type CrewOpsBook = Record<string, CrewPersonOps>;
@@ -49,11 +60,18 @@ export function emptyCrewOps(personId: string): CrewPersonOps {
     plannedOutOverride: null,
     outboundFlight: "not_started",
     returnFlight: "not_started",
+    outboundBookFrom: null,
+    outboundBookTo: null,
+    returnBookFrom: null,
+    returnBookTo: null,
     flightNotes: "",
     accommodation: "not_started",
     accommodationNotes: "",
     confirmation: "",
     updates: [],
+    incomingReplacementId: null,
+    handoverFrom: null,
+    handoverTo: null,
   };
 }
 
@@ -90,6 +108,10 @@ export function readCrewOps(value: unknown): CrewOpsBook {
       plannedOutOverride: typeof row.plannedOutOverride === "string" ? row.plannedOutOverride.slice(0, 10) : null,
       outboundFlight: isStatus(row.outboundFlight) ? row.outboundFlight : "not_started",
       returnFlight: isStatus(row.returnFlight) ? row.returnFlight : "not_started",
+      outboundBookFrom: typeof row.outboundBookFrom === "string" ? row.outboundBookFrom.slice(0, 10) : null,
+      outboundBookTo: typeof row.outboundBookTo === "string" ? row.outboundBookTo.slice(0, 10) : null,
+      returnBookFrom: typeof row.returnBookFrom === "string" ? row.returnBookFrom.slice(0, 10) : null,
+      returnBookTo: typeof row.returnBookTo === "string" ? row.returnBookTo.slice(0, 10) : null,
       flightNotes: typeof row.flightNotes === "string" ? row.flightNotes : "",
       accommodation: isStatus(row.accommodation) ? row.accommodation : "not_started",
       accommodationNotes: typeof row.accommodationNotes === "string" ? row.accommodationNotes : "",
@@ -97,9 +119,25 @@ export function readCrewOps(value: unknown): CrewOpsBook {
       updates: Array.isArray(row.updates)
         ? row.updates.map(readUpdate).filter((item): item is CrewUpdate => Boolean(item))
         : [],
+      incomingReplacementId: typeof row.incomingReplacementId === "string" ? row.incomingReplacementId : null,
+      handoverFrom: typeof row.handoverFrom === "string" ? row.handoverFrom.slice(0, 10) : null,
+      handoverTo: typeof row.handoverTo === "string" ? row.handoverTo.slice(0, 10) : null,
     };
   }
   return book;
+}
+
+/** Inclusive date window overlaps [weekStart, weekEnd]. */
+export function bookingWindowActive(
+  from: string | null,
+  to: string | null,
+  weekStart: string,
+  weekEnd: string,
+) {
+  if (!from && !to) return false;
+  const start = from || to!;
+  const end = to || from!;
+  return start <= weekEnd && end >= weekStart;
 }
 
 export function loadCrewOps(): CrewOpsBook {

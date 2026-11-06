@@ -1,17 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Bell, Plane, X } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AlertTriangle, X } from "lucide-react";
 import {
   buildCrewBriefing,
   buildInstantAlert,
   describeOpsChange,
 } from "@/lib/crew-briefing";
-import { catalogProjects } from "@/lib/crew-catalog";
 import {
   CREW_BOOKING_STATUSES,
   bookingLabel,
-  emptyCrewOps,
   loadCrewOps,
   opsFor,
   saveCrewOps,
@@ -28,44 +27,110 @@ import {
 } from "@/lib/crew-notify-settings";
 import {
   CREW_PROJECTS,
+  CREW_ROLE_ORDER,
   CREW_ROLES,
   CREW_SCHEDULE,
-  RETURN_SOON_DAYS,
   crewOverview,
   dutyLabel,
   isCampSite,
   isOffRotation,
   personSegments,
-  projectLabel,
+  roleLabel,
+  rotationFor,
   siteLabel,
   type CrewDutyStatus,
   type CrewProject,
   type CrewSnapshot,
 } from "@/lib/crew-schedule";
 import {
+  addNextRotation,
   emptyRoster,
   loadRoster,
   mergePeople,
   mergeProjects,
   saveRoster,
+  setEmploymentStatus,
   slugEmployee,
-  slugProject,
   type CrewRosterBook,
+  type EmploymentStatus,
 } from "@/lib/crew-roster";
+import { CrewFlightPanel } from "@/components/crew-flight-panel";
+import { CrewMonthGrid, monthStartFromIso, shiftMonth } from "@/components/crew-month-grid";
+import { CrewNextRotationForm } from "@/components/crew-next-rotation";
+import { CrewOverview } from "@/components/crew-overview";
+import { CrewRoleHeader } from "@/components/crew-role-header";
+import { CrewAccommodationDesk } from "@/components/crew-accommodation-desk";
+import { CrewTravelDesk } from "@/components/crew-travel-desk";
+import { CrewYearTape } from "@/components/crew-year-tape";
+import { CrewRotationDrawer } from "@/components/crew-rotation-drawer";
+import {
+  currentRotationForPerson,
+  loadRotations,
+  mergeRotationBook,
+  assumeFlightsBooked,
+  migrateOpsIntoRotations,
+  rotationForPersonOnDay,
+  saveRotations,
+  type RotationBook,
+} from "@/lib/crew-rotations";
+import { autoSeedTravelOps } from "@/lib/crew-auto-ops";
+import {
+  emptyFlightBook,
+  loadFlights,
+  saveFlights,
+  syncOpsFromFlights,
+  upsertFlightBooking,
+  type FlightBook,
+  type FlightBooking,
+} from "@/lib/crew-flights";
+import { addScheduleYear, loadScheduleYears } from "@/lib/crew-years";
+import {
+  emptyScheduleViewPrefs,
+  hidePerson,
+  loadScheduleViewPrefs,
+  saveScheduleViewPrefs,
+  showAllPeople,
+  showPerson,
+  type CrewScheduleViewPrefs,
+} from "@/lib/crew-schedule-view";
+import {
+  emptyRolesBook,
+  loadRolesBook,
+  saveRolesBook,
+  type CrewRolesBook,
+} from "@/lib/crew-roles-catalog";
+import {
+  emptySitesBook,
+  loadSitesBook,
+  saveSitesBook,
+  siteColour,
+  catalogSiteLabel,
+  type CrewSitesBook,
+} from "@/lib/crew-sites";
+import { CrewSettingsPanel } from "@/components/crew-settings-panel";
 import { formatLong, formatMedium, toISODate } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
-type FocusFilter = "all" | "on_site" | "off" | "upcoming" | "unassigned" | "overdue" | "due_soon" | "travel";
+export type CrewBoardView =
+  | "overview"
+  | "year"
+  | "month"
+  | "list"
+  | "travel"
+  | "accommodation"
+  | "alerts"
+  | "employees"
+  | "settings";
 
-const FILTER_SITES = ["IQA", "POND", "ALRT", "KUG"] as const;
-
-function siteTone(site: string | null) {
+function siteTone(site: string | null, sitesBook?: CrewSitesBook) {
   if (!site) return "bg-muted text-muted-foreground";
-  if (isCampSite(site)) return "bg-sky-100 text-sky-950";
-  if (site.includes("POND")) return "bg-emerald-100 text-emerald-950";
-  if (site.includes("ALRT")) return "bg-amber-100 text-amber-950";
-  if (site.includes("KUG")) return "bg-violet-100 text-violet-950";
-  return "bg-stone-100 text-stone-800";
+  if (sitesBook) {
+    const hit = sitesBook.sites.find(
+      (row) => site.toUpperCase() === row.code || site.toUpperCase().includes(row.code),
+    );
+    if (hit) return siteColour(hit).chip;
+  }
+  return siteColour(site).chip;
 }
 
 function statusTone(duty: CrewDutyStatus) {
@@ -82,7 +147,7 @@ function markTone(mark: string | null) {
 }
 
 function departureLabel(row: CrewSnapshot) {
-  if (row.daysUntilOut == null) return "—";
+  if (row.daysUntilOut == null) return "-";
   if (row.daysUntilOut < 0) return `${Math.abs(row.daysUntilOut)}d overdue`;
   if (row.daysUntilOut === 0) return "Today";
   return `${row.daysUntilOut}d left`;
@@ -92,7 +157,7 @@ function travelLabel(ops: ReturnType<typeof opsFor> | null, row: CrewSnapshot) {
   if (!row.duty || (row.duty !== "on_site" && row.duty !== "in_transit" && row.duty !== "upcoming")) {
     return "Not required";
   }
-  if (!ops) return row.overdue || row.dueSoon ? "Pending" : "—";
+  if (!ops) return row.overdue || row.dueSoon ? "Pending" : "-";
   const status = row.duty === "upcoming" ? ops.outboundFlight : ops.returnFlight;
   if (status === "confirmed" || status === "booked") return bookingLabel(status);
   if (status === "cancelled") return "Cancelled";
@@ -100,44 +165,72 @@ function travelLabel(ops: ReturnType<typeof opsFor> | null, row: CrewSnapshot) {
   return bookingLabel(status);
 }
 
-export function CrewBoard() {
+export function CrewBoard({ view }: { view: CrewBoardView }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const today = toISODate(new Date());
+  const boardView = view;
   const [opsBook, setOpsBook] = useState<CrewOpsBook>({});
+  const [flightBook, setFlightBook] = useState<FlightBook>(emptyFlightBook);
   const [roster, setRoster] = useState<CrewRosterBook>(emptyRoster());
   const [hydrated, setHydrated] = useState(false);
   const [role, setRole] = useState("");
   const [site, setSite] = useState("");
-  const [projectFilter, setProjectFilter] = useState("");
-  const [focus, setFocus] = useState<FocusFilter>("all");
+  const [scheduleYear, setScheduleYear] = useState<number>(CREW_SCHEDULE.year);
+  const [scheduleYears, setScheduleYears] = useState<number[]>(() => [...loadScheduleYears()]);
+  const [monthCursor, setMonthCursor] = useState(() => `${CREW_SCHEDULE.year || new Date().getFullYear()}-11-01`);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedRotationId, setSelectedRotationId] = useState<string | null>(null);
+  const [rotationBook, setRotationBook] = useState<RotationBook>({ version: 1, rotations: [] });
   const [staffName, setStaffName] = useState("Crew coordinator");
   const [showAddEmployee, setShowAddEmployee] = useState(false);
-  const [showAddProject, setShowAddProject] = useState(false);
-  const [showNotify, setShowNotify] = useState(false);
   const [notify, setNotify] = useState<CrewNotifySettings>(() => loadNotifySettings());
-  const [notifyMsg, setNotifyMsg] = useState("");
-  const [briefingPreview, setBriefingPreview] = useState("");
-  const [newEmployee, setNewEmployee] = useState({ name: "", role: "Labourers", sites: "", projects: "" });
-  const [newProjectName, setNewProjectName] = useState("");
+  const [scheduleView, setScheduleView] = useState<CrewScheduleViewPrefs>(() => emptyScheduleViewPrefs());
+  const [sitesBook, setSitesBook] = useState<CrewSitesBook>(() => emptySitesBook());
+  const [rolesBook, setRolesBook] = useState<CrewRolesBook>(() => emptyRolesBook());
+  const [newEmployee, setNewEmployee] = useState({ name: "", role: "Labourer", sites: "" });
 
   useEffect(() => {
-    setOpsBook(loadCrewOps());
-    const loaded = loadRoster();
-    const year = CREW_SCHEDULE.year;
-    const seeded = catalogProjects(year);
-    const known = new Set([
-      ...CREW_PROJECTS.map((project) => project.id),
-      ...loaded.projects.map((project) => project.id),
-    ]);
-    const missing = seeded.filter((project) => !known.has(project.id));
-    const nextRoster =
-      missing.length > 0
-        ? { ...loaded, projects: [...loaded.projects, ...missing] }
-        : loaded;
-    if (missing.length > 0) saveRoster(nextRoster);
-    setRoster(nextRoster);
+    const yearParam = Number(searchParams.get("year") || "");
+    if (yearParam && Number.isInteger(yearParam)) {
+      setScheduleYear(yearParam);
+      setScheduleYears((current) => (current.includes(yearParam) ? current : addScheduleYear(current, yearParam)));
+    }
+    const monthParam = searchParams.get("month") || searchParams.get("start");
+    if (monthParam && /^\d{4}-\d{2}/.test(monthParam)) {
+      setMonthCursor(monthStartFromIso(monthParam.length === 7 ? `${monthParam}-01` : monthParam));
+    }
+    const personParam = searchParams.get("person");
+    if (personParam) setSelectedId(personParam);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const todayIso = toISODate(new Date());
+    const loadedOps = loadCrewOps();
+    const seededOps = autoSeedTravelOps(CREW_SCHEDULE.people, loadedOps, todayIso);
+    if (seededOps !== loadedOps) saveCrewOps(seededOps);
+    setOpsBook(seededOps);
+    const flights = loadFlights();
+    setFlightBook(flights);
+
+    const loadedRoster = loadRoster();
+    setRoster(loadedRoster);
     setNotify(loadNotifySettings());
+    setScheduleView(loadScheduleViewPrefs());
+    const cleanedSites = loadSitesBook();
+    setSitesBook(cleanedSites);
+    saveSitesBook(cleanedSites);
+    setRolesBook(loadRolesBook());
+    setScheduleYears(loadScheduleYears());
+
+    const mergedPeople = mergePeople(CREW_SCHEDULE.people, loadedRoster);
+    const merged = mergeRotationBook(mergedPeople, loadRotations());
+    const migrated = migrateOpsIntoRotations(merged, seededOps, flights);
+    const withFlights = assumeFlightsBooked(migrated);
+    setRotationBook(withFlights);
+    saveRotations(withFlights);
+
     setHydrated(true);
     const params = new URLSearchParams(window.location.search);
     const person = params.get("person");
@@ -145,9 +238,12 @@ export function CrewBoard() {
   }, []);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId && !selectedRotationId) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setSelectedId(null);
+      if (event.key === "Escape") {
+        setSelectedId(null);
+        setSelectedRotationId(null);
+      }
     }
     window.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;
@@ -156,7 +252,7 @@ export function CrewBoard() {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
     };
-  }, [selectedId]);
+  }, [selectedId, selectedRotationId]);
 
   async function dispatchMail(payload: { kind: "briefing" | "alert"; to: string; subject: string; text: string; html: string }) {
     const response = await fetch("/api/notify", {
@@ -210,8 +306,8 @@ export function CrewBoard() {
                 sentAlertFingerprints: [...settings.sentAlertFingerprints, alert.fingerprint].slice(-200),
               }));
             })
-            .catch((error) => {
-              setNotifyMsg(error instanceof Error ? error.message : "Instant alert failed.");
+            .catch(() => {
+              /* keep quiet in UI when mail is not configured */
             });
         }
       }
@@ -227,9 +323,89 @@ export function CrewBoard() {
     });
   }
 
+  function saveFlightBooking(booking: FlightBooking) {
+    const nextFlights = upsertFlightBooking(flightBook, booking);
+    setFlightBook(nextFlights);
+    saveFlights(nextFlights);
+    patchOps(booking.personId, (current) =>
+      syncOpsFromFlights({ [booking.personId]: current }, nextFlights, booking.personId),
+    );
+  }
+
   const people = useMemo(() => mergePeople(CREW_SCHEDULE.people, roster), [roster]);
-  const projects = useMemo(() => mergeProjects(CREW_PROJECTS as CrewProject[], roster), [roster]);
-  const overview = useMemo(() => crewOverview(today, opsBook, people), [opsBook, people, today]);
+  const projects = useMemo(
+    () => mergeProjects(CREW_PROJECTS as CrewProject[], roster),
+    [roster],
+  );
+  /** Overview / list / travel follow the selected year (live today inside the current year). */
+  const asOf = useMemo(() => {
+    const calendarYear = Number(today.slice(0, 4));
+    if (scheduleYear === calendarYear) return today;
+    if (scheduleYear < calendarYear) return `${scheduleYear}-12-31`;
+    return `${scheduleYear}-01-01`;
+  }, [scheduleYear, today]);
+
+  function openPersonRotation(personId: string, iso = asOf) {
+    const hit =
+      rotationForPersonOnDay(rotationBook, personId, iso) ||
+      currentRotationForPerson(rotationBook, personId, asOf);
+    if (hit) {
+      setSelectedRotationId(hit.id);
+      setSelectedId(null);
+      return;
+    }
+    setSelectedId(personId);
+  }
+
+  function saveRotationBook(next: RotationBook) {
+    setRotationBook(next);
+    saveRotations(next);
+  }
+
+  // Keep rotation book in sync when roster people/stints change
+  useEffect(() => {
+    if (!hydrated) return;
+    setRotationBook((prev) => {
+      const merged = assumeFlightsBooked(mergeRotationBook(people, prev));
+      const same =
+        merged.rotations.length === prev.rotations.length &&
+        merged.rotations.every((row, index) => {
+          const prior = prev.rotations[index];
+          return (
+            prior &&
+            prior.id === row.id &&
+            prior.plannedIn === row.plannedIn &&
+            prior.plannedOut === row.plannedOut &&
+            prior.outbound.confirmed === row.outbound.confirmed &&
+            prior.returnTravel.confirmed === row.returnTravel.confirmed
+          );
+        });
+      if (same) return prev;
+      saveRotations(merged);
+      return merged;
+    });
+  }, [hydrated, people]);
+
+  const selectedRotation = useMemo(
+    () => rotationBook.rotations.find((row) => row.id === selectedRotationId) ?? null,
+    [rotationBook.rotations, selectedRotationId],
+  );
+  const selectedRotationPerson = useMemo(
+    () => (selectedRotation ? people.find((row) => row.id === selectedRotation.personId) ?? null : null),
+    [people, selectedRotation],
+  );
+
+  const overview = useMemo(() => crewOverview(asOf, opsBook, people), [asOf, opsBook, people]);
+  const includeInactive = boardView === "employees";
+  const workingRows = useMemo(
+    () => (includeInactive ? overview.rows : overview.rows.filter((row) => row.person.active !== false)),
+    [includeInactive, overview.rows],
+  );
+
+  function withYearQuery(path: string, extra?: Record<string, string>) {
+    const params = new URLSearchParams({ year: String(scheduleYear), ...(extra || {}) });
+    return `${path}?${params.toString()}`;
+  }
 
   function makeBriefing() {
     return buildCrewBriefing({
@@ -244,16 +420,10 @@ export function CrewBoard() {
     });
   }
 
-  async function sendBriefing(manual = false) {
-    setNotifyMsg("");
+  async function sendBriefing() {
     try {
       const briefing = makeBriefing();
-      setBriefingPreview(briefing.text);
-      if (!notify.recipientEmail) {
-        setNotifyMsg("Add Katrina’s email, then send again. Preview is ready below.");
-        setShowNotify(true);
-        return;
-      }
+      if (!notify.recipientEmail) return;
       await dispatchMail({
         kind: "briefing",
         to: notify.recipientEmail,
@@ -266,21 +436,16 @@ export function CrewBoard() {
         lastBriefingAt: new Date().toISOString(),
         lastBriefingFingerprint: `${briefing.today}:${briefing.counts.overdue}:${briefing.counts.dueSoon}:${briefing.counts.travelAttention}`,
       }));
-      setNotifyMsg(manual ? "Daily briefing sent to Katrina." : "8:00 AM briefing sent to Katrina.");
-    } catch (error) {
-      setNotifyMsg(error instanceof Error ? error.message : "Briefing could not be sent.");
-      setShowNotify(true);
+    } catch {
+      /* keep quiet in UI when mail is not configured */
     }
   }
 
   useEffect(() => {
     if (!hydrated || !notify.dailyBriefing) return;
     if (!shouldOfferMorningBriefing(notify)) return;
-    if (!notify.recipientEmail) {
-      setNotifyMsg("Morning briefing is due (8:00 AM Montreal). Add Katrina’s email to send it.");
-      return;
-    }
-    void sendBriefing(false);
+    if (!notify.recipientEmail) return;
+    void sendBriefing();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when hydrated after 8 AM
   }, [hydrated]);
 
@@ -298,114 +463,64 @@ export function CrewBoard() {
       .split(",")
       .map((item) => item.trim().toUpperCase())
       .filter(Boolean);
-    const projectIds = newEmployee.projects
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .map((item) => {
-        const existing = projects.find((project) => project.name.toLowerCase() === item.toLowerCase() || project.id === item);
-        return existing?.id ?? slugProject(item);
-      });
-    patchRoster((current) => {
-      const nextProjects = [...current.projects];
-      for (const projectId of projectIds) {
-        if (!nextProjects.some((project) => project.id === projectId) && !CREW_PROJECTS.some((project) => project.id === projectId)) {
-          nextProjects.push({ id: projectId, name: projectId.replace(/-/g, " "), source: "manual", year: CREW_SCHEDULE.year });
-        }
-      }
-      return {
-        ...current,
-        projects: nextProjects,
-        employees: [
-          ...current.employees,
-          {
-            id,
-            name,
-            role: roleName,
-            homeSites,
-            projectIds,
-            rotationDays: 42,
-            notes: "",
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      };
-    });
-    setNewEmployee({ name: "", role: "Labourers", sites: "", projects: "" });
+    patchRoster((current) => ({
+      ...current,
+      employees: [
+        ...current.employees,
+        {
+          id,
+          name,
+          role: roleName,
+          homeSites,
+          projectIds: [],
+          rotationDays: 42,
+          notes: "",
+          createdAt: new Date().toISOString(),
+          employmentStatus: "active",
+        },
+      ],
+      employmentStatus: { ...current.employmentStatus, [id]: "active" },
+    }));
+    setNewEmployee({ name: "", role: "Labourer", sites: "" });
     setShowAddEmployee(false);
     setSelectedId(id);
   }
 
-  function addProject() {
-    const name = newProjectName.trim();
-    if (!name) return;
-    const id = slugProject(name);
-    patchRoster((current) => {
-      if (current.projects.some((project) => project.id === id) || CREW_PROJECTS.some((project) => project.id === id)) {
-        return current;
-      }
-      return {
-        ...current,
-        projects: [...current.projects, { id, name, source: "manual", year: CREW_SCHEDULE.year }],
-      };
-    });
-    setNewProjectName("");
-    setShowAddProject(false);
-  }
-
-  function setPersonProjects(personId: string, projectIds: string[]) {
-    patchRoster((current) => {
-      const manualIndex = current.employees.findIndex((employee) => employee.id === personId);
-      if (manualIndex >= 0) {
-        const employees = current.employees.map((employee, index) =>
-          index === manualIndex ? { ...employee, projectIds } : employee,
-        );
-        return { ...current, employees };
-      }
-      return {
-        ...current,
-        projectLinks: { ...current.projectLinks, [personId]: projectIds },
-      };
+  function patchScheduleView(recipe: (current: CrewScheduleViewPrefs) => CrewScheduleViewPrefs) {
+    setScheduleView((prev) => {
+      const next = recipe(prev);
+      saveScheduleViewPrefs(next);
+      return next;
     });
   }
 
-  const duplicateNames = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const row of overview.rows) counts.set(row.person.name, (counts.get(row.person.name) ?? 0) + 1);
-    return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([name]) => name));
-  }, [overview.rows]);
+  const hiddenIdSet = useMemo(
+    () => new Set(scheduleView.hiddenPersonIds),
+    [scheduleView.hiddenPersonIds],
+  );
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return overview.rows
+    return workingRows
       .filter((row) => {
-        if (role && row.person.role !== role) return false;
+        const roles = row.person.roles?.length ? row.person.roles : [row.person.role];
+        if (role && !roles.includes(role)) return false;
         if (site && row.site !== site) return false;
-        if (focus === "on_site" && row.duty !== "on_site") return false;
-        if (focus === "off" && row.duty !== "off_rotation") return false;
-        if (focus === "upcoming" && row.duty !== "upcoming") return false;
-        if (focus === "unassigned" && row.duty !== "unassigned") return false;
-        if (focus === "overdue" && !row.overdue) return false;
-        if (focus === "due_soon" && !row.dueSoon) return false;
-        if (
-          focus === "travel" &&
-          !row.alerts.some((alert) => alert === "return_flight" || alert === "outbound_flight" || alert === "accommodation")
-        ) {
-          return false;
-        }
-        if (projectFilter && !row.person.projectIds.includes(projectFilter)) return false;
         if (
           needle &&
           !row.person.name.toLowerCase().includes(needle) &&
-          !row.person.role.toLowerCase().includes(needle) &&
-          !row.person.projectIds.some((id) => projectLabel(projects, id).toLowerCase().includes(needle))
+          !roles.some((entry) => entry.toLowerCase().includes(needle))
         ) {
           return false;
         }
         return true;
       })
       .sort((a, b) => {
-        const rank = (row: CrewSnapshot) => {
+        const roleRank = (value: string) => {
+          const index = (CREW_ROLE_ORDER as readonly string[]).indexOf(value);
+          return index === -1 ? CREW_ROLE_ORDER.length : index;
+        };
+        const urgency = (row: CrewSnapshot) => {
           if (row.overdue) return 0;
           if (row.dueSoon) return 1;
           if (row.alerts.length) return 2;
@@ -413,149 +528,41 @@ export function CrewBoard() {
           if (row.duty === "upcoming") return 4;
           return 5;
         };
-        return rank(a) - rank(b) || a.person.name.localeCompare(b.person.name) || a.person.role.localeCompare(b.person.role);
+        if (boardView === "employees") {
+          const aInactive = a.person.active === false ? 1 : 0;
+          const bInactive = b.person.active === false ? 1 : 0;
+          return (
+            aInactive - bInactive ||
+            roleRank(a.person.role) - roleRank(b.person.role) ||
+            a.person.name.localeCompare(b.person.name)
+          );
+        }
+        return (
+          roleRank(a.person.role) - roleRank(b.person.role) ||
+          urgency(a) - urgency(b) ||
+          a.person.name.localeCompare(b.person.name)
+        );
       });
-  }, [focus, overview.rows, projectFilter, projects, query, role, site]);
+  }, [boardView, query, role, site, workingRows]);
+
+  const scheduleRows = useMemo(
+    () => rows.filter((row) => !hiddenIdSet.has(row.person.id)),
+    [hiddenIdSet, rows],
+  );
+
+  const hiddenPeople = useMemo(() => {
+    const byId = new Map(overview.rows.map((row) => [row.person.id, row.person.name]));
+    return scheduleView.hiddenPersonIds.map((id) => ({
+      id,
+      name: byId.get(id) || id,
+    }));
+  }, [overview.rows, scheduleView.hiddenPersonIds]);
 
   const selected = overview.rows.find((row) => row.person.id === selectedId) ?? null;
   const selectedOps = selected ? opsFor(opsBook, selected.person.id) : null;
-  const reconciled =
-    overview.onSite + overview.offRotation + overview.inTransit + overview.upcoming + overview.unassigned;
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">Crew logistics</p>
-          <h1 className="mt-2 font-heading text-3xl tracking-tight sm:text-4xl">Crew {CREW_SCHEDULE.year}</h1>
-          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            Who is on site, how far through the 42-day rotation, when they leave, and whether return travel and
-            accommodation are arranged. Reminders start {RETURN_SOON_DAYS} days before planned Out. In = arrive on
-            site · Out = leave site. Year {CREW_SCHEDULE.year} from {CREW_SCHEDULE.sheet || CREW_SCHEDULE.source}.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setBriefingPreview(makeBriefing().text);
-              setShowNotify(true);
-            }}
-            className="inline-flex items-center gap-2 rounded-lg border border-input bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            <Bell className="size-4" />
-            Katrina alerts
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAddProject((open) => !open)}
-            className="rounded-lg border border-input bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            Add project
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAddEmployee((open) => !open)}
-            className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-          >
-            Add employee
-          </button>
-        </div>
-      </header>
-
-      {notifyMsg ? (
-        <p className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">{notifyMsg}</p>
-      ) : null}
-
-      {showNotify ? (
-        <section className="grid gap-4 rounded-2xl border border-border bg-card p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">Notifications</p>
-              <h2 className="mt-1 font-heading text-2xl tracking-tight">Katrina daily briefing &amp; alerts</h2>
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                Email the 8:00 AM Montreal briefing and critical change alerts. Instant alerts fire when planned dates,
-                flights, or lodging change. Routine notes stay in the daily summary.
-              </p>
-            </div>
-            <button type="button" onClick={() => setShowNotify(false)} className="rounded-lg border border-input px-3 py-1.5 text-sm">
-              Close
-            </button>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="grid gap-1 text-sm">
-              <span className="text-muted-foreground">Recipient name</span>
-              <input
-                value={notify.recipientName}
-                onChange={(event) => patchNotify((settings) => ({ ...settings, recipientName: event.target.value }))}
-                className="h-9 rounded-lg border border-input bg-card px-2"
-              />
-            </label>
-            <label className="grid gap-1 text-sm sm:col-span-1 lg:col-span-2">
-              <span className="text-muted-foreground">Email</span>
-              <input
-                type="email"
-                value={notify.recipientEmail}
-                onChange={(event) => patchNotify((settings) => ({ ...settings, recipientEmail: event.target.value.trim() }))}
-                placeholder="katrina@towerarctic.ca"
-                className="h-9 rounded-lg border border-input bg-card px-2"
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="text-muted-foreground">Your name on updates</span>
-              <input
-                value={staffName}
-                onChange={(event) => setStaffName(event.target.value)}
-                className="h-9 rounded-lg border border-input bg-card px-2"
-              />
-            </label>
-          </div>
-          <div className="flex flex-wrap gap-4 text-sm">
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={notify.dailyBriefing}
-                onChange={(event) => patchNotify((settings) => ({ ...settings, dailyBriefing: event.target.checked }))}
-              />
-              Auto 8:00 AM briefing
-            </label>
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={notify.instantAlerts}
-                onChange={(event) => patchNotify((settings) => ({ ...settings, instantAlerts: event.target.checked }))}
-              />
-              Instant alerts for critical changes
-            </label>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setBriefingPreview(makeBriefing().text)}
-              className="rounded-lg border border-input px-3 py-2 text-sm font-medium hover:bg-muted"
-            >
-              Preview briefing
-            </button>
-            <button
-              type="button"
-              onClick={() => void sendBriefing(true)}
-              className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Send briefing now
-            </button>
-          </div>
-          {briefingPreview ? (
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-xl bg-muted/50 p-4 text-xs leading-relaxed text-foreground">
-              {briefingPreview}
-            </pre>
-          ) : null}
-          <p className="text-xs text-muted-foreground">
-            Last briefing: {notify.lastBriefingAt ? new Date(notify.lastBriefingAt).toLocaleString() : "not sent yet"}.
-            Delivery uses the same Microsoft Graph mail settings as Camp Bookings when configured.
-          </p>
-        </section>
-      ) : null}
-
+    <div className="flex flex-col gap-4">
       {showAddEmployee ? (
         <section className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
           <label className="grid gap-1 text-sm">
@@ -590,15 +597,6 @@ export function CrewBoard() {
               placeholder="IQA, POND"
             />
           </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-muted-foreground">Projects</span>
-            <input
-              value={newEmployee.projects}
-              onChange={(event) => setNewEmployee({ ...newEmployee, projects: event.target.value })}
-              className="h-9 rounded-lg border border-input bg-card px-2"
-              placeholder="Side 1, AV328"
-            />
-          </label>
           <div className="flex items-end gap-2">
             <button type="button" onClick={addEmployee} className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">
               Save employee
@@ -610,126 +608,243 @@ export function CrewBoard() {
         </section>
       ) : null}
 
-      {showAddProject ? (
-        <section className="flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-card p-4">
-          <label className="grid min-w-[16rem] flex-1 gap-1 text-sm">
-            <span className="text-muted-foreground">Project name</span>
-            <input
-              value={newProjectName}
-              onChange={(event) => setNewProjectName(event.target.value)}
-              className="h-9 rounded-lg border border-input bg-card px-2"
-              placeholder="NRC - 2308"
+      <section className={cn(boardView === "overview" || boardView === "settings" ? "" : "overflow-hidden rounded-2xl border border-border bg-card")}>
+        {boardView !== "overview" && boardView !== "settings" ? (
+          <div className="flex flex-wrap items-end gap-3 border-b border-border px-3 py-3 sm:px-4">
+            <label className="grid gap-1 text-sm text-muted-foreground">
+              <span>Search</span>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Name or role"
+                className="h-9 w-44 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+              />
+            </label>
+            <label className="grid gap-1 text-sm text-muted-foreground">
+              <span>Role</span>
+              <select
+                value={role}
+                onChange={(event) => setRole(event.target.value)}
+                className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+              >
+                <option value="">All roles</option>
+                {CREW_ROLES.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm text-muted-foreground">
+              <span>Site</span>
+              <select
+                value={site}
+                onChange={(event) => setSite(event.target.value)}
+                className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+              >
+                <option value="">All sites</option>
+                {sitesBook.sites.map((entry) => (
+                  <option key={entry.code} value={entry.code}>
+                    {entry.code}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="ml-auto flex flex-wrap items-end gap-2 pb-0.5">
+              <p className="pb-2 text-sm text-muted-foreground">{hydrated ? `${rows.length} people` : "Loading…"}</p>
+              <button
+                type="button"
+                onClick={() => setShowAddEmployee((open) => !open)}
+                className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                Add employee
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {boardView === "overview" ? (
+          <CrewOverview
+            rows={overview.rows.filter((row) => row.person.active !== false)}
+            rotationBook={rotationBook}
+            asOf={asOf}
+            reminders={{
+              planDays: notify.reminderPlanDays,
+              checkDays: notify.reminderCheckDays,
+              escalateDays: notify.reminderEscalateDays,
+            }}
+            onOpenPerson={openPersonRotation}
+            onOpenRotation={(rotationId) => {
+              setSelectedRotationId(rotationId);
+              setSelectedId(null);
+            }}
+          />
+        ) : null}
+
+        {boardView === "travel" ? (
+          <div className="border-t border-border p-3 sm:p-4">
+            <CrewTravelDesk
+              rows={rows}
+              opsBook={opsBook}
+              flightBook={flightBook}
+              today={asOf}
+              onOpen={openPersonRotation}
             />
-          </label>
-          <button type="button" onClick={addProject} className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">
-            Save project
-          </button>
-          <button type="button" onClick={() => setShowAddProject(false)} className="h-9 rounded-lg border border-input px-3 text-sm">
-            Cancel
-          </button>
-        </section>
-      ) : null}
+          </div>
+        ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <Stat label="On site" value={String(overview.onSite)} hint={formatLong(today)} />
-        <Stat label="Off rotation" value={String(overview.offRotation)} hint="Away from work sites" />
-        <Stat
-          label="Other status"
-          value={String(overview.inTransit + overview.upcoming + overview.unassigned)}
-          hint={`${overview.inTransit} transit · ${overview.upcoming} upcoming · ${overview.unassigned} unassigned`}
-        />
-        <Stat label="Due soon" value={String(overview.dueSoon)} hint={`Planned Out within ${RETURN_SOON_DAYS} days`} />
-        <Stat label="Overdue" value={String(overview.overdue)} hint="Past planned Out" tone="rose" />
-        <Stat label="Travel attention" value={String(overview.travelAttention)} hint="Flights or lodging" />
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {overview.total} people · {reconciled} accounted in status buckets
-        {reconciled !== overview.total ? " · counts need review" : ""}
-      </p>
-
-      <section className="overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="flex flex-wrap items-end gap-3 border-b border-border px-4 py-3">
-          <label className="grid gap-1 text-sm text-muted-foreground">
-            Search
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Name or role"
-              className="h-9 w-44 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+        {boardView === "accommodation" ? (
+          <div className="border-t border-border p-3 sm:p-4">
+            <CrewAccommodationDesk
+              rows={rows}
+              opsBook={opsBook}
+              today={asOf}
+              onOpen={openPersonRotation}
+              onMarkBooked={(personId) =>
+                patchOps(personId, (current) => ({ ...current, accommodation: "booked" }))
+              }
             />
-          </label>
-          <label className="grid gap-1 text-sm text-muted-foreground">
-            Role
-            <select
-              value={role}
-              onChange={(event) => setRole(event.target.value)}
-              className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
-            >
-              <option value="">All roles</option>
-              {CREW_ROLES.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm text-muted-foreground">
-            Site
-            <select
-              value={site}
-              onChange={(event) => setSite(event.target.value)}
-              className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
-            >
-              <option value="">All sites</option>
-              {FILTER_SITES.map((code) => (
-                <option key={code} value={code}>
-                  {siteLabel(code)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm text-muted-foreground">
-            Project
-            <select
-              value={projectFilter}
-              onChange={(event) => setProjectFilter(event.target.value)}
-              className="h-9 max-w-[12rem] rounded-lg border border-input bg-card px-2 text-sm text-foreground"
-            >
-              <option value="">All projects</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm text-muted-foreground">
-            Focus
-            <select
-              value={focus}
-              onChange={(event) => setFocus(event.target.value as FocusFilter)}
-              className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
-            >
-              <option value="all">Everyone</option>
-              <option value="on_site">On site</option>
-              <option value="off">Off rotation</option>
-              <option value="upcoming">Upcoming</option>
-              <option value="unassigned">Unassigned</option>
-              <option value="due_soon">Due soon</option>
-              <option value="overdue">Overdue</option>
-              <option value="travel">Travel / lodging</option>
-            </select>
-          </label>
-          <p className="ml-auto pb-2 text-sm text-muted-foreground">{hydrated ? `${rows.length} people` : "Loading…"}</p>
-        </div>
+          </div>
+        ) : null}
 
-        <div className="min-w-0 overflow-x-auto">
-          <div className="grid min-w-[56rem] grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] gap-2 border-b border-border px-4 py-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+        {boardView === "year" ? (
+          <div className="max-h-[min(70vh,40rem)] overflow-auto border-t border-border p-3 sm:p-4">
+            <CrewYearTape
+              year={scheduleYear}
+              today={today}
+              rows={scheduleRows.map((row) => ({ person: row.person }))}
+              sites={sitesBook.sites}
+              onOpen={openPersonRotation}
+              onMonthClick={(year, monthIndex, personId) => {
+                const month = String(monthIndex).padStart(2, "0");
+                const monthIso = `${year}-${month}-01`;
+                setMonthCursor(monthIso);
+                setScheduleYear(year);
+                router.push(
+                  withYearQuery("/month", {
+                    month: `${year}-${month}`,
+                    ...(personId ? { person: personId } : {}),
+                  }),
+                  { scroll: false },
+                );
+              }}
+              onAddRotation={(personId, input) =>
+                patchRoster((current) => addNextRotation(current, personId, input))
+              }
+              onHidePerson={(personId) => patchScheduleView((current) => hidePerson(current, personId))}
+              hiddenPeople={hiddenPeople}
+              onShowPerson={(personId) => patchScheduleView((current) => showPerson(current, personId))}
+              onShowAllHidden={() => patchScheduleView((current) => showAllPeople(current))}
+            />
+          </div>
+        ) : null}
+
+        {boardView === "month" ? (
+          <div className="flex flex-col gap-4 border-t border-border p-3 sm:p-4">
+            <CrewMonthGrid
+              monthStart={monthCursor}
+              today={today}
+              rows={scheduleRows.map((row) => ({ person: row.person }))}
+              opsBook={opsBook}
+              sites={sitesBook.sites}
+              onOpen={(personId) => openPersonRotation(personId, asOf)}
+              onOpenDay={(personId, iso) => openPersonRotation(personId, iso)}
+              onPrev={() => setMonthCursor((current) => shiftMonth(current, -1))}
+              onNext={() => setMonthCursor((current) => shiftMonth(current, 1))}
+              onThisMonth={() => setMonthCursor(`${scheduleYear}-11-01`)}
+              onSetBookWindow={(personId, recipe) => patchOps(personId, recipe)}
+              onAddRotation={(personId, input) =>
+                patchRoster((current) => addNextRotation(current, personId, input))
+              }
+              onHidePerson={(personId) => patchScheduleView((current) => hidePerson(current, personId))}
+              hiddenPeople={hiddenPeople}
+              onShowPerson={(personId) => patchScheduleView((current) => showPerson(current, personId))}
+              onShowAllHidden={() => patchScheduleView((current) => showAllPeople(current))}
+            />
+          </div>
+        ) : null}
+
+        {boardView === "settings" ? (
+          <CrewSettingsPanel
+            sitesBook={sitesBook}
+            rolesBook={rolesBook}
+            notify={notify}
+            years={scheduleYears}
+            onSitesChange={(book) => {
+              setSitesBook(book);
+              saveSitesBook(book);
+            }}
+            onRolesChange={(book) => {
+              setRolesBook(book);
+              saveRolesBook(book);
+            }}
+            onNotifyChange={patchNotify}
+            onYearsChange={setScheduleYears}
+          />
+        ) : null}
+
+        {boardView === "employees" ? (
+          <div className="max-h-[min(70vh,40rem)] overflow-y-auto border-t border-border">
+            {rows.length === 0 ? (
+              <p className="px-4 py-8 text-sm text-muted-foreground">No crew match these filters.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {rows.map((row) => {
+                  const isActive = row.person.active !== false;
+                  return (
+                    <li key={row.person.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => openPersonRotation(row.person.id)}
+                        className="min-w-0 flex-1 text-left hover:opacity-80"
+                      >
+                        <p className="font-semibold">{row.person.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {roleLabel(row.person)}
+                          {row.person.manual ? " · Manual" : ""}
+                        </p>
+                      </button>
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+                          isActive ? "bg-emerald-100 text-emerald-950" : "bg-stone-200 text-stone-700",
+                        )}
+                      >
+                        {isActive ? "Active" : "Inactive"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(row.person.id)}
+                        className="h-8 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90"
+                      >
+                        {isActive ? "Add rotation" : "Set active + add rotation"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          patchRoster((current) =>
+                            setEmploymentStatus(current, row.person.id, isActive ? "inactive" : "active"),
+                          )
+                        }
+                        className="h-8 rounded-lg border border-input px-3 text-xs font-medium hover:bg-muted"
+                      >
+                        {isActive ? "Set inactive" : "Set active"}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : null}
+
+        <div className={cn("min-w-0 max-h-[min(70vh,40rem)] overflow-auto", boardView !== "list" && "hidden")}>
+          <div className="sticky top-0 z-10 grid min-w-[56rem] grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] gap-2 border-b border-border bg-card px-4 py-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
             <span>Crew</span>
             <span>Site</span>
             <span>Status</span>
-            <span>Came in</span>
-            <span>Going out</span>
+            <span>IN</span>
+            <span>OUT</span>
             <span>Rotation</span>
             <span>Departure</span>
             <span>Return</span>
@@ -739,35 +854,40 @@ export function CrewBoard() {
             <p className="px-4 py-8 text-sm text-muted-foreground">No crew match these filters.</p>
           ) : (
             <ul>
-              {rows.map((row) => {
+              {rows.map((row, index) => {
                 const ops = opsFor(opsBook, row.person.id);
                 const progress =
                   row.daysOnSite == null ? null : Math.min(100, Math.round((row.daysOnSite / row.rotationDays) * 100));
+                const previous = index > 0 ? rows[index - 1] : null;
+                const showRoleHeader = !previous || previous.person.role !== row.person.role;
                 return (
                   <li key={row.person.id} className="border-b border-border">
+                    {showRoleHeader ? (
+                      <CrewRoleHeader
+                        role={row.person.role}
+                        spaced={index > 0}
+                        count={rows.filter((entry) => entry.person.role === row.person.role).length}
+                      />
+                    ) : null}
                     <button
                       type="button"
-                      onClick={() => setSelectedId(row.person.id)}
+                      onClick={() => openPersonRotation(row.person.id)}
                       className="grid min-w-[56rem] w-full grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] items-center gap-2 px-4 py-3 text-left hover:bg-muted/50"
                     >
                       <span className="min-w-0">
                         <span className="block truncate font-medium">{row.person.name}</span>
                         <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                          {row.person.role}
-                          {row.person.manual ? " · added" : ""}
-                          {duplicateNames.has(row.person.name) ? " · separate sheet row" : ""}
-                          {row.person.projectIds.length
-                            ? ` · ${row.person.projectIds.map((id) => projectLabel(projects, id)).join(", ")}`
-                            : ""}
+                          {row.site ? catalogSiteLabel(row.site, sitesBook) : "Off site"}
+                          {row.fourWeeksOut ? " · 4 weeks out" : ""}
                         </span>
                       </span>
                       <span>
                         {row.site ? (
-                          <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-semibold", siteTone(row.site))}>
+                          <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-semibold", siteTone(row.site, sitesBook))}>
                             {row.site}
                           </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                          <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </span>
                       <span>
@@ -776,13 +896,13 @@ export function CrewBoard() {
                         </span>
                       </span>
                       <span className="text-sm tabular-nums text-muted-foreground">
-                        {row.plannedIn ? formatMedium(row.plannedIn) : "—"}
+                        {row.plannedIn ? formatMedium(row.plannedIn) : "-"}
                       </span>
                       <span className="text-sm tabular-nums text-muted-foreground">
-                        {row.plannedOut ? formatMedium(row.plannedOut) : "—"}
+                        {row.plannedOut ? formatMedium(row.plannedOut) : "-"}
                       </span>
                       <span className="text-sm tabular-nums text-muted-foreground">
-                        {row.rotationDay == null ? "—" : `Day ${row.rotationDay} of ${row.rotationDays}`}
+                        {row.rotationDay == null ? "-" : `Day ${row.rotationDay} of ${row.rotationDays}`}
                         {progress != null ? <span className="mt-0.5 block text-[11px]">{progress}%</span> : null}
                       </span>
                       <span
@@ -806,8 +926,6 @@ export function CrewBoard() {
         </div>
       </section>
 
-      {CREW_SCHEDULE.note ? <p className="text-xs text-muted-foreground">{CREW_SCHEDULE.note}</p> : null}
-
       {selected && selectedOps ? (
         <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/45 p-0 sm:p-4" role="presentation">
           <button type="button" aria-label="Close crew detail" className="absolute inset-0" onClick={() => setSelectedId(null)} />
@@ -820,36 +938,39 @@ export function CrewBoard() {
             <PersonProfile
               snap={selected}
               ops={selectedOps}
-              projects={projects}
               staffName={staffName}
               year={CREW_SCHEDULE.year}
+              flightBook={flightBook}
               onClose={() => setSelectedId(null)}
               onChange={(recipe) => patchOps(selected.person.id, recipe)}
-              onProjectsChange={(projectIds) => setPersonProjects(selected.person.id, projectIds)}
+              onSaveFlight={saveFlightBooking}
+              onEmploymentStatus={(status) =>
+                patchRoster((current) => setEmploymentStatus(current, selected.person.id, status))
+              }
+              onAddRotation={(input) =>
+                patchRoster((current) => addNextRotation(current, selected.person.id, input))
+              }
             />
           </div>
         </div>
       ) : null}
-    </div>
-  );
-}
 
-function Stat({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: "rose";
-}) {
-  return (
-    <div className={cn("rounded-2xl border border-border bg-card px-5 py-4", tone === "rose" && "border-rose-200")}>
-      <p className="text-[11px] tracking-[0.16em] text-muted-foreground uppercase">{label}</p>
-      <p className={cn("mt-2 font-heading text-3xl tracking-tight", tone === "rose" && "text-rose-800")}>{value}</p>
-      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+      {selectedRotation && selectedRotationPerson ? (
+        <CrewRotationDrawer
+          key={selectedRotation.id}
+          rotation={selectedRotation}
+          person={selectedRotationPerson}
+          people={people}
+          book={rotationBook}
+          asOf={asOf}
+          staffName={staffName}
+          sites={sitesBook.sites}
+          roles={[...new Set([...CREW_ROLES, ...rolesBook.extras])]}
+          onClose={() => setSelectedRotationId(null)}
+          onSaveBook={saveRotationBook}
+          onSaveRoster={patchRoster}
+        />
+      ) : null}
     </div>
   );
 }
@@ -857,36 +978,33 @@ function Stat({
 function PersonProfile({
   snap,
   ops,
-  projects,
   staffName,
   year,
+  flightBook,
   onClose,
   onChange,
-  onProjectsChange,
+  onSaveFlight,
+  onEmploymentStatus,
+  onAddRotation,
 }: {
   snap: CrewSnapshot;
   ops: CrewPersonOps;
-  projects: CrewProject[];
   staffName: string;
   year: number;
+  flightBook: FlightBook;
   onClose: () => void;
   onChange: (recipe: (current: CrewPersonOps) => CrewPersonOps) => void;
-  onProjectsChange: (projectIds: string[]) => void;
+  onSaveFlight: (booking: FlightBooking) => void;
+  onEmploymentStatus: (status: EmploymentStatus) => void;
+  onAddRotation: (input: { site: string; from: string; out: string; role: string }) => void;
 }) {
   const [note, setNote] = useState("");
   const segments = personSegments(snap.person);
-  const onSite = snap.duty === "on_site" || snap.duty === "in_transit";
   const progress =
     snap.daysOnSite == null ? null : Math.min(100, Math.round((snap.daysOnSite / snap.rotationDays) * 100));
-  const cameIn = ops.actualIn || snap.plannedIn;
-  const goingOut = ops.actualOut || snap.expectedOut || snap.plannedOut;
-
-  function toggleProject(projectId: string) {
-    const current = snap.person.projectIds;
-    onProjectsChange(
-      current.includes(projectId) ? current.filter((id) => id !== projectId) : [...current, projectId],
-    );
-  }
+  const cameIn = snap.plannedIn;
+  const goingOut = snap.expectedOut || snap.plannedOut;
+  const isActive = snap.person.active !== false;
 
   function addUpdate() {
     const text = note.trim();
@@ -911,10 +1029,7 @@ function PersonProfile({
           <h2 id="crew-person-title" className="mt-1 font-heading text-3xl tracking-tight">
             {snap.person.name}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {snap.person.role}
-            {snap.person.manual ? " · added in app" : ""}
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{roleLabel(snap.person)}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold", statusTone(snap.duty))}>
               {dutyLabel(snap.duty)}
@@ -924,21 +1039,29 @@ function PersonProfile({
                 {siteLabel(snap.site)}
               </span>
             ) : null}
-            {snap.person.projectIds.map((projectId) => (
-              <span key={projectId} className="inline-flex rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-800">
-                {projectLabel(projects, projectId)}
-              </span>
-            ))}
             {snap.overdue ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-900">
                 <AlertTriangle className="size-3.5" /> Overdue
               </span>
             ) : null}
-            {snap.dueSoon && !snap.overdue ? (
+            {snap.fourWeeksOut ? (
               <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-950">
-                Leave in {snap.daysUntilOut}d · start replacement
+                4 weeks out
               </span>
             ) : null}
+            {snap.dueSoon && !snap.overdue ? (
+              <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-950">
+                Leave in {snap.daysUntilOut}d
+              </span>
+            ) : null}
+            <span
+              className={cn(
+                "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+                isActive ? "bg-emerald-100 text-emerald-950" : "bg-stone-200 text-stone-700",
+              )}
+            >
+              {isActive ? "Active" : "Inactive"}
+            </span>
           </div>
         </div>
         <button
@@ -952,18 +1075,37 @@ function PersonProfile({
       </div>
 
       <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-7">
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4">
+        <div>
+          <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Employment</p>
+          <p className="mt-1 text-sm">
+            {isActive
+              ? "Included in live ops, travel, and action lists."
+              : "Hidden from live ops until set active again."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onEmploymentStatus(isActive ? "inactive" : "active")}
+          className="h-9 rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted"
+        >
+          {isActive ? "Set inactive" : "Set active"}
+        </button>
+      </section>
+
+      <CrewNextRotationForm
+        defaultSite={snap.site || snap.person.homeSites[0] || "IQA"}
+        defaultRole={snap.person.role}
+        defaultDays={rotationFor(snap.person)}
+        isActive={isActive}
+        onSave={onAddRotation}
+      />
+
       <section className="grid gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:grid-cols-3">
         <Fact label="Year" value={String(year)} />
+        <Fact label="IN" value={cameIn ? formatMedium(cameIn) : "-"} />
         <Fact
-          label="Came in"
-          value={
-            cameIn
-              ? `${formatMedium(cameIn)}${ops.actualIn ? " · actual" : " · planned"}`
-              : "Not recorded"
-          }
-        />
-        <Fact
-          label="Going out"
+          label="OUT"
           value={
             goingOut
               ? `${formatMedium(goingOut)}${
@@ -972,8 +1114,8 @@ function PersonProfile({
                     : snap.daysUntilOut < 0
                       ? ` · ${Math.abs(snap.daysUntilOut)}d overdue`
                       : ` · in ${snap.daysUntilOut}d`
-                }${ops.actualOut ? " · actual" : ""}`
-              : "Not recorded"
+                }`
+              : "-"
           }
         />
       </section>
@@ -988,12 +1130,12 @@ function PersonProfile({
             label="Days on site"
             value={
               snap.rotationDay == null
-                ? "—"
+                ? "-"
                 : `Day ${snap.rotationDay} of ${snap.rotationDays}${progress != null ? ` · ${progress}%` : ""}`
             }
           />
-          <Fact label="Planned In" value={snap.plannedIn ? formatMedium(snap.plannedIn) : "—"} />
-          <Fact label="Planned Out" value={snap.plannedOut ? formatMedium(snap.plannedOut) : "—"} />
+          <Fact label="IN" value={snap.plannedIn ? formatMedium(snap.plannedIn) : "-"} />
+          <Fact label="OUT" value={snap.plannedOut ? formatMedium(snap.plannedOut) : "-"} />
         </dl>
         {progress != null ? (
           <div className="mt-1">
@@ -1008,104 +1150,91 @@ function PersonProfile({
       </section>
 
       <section className="grid gap-3">
-        <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Projects</p>
-        <p className="text-xs text-muted-foreground">A person can be on more than one project at the same time.</p>
-        <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
-          {projects.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No projects yet. Add one from the header.</p>
-          ) : (
-            projects.map((project) => {
-              const checked = snap.person.projectIds.includes(project.id);
-              return (
-                <label key={project.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/60">
-                  <input type="checkbox" checked={checked} onChange={() => toggleProject(project.id)} />
-                  <span className="min-w-0 truncate">{project.name}</span>
-                </label>
-              );
-            })
-          )}
-        </div>
-      </section>
-
-      <section className="grid gap-3">
-        <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Came in &amp; going out</p>
-        <p className="text-xs text-muted-foreground">
-          Year {year}. Planned dates come from the {year} schedule. Override them or record actual In / Out when plans change.
-        </p>
+        <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">IN &amp; OUT</p>
         <div className="grid gap-2 sm:grid-cols-2">
           <DateField
-            label="Came in (planned override)"
+            label="IN"
             value={ops.plannedInOverride ?? ""}
             onChange={(value) => onChange((current) => ({ ...current, plannedInOverride: value || null }))}
           />
           <DateField
-            label="Going out (planned override)"
+            label="OUT"
             value={ops.plannedOutOverride ?? ""}
             onChange={(value) => onChange((current) => ({ ...current, plannedOutOverride: value || null }))}
-          />
-          <DateField
-            label="Actual In"
-            value={ops.actualIn ?? ""}
-            onChange={(value) => onChange((current) => ({ ...current, actualIn: value || null }))}
-          />
-          <DateField
-            label="Actual Out"
-            value={ops.actualOut ?? ""}
-            onChange={(value) => onChange((current) => ({ ...current, actualOut: value || null }))}
           />
         </div>
       </section>
 
+      <CrewFlightPanel
+        personId={snap.person.id}
+        personName={snap.person.name}
+        role={snap.person.role}
+        site={snap.site}
+        plannedIn={snap.plannedIn}
+        plannedOut={snap.plannedOut}
+        staffName={staffName}
+        flightBook={flightBook}
+        onSave={onSaveFlight}
+      />
+
       <section className="grid gap-3">
-        <p className="flex items-center gap-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-          <Plane className="size-3.5" /> Travel & accommodation
+        <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+          Accommodation
         </p>
-        <StatusField
-          label="Outbound flight"
-          value={ops.outboundFlight}
-          onChange={(value) => onChange((current) => ({ ...current, outboundFlight: value }))}
-        />
-        <StatusField
-          label="Return flight"
-          value={ops.returnFlight}
-          onChange={(value) => onChange((current) => ({ ...current, returnFlight: value }))}
-        />
-        <StatusField
-          label="Accommodation"
-          value={ops.accommodation}
-          onChange={(value) => onChange((current) => ({ ...current, accommodation: value }))}
-        />
-        <label className="grid gap-1 text-sm">
-          <span className="text-muted-foreground">Confirmation #</span>
+        <label className="flex items-start gap-3 rounded-xl border border-border bg-card px-3 py-3 text-sm">
           <input
-            value={ops.confirmation}
-            onChange={(event) => onChange((current) => ({ ...current, confirmation: event.target.value }))}
-            className="h-9 rounded-lg border border-input bg-card px-2 text-sm"
-            placeholder="Flight or lodging reference"
+            type="checkbox"
+            className="mt-1 size-4"
+            checked={ops.accommodation === "booked" || ops.accommodation === "confirmed"}
+            onChange={(event) =>
+              onChange((current) => ({
+                ...current,
+                accommodation: event.target.checked ? "booked" : "needed",
+              }))
+            }
           />
+          <span className="font-semibold">Accommodation booked</span>
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="text-muted-foreground">Flight notes</span>
-          <textarea
-            value={ops.flightNotes}
-            onChange={(event) => onChange((current) => ({ ...current, flightNotes: event.target.value }))}
-            rows={2}
-            className="rounded-lg border border-input bg-card px-2 py-1.5 text-sm"
-          />
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span className="text-muted-foreground">Accommodation notes</span>
-          <textarea
+          <span className="text-muted-foreground">Accommodation confirmation #</span>
+          <input
             value={ops.accommodationNotes}
             onChange={(event) => onChange((current) => ({ ...current, accommodationNotes: event.target.value }))}
-            rows={2}
-            className="rounded-lg border border-input bg-card px-2 py-1.5 text-sm"
+            className="h-9 rounded-lg border border-input bg-card px-2 text-sm"
+            placeholder="Hotel / camp confirmation"
           />
         </label>
-        {(ops.returnFlight === "not_started" || ops.returnFlight === "needed") && onSite ? (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">
-            Action needed: return flight is {bookingLabel(ops.returnFlight).toLowerCase()}.
-          </p>
+        {(snap.person.flights?.length ?? 0) > 0 ? (
+          <div className="space-y-2 rounded-xl border border-border bg-card p-3">
+            <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Sheet flights</p>
+            <ul className="space-y-2 text-sm">
+              {snap.person.flights!.map((flight, index) => (
+                <li key={`${snap.person.id}-flight-${index}`} className="rounded-lg bg-muted/50 px-3 py-2">
+                  {flight.arriveIqa ? (
+                    <p>
+                      <span className="font-semibold text-teal-800">Inbound</span>
+                      {" · "}
+                      {formatMedium(flight.arriveIqa)}
+                      {flight.arriveRef ? ` · ${flight.arriveRef}` : ""}
+                    </p>
+                  ) : null}
+                  {flight.departIqa ? (
+                    <p>
+                      <span className="font-semibold text-sky-800">Outbound</span>
+                      {" · "}
+                      {formatMedium(flight.departIqa)}
+                      {flight.departRef ? ` · ${flight.departRef}` : ""}
+                    </p>
+                  ) : null}
+                  {(flight.camp || flight.note) && (
+                    <p className="text-xs text-muted-foreground">
+                      {[flight.camp, flight.note].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
       </section>
 
@@ -1121,7 +1250,7 @@ function PersonProfile({
                 addUpdate();
               }
             }}
-            placeholder="Record a change or reminder"
+            placeholder="Update"
             className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-card px-2 text-sm"
           />
           <button
@@ -1151,7 +1280,7 @@ function PersonProfile({
       <section className="grid gap-2">
         <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Work & travel timeline</p>
         {segments.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No dated marks in the spreadsheet for this person.</p>
+          <p className="text-sm text-muted-foreground">No dated marks for this person yet.</p>
         ) : (
           <ul className="flex max-h-56 flex-col gap-1.5 overflow-y-auto">
             {segments.map((segment) => (
@@ -1172,14 +1301,6 @@ function PersonProfile({
           </ul>
         )}
       </section>
-
-      <button
-        type="button"
-        className="text-left text-xs text-muted-foreground hover:text-foreground"
-        onClick={() => onChange(() => emptyCrewOps(snap.person.id))}
-      >
-        Clear ops for this person
-      </button>
       </div>
     </div>
   );

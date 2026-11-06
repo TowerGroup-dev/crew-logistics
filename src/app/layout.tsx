@@ -25,15 +25,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${sans.variable} ${display.variable} h-full`}>
       <body className="min-h-full flex flex-col">
         <header className="border-b border-border bg-card">
-          <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
-            <div>
-              <p className="text-[11px] font-semibold tracking-[0.18em] text-primary uppercase">Tower Arctic Ltd</p>
-              <p className="mt-1 font-heading text-xl tracking-tight">Crew Logistics</p>
-            </div>
-            <p className="text-xs text-muted-foreground">Pilot · local</p>
+          <div className="mx-auto flex w-full max-w-[1600px] items-baseline gap-3 px-5 py-3 sm:px-8">
+            <p className="font-heading text-2xl tracking-tight">Crew Schedule</p>
+            <p className="text-[11px] font-semibold tracking-[0.18em] text-primary uppercase">Tower Arctic Ltd</p>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-7xl flex-1 px-5 py-8 sm:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1600px] flex-1 px-5 pb-8 sm:px-8">{children}</main>
       </body>
     </html>
   );

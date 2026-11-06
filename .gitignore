@@ -4,3 +4,6 @@ out
 .env*.local
 .DS_Store
 *.log
+
+# Source workbooks (contain employee details) - never commit
+/data/

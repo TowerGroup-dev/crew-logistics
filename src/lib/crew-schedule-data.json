@@ -18,7 +18,7 @@
     {
       "id": "bernie-labourers",
       "name": "Bernie",
-      "role": "Labourers",
+      "role": "Labourer",
       "homeSites": [
         "ALRT",
         "IQA"
@@ -56,7 +56,7 @@
     {
       "id": "brad-rubia-labourers",
       "name": "Brad Rubia",
-      "role": "Labourers",
+      "role": "Labourer",
       "homeSites": [
         "KUG",
         "POND"
@@ -94,7 +94,7 @@
     {
       "id": "javi-labourers",
       "name": "Javi",
-      "role": "Labourers",
+      "role": "Labourer",
       "homeSites": [
         "ALRT",
         "IQA"
@@ -132,7 +132,7 @@
     {
       "id": "jf-labourers",
       "name": "JF",
-      "role": "Labourers",
+      "role": "Labourer",
       "homeSites": [
         "IQA"
       ],
@@ -161,7 +161,7 @@
     {
       "id": "kevin-barrieau-labourers",
       "name": "Kevin Barrieau",
-      "role": "Labourers",
+      "role": "Labourer",
       "homeSites": [
         "IQA"
       ],
@@ -173,7 +173,7 @@
     {
       "id": "louis-labourers",
       "name": "Louis",
-      "role": "Labourers",
+      "role": "Labourer",
       "homeSites": [
         "IQA"
       ],
@@ -198,7 +198,7 @@
     {
       "id": "marc-olivier-labourers",
       "name": "Marc Olivier",
-      "role": "Labourers",
+      "role": "Labourer",
       "homeSites": [
         "IQA"
       ],
@@ -219,7 +219,7 @@
     {
       "id": "marjorie-labourers",
       "name": "Marjorie",
-      "role": "Labourers",
+      "role": "Labourer",
       "homeSites": [
         "IQA"
       ],
@@ -244,7 +244,7 @@
     {
       "id": "natanael-lachance-labourers",
       "name": "Natanael Lachance",
-      "role": "Labourers",
+      "role": "Labourer",
       "homeSites": [
         "IQA"
       ],
@@ -273,7 +273,7 @@
     {
       "id": "nicholas-labourers",
       "name": "Nicholas",
-      "role": "Labourers",
+      "role": "Labourer",
       "homeSites": [
         "ALRT",
         "IQA"
@@ -311,7 +311,7 @@
     {
       "id": "shakira-labourers",
       "name": "Shakira",
-      "role": "Labourers",
+      "role": "Labourer",
       "homeSites": [
         "KUG",
         "POND"
@@ -345,7 +345,7 @@
     {
       "id": "eric-jacobsen-managers",
       "name": "Eric Jacobsen",
-      "role": "Managers",
+      "role": "Manager",
       "homeSites": [
         "IQA",
         "POND"
@@ -395,7 +395,7 @@
     {
       "id": "maegan-ellison-managers",
       "name": "Maegan Ellison",
-      "role": "Managers",
+      "role": "Manager",
       "homeSites": [
         "ALRT"
       ],
@@ -424,7 +424,7 @@
     {
       "id": "simon-plourde-managers",
       "name": "Simon Plourde",
-      "role": "Managers",
+      "role": "Manager",
       "homeSites": [
         "ALRT",
         "POND"
@@ -466,7 +466,7 @@
     {
       "id": "william-matthews-managers",
       "name": "William Matthews",
-      "role": "Managers",
+      "role": "Manager",
       "homeSites": [
         "POND"
       ],
@@ -487,7 +487,7 @@
     {
       "id": "mike-reid-mechanics",
       "name": "Mike Reid",
-      "role": "Mechanics",
+      "role": "Mechanic",
       "homeSites": [
         "KUG",
         "POND"
@@ -545,7 +545,7 @@
     {
       "id": "shannon-mechanics",
       "name": "Shannon",
-      "role": "Mechanics",
+      "role": "Mechanic",
       "homeSites": [
         "IQA"
       ],
@@ -606,7 +606,7 @@
     {
       "id": "carson-gemtec-operators-truck-drivers",
       "name": "Carson (Gemtec)",
-      "role": "Operators / Truck Drivers",
+      "role": "Operator/Truck Driver",
       "homeSites": [
         "POND"
       ],
@@ -627,7 +627,7 @@
     {
       "id": "dean-melvin-operators-truck-drivers",
       "name": "Dean Melvin",
-      "role": "Operators / Truck Drivers",
+      "role": "Operator/Truck Driver",
       "homeSites": [
         "IQA",
         "POND"
@@ -673,7 +673,7 @@
     {
       "id": "elmer-gosse-operators-truck-drivers",
       "name": "Elmer Gosse",
-      "role": "Operators / Truck Drivers",
+      "role": "Operator/Truck Driver",
       "homeSites": [
         "KUG",
         "POND"
@@ -711,7 +711,7 @@
     {
       "id": "kirk-operators-truck-drivers",
       "name": "Kirk",
-      "role": "Operators / Truck Drivers",
+      "role": "Operator/Truck Driver",
       "homeSites": [
         "KUG",
         "POND"
@@ -761,7 +761,7 @@
     {
       "id": "rob-operators-truck-drivers",
       "name": "Rob",
-      "role": "Operators / Truck Drivers",
+      "role": "Operator/Truck Driver",
       "homeSites": [
         "IQA",
         "POND"
@@ -795,7 +795,7 @@
     {
       "id": "sam-m-operators-truck-drivers",
       "name": "Sam M",
-      "role": "Operators / Truck Drivers",
+      "role": "Operator/Truck Driver",
       "homeSites": [
         "KUG",
         "POND"
@@ -873,7 +873,7 @@
     {
       "id": "stacey-turner-operators-truck-drivers",
       "name": "Stacey Turner",
-      "role": "Operators / Truck Drivers",
+      "role": "Operator/Truck Driver",
       "homeSites": [
         "KUG",
         "POND"
@@ -919,7 +919,7 @@
     {
       "id": "stephen-turner-operators-truck-drivers",
       "name": "Stephen Turner",
-      "role": "Operators / Truck Drivers",
+      "role": "Operator/Truck Driver",
       "homeSites": [
         "KUG",
         "POND"
@@ -965,7 +965,7 @@
     {
       "id": "thomas-gemtec-operators-truck-drivers",
       "name": "Thomas (Gemtec)",
-      "role": "Operators / Truck Drivers",
+      "role": "Operator/Truck Driver",
       "homeSites": [
         "POND"
       ],
@@ -990,7 +990,7 @@
     {
       "id": "trevor-anstey-operators-truck-drivers",
       "name": "Trevor Anstey",
-      "role": "Operators / Truck Drivers",
+      "role": "Operator/Truck Driver",
       "homeSites": [
         "KUG",
         "POND"
@@ -1048,7 +1048,7 @@
     {
       "id": "andrew-murphy-surveyors",
       "name": "Andrew Murphy",
-      "role": "Surveyors",
+      "role": "Surveyor",
       "homeSites": [
         "IQA"
       ],
@@ -1081,7 +1081,7 @@
     {
       "id": "bryan-hay-surveyors",
       "name": "Bryan Hay",
-      "role": "Surveyors",
+      "role": "Surveyor",
       "homeSites": [
         "IQA"
       ],
@@ -1122,7 +1122,7 @@
     {
       "id": "william-matthews-surveyors",
       "name": "William Matthews",
-      "role": "Surveyors",
+      "role": "Surveyor",
       "homeSites": [
         "IQA"
       ],
