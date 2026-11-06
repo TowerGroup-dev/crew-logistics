@@ -430,15 +430,15 @@ function RemindersSheet({
         window.sections.length ? (
           <div key={window.label} className="space-y-2">
             <div className="px-2 pt-1">
-              <p className="text-[13px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{window.label}</p>
-              <p className="text-[13px] text-muted-foreground/80">{window.range}</p>
+              <p className="text-[13px] font-semibold tracking-[0.12em] text-foreground uppercase">{window.label}</p>
+              <p className="text-[13px] text-foreground/70">{window.range}</p>
             </div>
             {window.sections.map((section) => (
               <div key={`${window.label}-${section.key}`} className="overflow-hidden rounded-xl border border-border/70">
-                <p className="border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[13px] font-medium text-muted-foreground">
+                <p className="border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[13px] font-semibold text-foreground">
                   {section.label}
                 </p>
-                <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 border-b border-border/60 px-3 py-1.5 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 border-b border-border/60 px-3 py-1.5 text-[12px] font-semibold tracking-wide text-foreground uppercase">
                   <span>Date</span>
                   <span>Description</span>
                 </div>
@@ -527,8 +527,8 @@ function ReminderWindow({
         className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-muted/40"
       >
         <span className="min-w-0">
-          <span className="block text-xs font-semibold tracking-wide text-foreground uppercase">{label}</span>
-          <span className="block text-[13px] text-muted-foreground">
+          <span className="block text-sm font-semibold tracking-wide text-foreground uppercase">{label}</span>
+          <span className="block text-[13px] font-medium text-foreground/75">
             {range}
             {count ? ` · ${count}` : " · clear"}
           </span>
@@ -540,10 +540,10 @@ function ReminderWindow({
           <div className="border-t border-border/70">
             {sections.map((section) => (
               <div key={section.key} className="border-b border-border/60 last:border-b-0">
-                <p className="px-4 pt-3 pb-1 text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <p className="px-4 pt-3 pb-1 text-[13px] font-semibold tracking-wide text-foreground uppercase">
                   {section.label}
                 </p>
-                <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 px-4 pb-1 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 px-4 pb-1 text-[12px] font-semibold tracking-wide text-foreground uppercase">
                   <span>Date</span>
                   <span>Description</span>
                 </div>
