@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
-import { usePathname } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { CrewBoard, type CrewBoardView } from "@/components/crew-board";
 import { CrewNav } from "@/components/crew-nav";
 
@@ -20,15 +20,31 @@ function viewFromPath(pathname: string): CrewBoardView {
 /** Board reads the route so a shared layout can keep it mounted across Schedule views. */
 export function CrewWorkspace() {
   const pathname = usePathname();
+  const router = useRouter();
   const view = useMemo(() => viewFromPath(pathname), [pathname]);
+  const [remindersOpen, setRemindersOpen] = useState(false);
+  const [reminderCount, setReminderCount] = useState(0);
+
+  // Old /reminders route → open the popup on Overview instead of a full page.
+  useEffect(() => {
+    if (pathname.startsWith("/reminders")) {
+      setRemindersOpen(true);
+      router.replace("/", { scroll: false });
+    }
+  }, [pathname, router]);
 
   return (
     <div className="flex flex-col gap-5">
       <Suspense fallback={<div className="h-9 animate-pulse rounded-md bg-muted" />}>
-        <CrewNav />
+        <CrewNav onOpenReminders={() => setRemindersOpen(true)} reminderCount={reminderCount} />
       </Suspense>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-        <CrewBoard view={view} />
+        <CrewBoard
+          view={view}
+          remindersOpen={remindersOpen}
+          onCloseReminders={() => setRemindersOpen(false)}
+          onReminderCountChange={setReminderCount}
+        />
       </Suspense>
     </div>
   );

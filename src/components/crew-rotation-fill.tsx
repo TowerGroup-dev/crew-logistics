@@ -87,7 +87,7 @@ export function CrewRotationFill({
   return (
     <section className="grid gap-4 rounded-2xl border border-border bg-card p-4 lg:grid-cols-2">
       <div>
-        <h3 className="font-heading text-xl tracking-tight">Rotations ending</h3>
+        <h3 className="text-base font-semibold tracking-tight">Rotations ending</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Finishing stays with unplaced options you can plan next.
         </p>
@@ -161,7 +161,7 @@ export function CrewRotationFill({
       </div>
 
       <div>
-        <h3 className="font-heading text-xl tracking-tight">Available to place</h3>
+        <h3 className="text-base font-semibold tracking-tight">Available to place</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Not currently on a rotation. Full list for movement planning.
         </p>

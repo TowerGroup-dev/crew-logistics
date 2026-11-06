@@ -8,7 +8,13 @@ import { addDays, daysBetween } from "@/lib/dates";
 import type { FlightBook, FlightBooking, FlightSegment } from "@/lib/crew-flights";
 import type { CrewOpsBook } from "@/lib/crew-ops";
 import { opsFor } from "@/lib/crew-ops";
-import { DEFAULT_ROTATION_DAYS, type CrewPerson, type CrewStint } from "@/lib/crew-schedule";
+import {
+  DEFAULT_ROTATION_DAYS,
+  scheduleYearLastDay,
+  scheduleYearOutExclusive,
+  type CrewPerson,
+  type CrewStint,
+} from "@/lib/crew-schedule";
 
 export type TravelDirection = "outbound" | "return";
 
@@ -246,7 +252,8 @@ export function saveRotations(book: RotationBook) {
 
 function stintToSeed(person: CrewPerson, stint: CrewStint): CrewRotation {
   const from = stint.from;
-  const out = stint.out || addDays(from, person.rotationDays || DEFAULT_ROTATION_DAYS);
+  // No sheet Out → exclusive Jan 1 so Dec 31 stays on site; UI shows Out as Dec 31.
+  const out = stint.out || scheduleYearOutExclusive();
   const days = Math.max(1, daysBetween(from, addDays(out, -1)) + 1);
   const site = stint.site || stint.sites[0] || "";
   const role = stint.role || person.role;
@@ -294,6 +301,8 @@ export function mergeRotationBook(people: CrewPerson[], stored: RotationBook): R
         derived.push(seed);
         continue;
       }
+      // Place end is Out: always take In/Out from the live stint (extensions included).
+      // Keep confirmations from storage; never keep a stale check-out after an extend.
       derived.push({
         ...seed,
         role: prev.role || seed.role,
@@ -310,8 +319,8 @@ export function mergeRotationBook(people: CrewPerson[], stored: RotationBook): R
         stay: {
           ...prev.stay,
           site: prev.stay.site || seed.site,
-          checkIn: prev.stay.checkIn || seed.stay.checkIn,
-          checkOut: prev.stay.checkOut || seed.stay.checkOut,
+          checkIn: seed.stay.checkIn,
+          checkOut: seed.stay.checkOut,
         },
         replacesRotationId: prev.replacesRotationId,
         replacedByRotationId: prev.replacedByRotationId,
@@ -510,6 +519,25 @@ export function upsertRotation(book: RotationBook, rotation: CrewRotation): Rota
   return { version: 1, rotations: [...book.rotations, rotation] };
 }
 
+/** Push planned OUT later (exclusive out date). */
+export function extendRotationOut(book: RotationBook, rotationId: string, newOutExclusive: string): RotationBook {
+  const rotation = book.rotations.find((row) => row.id === rotationId);
+  if (!rotation) return book;
+  const out = newOutExclusive.slice(0, 10);
+  if (!out || out <= rotation.plannedIn) return book;
+  if (rotation.plannedOut >= out) return book;
+  const endInclusive = addDays(out, -1);
+  return upsertRotation(book, {
+    ...rotation,
+    plannedOut: out,
+    rotationDays: Math.max(1, daysBetween(rotation.plannedIn, endInclusive) + 1),
+    stay: {
+      ...rotation.stay,
+      checkOut: endInclusive,
+    },
+  });
+}
+
 export function linkReplacement(
   book: RotationBook,
   outgoingId: string,
@@ -569,16 +597,23 @@ export function rotationForPersonOnDay(book: RotationBook, personId: string, iso
   );
 }
 
+/** Current stay on `asOf`, else the next upcoming stay. Never falls back to a past rotation. */
 export function currentRotationForPerson(book: RotationBook, personId: string, asOf: string) {
   return (
     rotationForPersonOnDay(book, personId, asOf) ||
     book.rotations
       .filter((row) => row.personId === personId && row.plannedIn > asOf)
       .sort((a, b) => a.plannedIn.localeCompare(b.plannedIn))[0] ||
+    null
+  );
+}
+
+/** Most recent stay by planned In (including past). For history / list views only. */
+export function latestRotationForPerson(book: RotationBook, personId: string) {
+  return (
     book.rotations
       .filter((row) => row.personId === personId)
-      .sort((a, b) => b.plannedIn.localeCompare(a.plannedIn))[0] ||
-    null
+      .sort((a, b) => b.plannedIn.localeCompare(a.plannedIn))[0] || null
   );
 }
 
@@ -734,7 +769,7 @@ export function buildKatrinaChecklist(
           rotationId: rotation.id,
           personId: rotation.personId,
           personName: name,
-          title: "Add worker to continue rotation",
+          title: "Extend rotation or add another person",
           detail: `Leaving ${endInclusive}`,
           dueOn: endInclusive,
           priority: left <= thresholds.escalateDays ? "urgent" : "high",
@@ -811,5 +846,8 @@ export function buildKatrinaChecklist(
 }
 
 export function inclusiveOut(rotation: CrewRotation) {
-  return addDays(rotation.plannedOut, -1);
+  const last = addDays(rotation.plannedOut, -1);
+  // Never show past season end (2026 → 18 Dec).
+  const seasonEnd = scheduleYearLastDay(Number(rotation.plannedIn.slice(0, 4)));
+  return last > seasonEnd ? seasonEnd : last;
 }

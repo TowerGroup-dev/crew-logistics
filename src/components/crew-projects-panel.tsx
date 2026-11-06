@@ -88,7 +88,7 @@ export function CrewProjectsPanel({
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-        <h2 className="font-heading text-2xl tracking-tight">Projects</h2>
+        <h2 className="text-lg font-semibold tracking-tight">Projects</h2>
         <form
           className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
           onSubmit={(event) => {
@@ -166,7 +166,7 @@ export function CrewProjectsPanel({
         return (
           <section key={phase} className="overflow-hidden rounded-2xl border border-border bg-card">
             <div className="border-b border-border px-4 py-3">
-              <h3 className="font-heading text-lg tracking-tight">
+              <h3 className="text-sm font-semibold tracking-tight">
                 {PHASE_LABEL[phase]} ({list.length})
               </h3>
             </div>

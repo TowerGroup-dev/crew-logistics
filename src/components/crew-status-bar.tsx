@@ -137,7 +137,7 @@ export function CrewStatusBar({
 
         <div className="flex flex-wrap gap-1.5">
           <StatChip label="Tickets to buy" value={pulse.open} hot={pulse.open > 0} />
-          <StatChip label="To go" value={pulse.outbound} />
+          <StatChip label="To site" value={pulse.outbound} />
           <StatChip label="Come back" value={pulse.inbound} />
           <StatChip label="On site" value={pulse.onSite} />
         </div>
@@ -183,7 +183,7 @@ export function CrewStatusBar({
           style={{ top: panelPos.top, left: panelPos.left }}
         >
           <div className="border-b border-border px-4 py-3">
-            <p className="font-heading text-lg tracking-tight">Reminders</p>
+            <p className="text-base font-semibold tracking-tight">Reminders</p>
           </div>
           <div className="flex gap-2 border-b border-border px-4 py-3">
             <input
@@ -246,7 +246,7 @@ function StatChip({ label, value, hot }: { label: string; value: number; hot?: b
       )}
     >
       <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">{label}</p>
-      <p className="font-heading text-lg leading-none tabular-nums">{value}</p>
+      <p className="text-base font-semibold leading-none tabular-nums">{value}</p>
     </div>
   );
 }

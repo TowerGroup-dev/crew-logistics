@@ -3,10 +3,10 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 /**
- * Morning cron hook (Montreal 8:00).
- * Ops data currently lives in the browser. This endpoint confirms schedule window and
- * reminds operators that the daily briefing is sent from the Crew Logistics app
- * (or a future server-synced store) after 8:00 America/Montreal.
+ * Weekly cron hook (Montreal Monday 8:30).
+ * Ops data currently lives in the browser. This endpoint confirms the schedule window and
+ * reminds operators that Katrina’s weekly briefing is sent from the Crew Logistics app
+ * after Monday 8:30 America/Montreal.
  */
 export async function GET(request: Request) {
   const secret = process.env.CREW_CRON_SECRET?.trim();
@@ -23,6 +23,7 @@ export async function GET(request: Request) {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
@@ -30,13 +31,13 @@ export async function GET(request: Request) {
   const get = (type: string) => montreal.find((part) => part.type === type)?.value ?? "";
   const hour = Number(get("hour"));
   const minute = Number(get("minute"));
-  const inWindow = hour === 8 && minute < 30;
+  const inWindow = get("weekday") === "Mon" && hour === 8 && minute >= 30 && minute < 45;
 
   return NextResponse.json({
     ok: true,
     montreal: `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`,
     inMorningWindow: inWindow,
     note:
-      "Open Crew Logistics after 8:00 AM Montreal to auto-send Katrina’s daily briefing from live roster data. Wire GRAPH_* env vars for delivery.",
+      "Open Crew Logistics after Monday 8:30 AM Montreal to auto-send Katrina’s weekly briefing from live roster data. Wire GRAPH_* env vars for delivery.",
   });
 }

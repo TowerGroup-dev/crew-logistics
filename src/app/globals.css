@@ -49,6 +49,12 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply bg-background text-foreground font-sans text-sm antialiased;
+  }
+  /* Type scale: body = sm, labels = xs, titles = base/semibold, brand only uses display. */
+  h1,
+  h2,
+  h3 {
+    @apply font-sans tracking-tight text-foreground;
   }
 }

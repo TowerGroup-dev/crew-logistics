@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, ChevronLeft, ChevronRight, Contact, ListChecks, Rows3, Settings } from "lucide-react";
+import { Bell, CalendarDays, ChevronLeft, ChevronRight, Contact, ListChecks, Rows3, Settings } from "lucide-react";
 import { CREW_SCHEDULE } from "@/lib/crew-schedule";
 import { loadScheduleYears } from "@/lib/crew-years";
 import { cn } from "@/lib/cn";
@@ -49,7 +49,13 @@ function basePath(pathname: string) {
   return "/";
 }
 
-export function CrewNav() {
+export function CrewNav({
+  onOpenReminders,
+  reminderCount = 0,
+}: {
+  onOpenReminders?: () => void;
+  reminderCount?: number;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const search = useSearchParams();
@@ -110,6 +116,22 @@ export function CrewNav() {
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
+          {onOpenReminders ? (
+            <button
+              type="button"
+              onClick={onOpenReminders}
+              aria-label={reminderCount ? `Reminders · ${reminderCount}` : "Reminders"}
+              title="Reminders"
+              className="relative flex size-8 items-center justify-center rounded-lg border border-input bg-card text-muted-foreground transition hover:text-foreground"
+            >
+              <Bell className="size-4" />
+              {reminderCount > 0 ? (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+                  {reminderCount > 99 ? "99+" : reminderCount}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
           <div className="flex items-center rounded-lg border border-input bg-card">
             <button
               type="button"

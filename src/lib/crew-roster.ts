@@ -52,8 +52,11 @@ export type RosterRotationPlan = {
   role?: string;
 };
 
-/** Max on-site days for an app-added rotation (6 weeks). */
-export const MAX_ROTATION_DAYS = 42;
+/** Standard on-site length (6 weeks). Place/forms stop here unless extending past. */
+export const DEFAULT_ROTATION_DAYS = 42;
+export const STANDARD_ROTATION_DAYS = 42;
+/** Absolute ceiling when Katrina extends past 6 weeks. */
+export const MAX_ROTATION_DAYS = 120;
 
 export type CrewRosterBook = {
   projects: CrewProject[];
@@ -66,13 +69,29 @@ export type CrewRosterBook = {
   employmentStatus: Record<string, EmploymentStatus>;
   /** Manual next rotations layered onto imported + manual people. */
   rotationPlans: Record<string, RosterRotationPlan[]>;
+  /**
+   * Extend an imported (or other) stint past its sheet OUT.
+   * Key: `${personId}:${stintFrom}` → exclusive out date.
+   */
+  stintOutOverrides: Record<string, string>;
   employees: ManualCrewPerson[];
 };
 
 const STORAGE_KEY = "tower-arctic-crew-roster";
 
 export function emptyRoster(): CrewRosterBook {
-  return { projects: [], projectLinks: {}, employmentStatus: {}, rotationPlans: {}, employees: [] };
+  return {
+    projects: [],
+    projectLinks: {},
+    employmentStatus: {},
+    rotationPlans: {},
+    stintOutOverrides: {},
+    employees: [],
+  };
+}
+
+export function stintOverrideKey(personId: string, stintFrom: string) {
+  return `${personId}:${stintFrom.slice(0, 10)}`;
 }
 
 export function slugProject(name: string) {
@@ -198,6 +217,12 @@ export function readRoster(value: unknown): CrewRosterBook {
         .filter((item): item is RosterRotationPlan => Boolean(item));
     }
   }
+  const stintOutOverrides: Record<string, string> = {};
+  if (raw.stintOutOverrides && typeof raw.stintOutOverrides === "object") {
+    for (const [key, out] of Object.entries(raw.stintOutOverrides)) {
+      if (typeof out === "string" && out.length >= 10) stintOutOverrides[key] = out.slice(0, 10);
+    }
+  }
   return {
     projects: Array.isArray(raw.projects)
       ? raw.projects.map(readProject).filter((item): item is CrewProject => Boolean(item))
@@ -205,6 +230,7 @@ export function readRoster(value: unknown): CrewRosterBook {
     projectLinks,
     employmentStatus,
     rotationPlans,
+    stintOutOverrides,
     employees,
   };
 }
@@ -409,7 +435,7 @@ export function setEmploymentStatus(
   return { ...roster, employmentStatus, employees };
 }
 
-/** Activate the person (if needed) and append a next on-site rotation (max 42 days). */
+/** Activate the person (if needed) and append a next on-site rotation. */
 export function addNextRotation(
   roster: CrewRosterBook,
   personId: string,
@@ -438,6 +464,61 @@ export function addNextRotation(
       [personId]: [...existing, plan],
     },
   };
+}
+
+/** Push a stay's exclusive OUT later (app plan or sheet stint override). */
+export function extendStay(
+  roster: CrewRosterBook,
+  personId: string,
+  stintFrom: string,
+  newOut: string,
+): CrewRosterBook {
+  const from = stintFrom.slice(0, 10);
+  const out = newOut.slice(0, 10);
+  if (!from || !out || out <= from) return roster;
+  const maxOut = addDaysLocal(from, MAX_ROTATION_DAYS);
+  const cappedOut = out > maxOut ? maxOut : out;
+
+  const plans = roster.rotationPlans?.[personId] ?? [];
+  const index = plans.findIndex((plan) => plan.from === from);
+  if (index >= 0) {
+    const current = plans[index]!;
+    if (cappedOut <= current.out) return roster;
+    const nextPlans = [...plans];
+    nextPlans[index] = { ...current, out: cappedOut };
+    return {
+      ...roster,
+      rotationPlans: {
+        ...(roster.rotationPlans ?? {}),
+        [personId]: nextPlans,
+      },
+    };
+  }
+
+  const key = stintOverrideKey(personId, from);
+  const previous = roster.stintOutOverrides?.[key];
+  if (previous && previous >= cappedOut) return roster;
+  return {
+    ...roster,
+    stintOutOverrides: {
+      ...(roster.stintOutOverrides ?? {}),
+      [key]: cappedOut,
+    },
+  };
+}
+
+function applyStintOutOverrides<T extends { from: string; out: string | null }>(
+  personId: string,
+  stints: T[],
+  overrides: Record<string, string> | undefined,
+): T[] {
+  if (!overrides || !Object.keys(overrides).length) return stints;
+  return stints.map((stint) => {
+    const override = overrides[stintOverrideKey(personId, stint.from)];
+    if (!override) return stint;
+    if (stint.out && override <= stint.out) return stint;
+    return { ...stint, out: override };
+  });
 }
 
 function addDaysLocal(iso: string, days: number) {
@@ -469,13 +550,18 @@ export function mergePeople(imported: ImportedPerson[], roster: CrewRosterBook):
   const importedIds = new Set(imported.map((person) => person.id));
   const merged = imported.map((person) => {
     const extra = plansAsStints(roster.rotationPlans?.[person.id]);
+    const stints = applyStintOutOverrides(
+      person.id,
+      [...(person.stints ?? []), ...extra],
+      roster.stintOutOverrides,
+    );
     return {
       ...person,
       roles: person.roles?.length ? [...person.roles] : [person.role],
       projectIds: projectsForPerson(person.id, person.projectIds, roster),
       homeSites: [...person.homeSites],
       events: person.events.map((event) => ({ ...event })),
-      stints: [...(person.stints ?? []), ...extra],
+      stints,
       active: employmentStatusFor(roster, person.id) === "active",
     };
   });
@@ -503,7 +589,11 @@ export function mergePeople(imported: ImportedPerson[], roster: CrewRosterBook):
       outDate: null,
       rotationDays: employee.rotationDays,
       events: [],
-      stints: plansAsStints(roster.rotationPlans?.[employee.id]),
+      stints: applyStintOutOverrides(
+        employee.id,
+        plansAsStints(roster.rotationPlans?.[employee.id]),
+        roster.stintOutOverrides,
+      ),
       manual: true,
       active: employmentStatusFor(roster, employee.id) === "active",
     });

@@ -1,16 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
-import {
-  CREW_ROLES,
-  type CrewPerson,
-} from "@/lib/crew-schedule";
+import { BedDouble, PlaneLanding, PlaneTakeoff, X } from "lucide-react";
+import { type CrewPerson } from "@/lib/crew-schedule";
 import {
   daysLeftOnRotation,
   emptyStay,
   emptyTravel,
   evaluateReadiness,
+  extendRotationOut,
   inclusiveOut,
   linkReplacement,
   peopleFreeForWindow,
@@ -22,7 +20,15 @@ import {
   type RotationTravel,
   type TravelDirection,
 } from "@/lib/crew-rotations";
-import { MAX_ROTATION_DAYS, addNextRotation, type CrewRosterBook } from "@/lib/crew-roster";
+import {
+  DEFAULT_ROTATION_DAYS,
+  MAX_ROTATION_DAYS,
+  STANDARD_ROTATION_DAYS,
+  addNextRotation,
+  extendStay,
+  type CrewRosterBook,
+} from "@/lib/crew-roster";
+import { type CrewPersonOps } from "@/lib/crew-ops";
 import { addDays, daysBetween, formatMedium } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
@@ -34,10 +40,11 @@ export function CrewRotationDrawer({
   asOf,
   staffName,
   sites,
-  roles,
+  personOps,
   onClose,
   onSaveBook,
   onSaveRoster,
+  onPatchOps,
 }: {
   rotation: CrewRotation;
   person: CrewPerson;
@@ -47,21 +54,24 @@ export function CrewRotationDrawer({
   staffName: string;
   sites?: { code: string; name: string }[];
   roles?: string[];
+  personOps?: CrewPersonOps | null;
   onClose: () => void;
   onSaveBook: (book: RotationBook) => void;
   onSaveRoster: (recipe: (current: CrewRosterBook) => CrewRosterBook) => void;
+  onPatchOps?: (recipe: (current: CrewPersonOps) => CrewPersonOps) => void;
 }) {
   const siteOptions = sites?.length ? sites.map((row) => row.code) : ["IQA", "POND", "ALRT", "KUG"];
-  const roleOptions = roles?.length ? roles : [...CREW_ROLES];
   const [draft, setDraft] = useState(rotation);
-  const [section, setSection] = useState<"overview" | "travel" | "stay" | "replacement" | "actuals">("overview");
+  const [section, setSection] = useState<"overview" | "travel" | "stay" | "replacement">("overview");
   const [travelDir, setTravelDir] = useState<TravelDirection>("outbound");
   const [replaceOpen, setReplaceOpen] = useState(false);
+  const [extendOut, setExtendOut] = useState(() => inclusiveOut(rotation));
 
   const readiness = useMemo(() => evaluateReadiness(draft, asOf), [asOf, draft]);
   const day = rotationDayNumber(draft, asOf);
   const left = daysLeftOnRotation(draft, asOf);
   const outInclusive = inclusiveOut(draft);
+  const stayDays = Math.max(1, daysBetween(draft.plannedIn, outInclusive) + 1);
   const replacement = draft.replacedByRotationId
     ? book.rotations.find((row) => row.id === draft.replacedByRotationId) ?? null
     : null;
@@ -77,113 +87,125 @@ export function CrewRotationDrawer({
   }
 
   function patchStay(patch: Partial<RotationStay>) {
-    commit({ ...draft, stay: { ...draft.stay, ...patch } });
-  }
-
-  async function onUpload(
-    file: File | null,
-    apply: (doc: { name: string; dataUrl: string } | null) => void,
-  ) {
-    if (!file) {
-      apply(null);
-      return;
-    }
-    if (!/(pdf|png|jpe?g)$/i.test(file.name) && !file.type.match(/pdf|png|jpeg/)) {
-      window.alert("Upload a PDF, PNG, or JPG.");
-      return;
-    }
-    if (file.size > 1_500_000) {
-      window.alert("Keep confirmation files under ~1.5 MB for local storage.");
-      return;
-    }
-    const dataUrl = await readFileAsDataUrl(file);
-    apply({ name: file.name, dataUrl });
+    // Out is always the place end — check-in/out follow the rotation, change via Extend.
+    const { checkIn: _in, checkOut: _out, ...rest } = patch;
+    commit({
+      ...draft,
+      stay: {
+        ...draft.stay,
+        ...rest,
+        checkIn: draft.plannedIn,
+        checkOut: inclusiveOut(draft),
+      },
+    });
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/35">
+    <div className="fixed inset-0 z-50 flex justify-end bg-foreground/25">
       <button type="button" aria-label="Close" className="absolute inset-0" onClick={onClose} />
-      <aside className="relative flex h-full w-full max-w-xl flex-col bg-card shadow-2xl">
-        <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
-          <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">Rotation</p>
-            <h2 className="truncate text-lg font-semibold">{person.name}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {draft.role} · {draft.site || "-"} · {formatMedium(draft.plannedIn)} → {formatMedium(outInclusive)}
-            </p>
+      <aside className="relative flex h-full w-full max-w-lg flex-col border-l border-border bg-card shadow-2xl">
+        <header className="border-b border-border bg-card px-6 py-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">Rotation</p>
+              <h2 className="mt-1 truncate text-lg font-semibold text-foreground">{person.name}</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {draft.role} · {draft.site || "—"} · {formatMedium(draft.plannedIn)} → {formatMedium(outInclusive)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg border border-input p-2 hover:bg-muted">
-            <X className="size-4" />
-          </button>
+          <nav className="mt-5 flex gap-5 overflow-x-auto text-sm">
+            {(
+              [
+                ["overview", "Overview", null],
+                ["travel", "Travel", "plane"],
+                ["stay", "Stay", "bed"],
+                ["replacement", "Extension", null],
+              ] as const
+            ).map(([id, label, icon]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSection(id)}
+                className={cn(
+                  "-mb-px inline-flex items-center gap-1.5 border-b-2 pb-2 font-medium whitespace-nowrap transition",
+                  section === id
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {icon === "plane" ? <PlaneTakeoff className="size-3.5" /> : null}
+                {icon === "bed" ? <BedDouble className="size-3.5" /> : null}
+                {label}
+              </button>
+            ))}
+          </nav>
         </header>
 
-        <div className="flex flex-wrap gap-1 border-b border-border px-4 py-2">
-          {(
-            [
-              ["overview", "Overview"],
-              ["travel", "Travel"],
-              ["stay", "Stay"],
-              ["replacement", "Next worker"],
-              ["actuals", "Actuals"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setSection(id)}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-sm font-medium",
-                section === id ? "bg-primary text-primary-foreground" : "hover:bg-muted",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 text-sm">
+        <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5 text-sm">
           {section === "overview" ? (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <ReadinessStrip readiness={readiness} />
-              <dl className="grid grid-cols-2 gap-3">
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
                 <Fact label="Role" value={draft.role} />
-                <Fact label="Site" value={draft.site || "-"} />
+                <Fact label="Site" value={draft.site || "—"} />
                 <Fact label="Planned IN" value={formatMedium(draft.plannedIn)} />
-                <Fact label="Planned OUT" value={formatMedium(outInclusive)} />
-                <Fact label="Actual IN" value={draft.actualIn ? formatMedium(draft.actualIn) : "-"} />
-                <Fact label="Actual OUT" value={draft.actualOut ? formatMedium(draft.actualOut) : "-"} />
+                <Fact label="OUT" value={`${formatMedium(outInclusive)} · end of stay`} />
                 <Fact label="Duration" value={`${draft.rotationDays} days`} />
                 <Fact
                   label="Progress"
                   value={day > 0 && left >= 0 ? `Day ${day}/${draft.rotationDays} · ${left}d left` : left < 0 ? "Ended" : "Not started"}
                 />
               </dl>
-              <ChecklistHints readiness={readiness} day={day} />
+              <ChecklistHints readiness={readiness} day={day} personOps={personOps} />
             </div>
           ) : null}
 
           {section === "travel" ? (
             <div className="space-y-4">
-              <div className="inline-flex rounded-lg border border-border p-0.5">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setTravelDir("outbound")}
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-sm font-medium",
-                    travelDir === "outbound" ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+                    "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition",
+                    travelDir === "outbound"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border hover:bg-muted",
                   )}
                 >
-                  Outbound to site {draft.outbound.confirmed ? "✓" : "✗"}
+                  <PlaneTakeoff className="size-4 shrink-0" />
+                  <span className="min-w-0">
+                    <span className="block">Outbound</span>
+                    <span className={cn("block text-xs font-normal", travelDir === "outbound" ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                      {draft.outbound.confirmed ? "Booked" : "Not booked"}
+                    </span>
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setTravelDir("return")}
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-sm font-medium",
-                    travelDir === "return" ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+                    "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition",
+                    travelDir === "return"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border hover:bg-muted",
                   )}
                 >
-                  Return home {draft.returnTravel.confirmed ? "✓" : "✗"}
+                  <PlaneLanding className="size-4 shrink-0" />
+                  <span className="min-w-0">
+                    <span className="block">Inbound</span>
+                    <span className={cn("block text-xs font-normal", travelDir === "return" ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                      {draft.returnTravel.confirmed ? "Booked" : "Not booked"}
+                    </span>
+                  </span>
                 </button>
               </div>
               <p className="text-sm text-muted-foreground">
@@ -192,40 +214,114 @@ export function CrewRotationDrawer({
                     ? `Outbound booked on ${formatMedium(draft.outbound.bookedOn)}.`
                     : "Book departure to camp before the stay starts."
                   : draft.returnTravel.bookedOn
-                    ? `Return booked on ${formatMedium(draft.returnTravel.bookedOn)}.`
+                    ? `Inbound booked on ${formatMedium(draft.returnTravel.bookedOn)}.`
                     : "Book the return around 4 weeks into the stay."}
               </p>
+              {travelDir === "return" && onPatchOps ? (
+                <ReturnWindowEditor
+                  from={personOps?.returnBookFrom || ""}
+                  to={personOps?.returnBookTo || ""}
+                  stayFrom={draft.plannedIn}
+                  stayTo={outInclusive}
+                  onChange={(from, to) =>
+                    onPatchOps((current) => ({
+                      ...current,
+                      returnBookFrom: from || null,
+                      returnBookTo: to || null,
+                      returnWindowPainted: Boolean(from && to),
+                      returnFlight:
+                        from && to
+                          ? current.returnFlight === "booked" || current.returnFlight === "confirmed"
+                            ? current.returnFlight
+                            : "needed"
+                          : current.returnFlight === "booked" || current.returnFlight === "confirmed"
+                            ? current.returnFlight
+                            : "not_started",
+                    }))
+                  }
+                />
+              ) : null}
               <TravelForm
                 value={travelDir === "outbound" ? draft.outbound : draft.returnTravel}
                 onChange={(patch) => patchTravel(travelDir, patch)}
-                onUpload={(file) =>
-                  onUpload(file, (document) => patchTravel(travelDir, { document, confirmed: Boolean(document) || undefined }))
-                }
               />
             </div>
           ) : null}
 
           {section === "stay" ? (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Accommodation covers the whole stay and is confirmed once for this rotation.
-              </p>
+              <div className="flex items-start gap-3 rounded-lg border border-border px-3 py-3">
+                <BedDouble className="mt-0.5 size-5 shrink-0 text-primary" />
+                <div>
+                  <p className="font-medium">Stay · {draft.stay.confirmed ? "Booked" : "Not booked"}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Accommodation covers the whole stay and is confirmed once for this rotation.
+                  </p>
+                </div>
+              </div>
               <StayForm
-                value={draft.stay}
+                value={{
+                  ...draft.stay,
+                  checkIn: draft.plannedIn,
+                  checkOut: outInclusive,
+                }}
                 sites={siteOptions}
                 onChange={patchStay}
-                onUpload={(file) =>
-                  onUpload(file, (document) => patchStay({ document, confirmed: Boolean(document) || undefined }))
-                }
               />
             </div>
           ) : null}
 
           {section === "replacement" ? (
             <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                When this stay ends: extend the rotation, or add another person.
+              </p>
+
+              <div className="rounded-xl border border-border bg-muted/20 p-4">
+                <p className="font-medium">Extend rotation</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Keep {person.name} on site longer. OUT moves with the new place end. Current stay{" "}
+                  {stayDays} day{stayDays === 1 ? "" : "s"}
+                  {stayDays > STANDARD_ROTATION_DAYS ? " · past 6 weeks" : ` · standard is ${STANDARD_ROTATION_DAYS}`}.
+                </p>
+                <div className="mt-3 flex flex-wrap items-end gap-2">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-muted-foreground">New OUT (end of stay)</span>
+                    <input
+                      type="date"
+                      value={extendOut}
+                      min={outInclusive}
+                      onChange={(event) => setExtendOut(event.target.value)}
+                      className="h-9 rounded-lg border border-input px-2"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!extendOut || extendOut <= outInclusive}
+                    onClick={() => {
+                      const newOut = addDays(extendOut, 1);
+                      const next = {
+                        ...draft,
+                        plannedOut: newOut,
+                        rotationDays: Math.max(1, daysBetween(draft.plannedIn, extendOut) + 1),
+                        stay: { ...draft.stay, checkIn: draft.plannedIn, checkOut: extendOut },
+                        replacementNeeded: false,
+                      };
+                      setDraft(next);
+                      setExtendOut(extendOut);
+                      onSaveBook(extendRotationOut(book, draft.id, newOut));
+                      onSaveRoster((roster) => extendStay(roster, draft.personId, draft.plannedIn, newOut));
+                    }}
+                    className="h-9 rounded-lg border border-input px-3 text-sm font-medium disabled:opacity-50"
+                  >
+                    Extend · move OUT
+                  </button>
+                </div>
+              </div>
+
               {replacement ? (
                 <div className="rounded-xl border border-border bg-muted/30 p-4">
-                  <p className="font-medium">Next worker linked</p>
+                  <p className="font-medium">Another person linked</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {people.find((row) => row.id === replacement.personId)?.name || replacement.personId}
                     {" · "}
@@ -246,20 +342,25 @@ export function CrewRotationDrawer({
                 </div>
               ) : draft.replacementNeeded === false ? (
                 <div className="rounded-xl border border-border bg-muted/30 p-4">
-                  <p className="font-medium">None necessary</p>
+                  <p className="font-medium">No one else needed</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    No next worker is required when this rotation ends.
+                    This rotation ends with no handoff (extended, or coverage stops).
                   </p>
                   <button
                     type="button"
                     onClick={() => commit({ ...draft, replacementNeeded: true })}
                     className="mt-3 h-9 rounded-lg border border-input px-3 text-sm font-medium"
                   >
-                    Change — a worker is needed
+                    Change — add another person
                   </button>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No replacement yet for when this rotation ends.</p>
+                <div className="rounded-xl border border-border bg-muted/20 p-4">
+                  <p className="font-medium">Add another person</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Bring someone else in when this rotation ends.
+                  </p>
+                </div>
               )}
 
               {!replacement && draft.replacementNeeded !== false && !replaceOpen ? (
@@ -269,7 +370,7 @@ export function CrewRotationDrawer({
                     onClick={() => setReplaceOpen(true)}
                     className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
                   >
-                    Add worker to continue rotation
+                    Add another person
                   </button>
                   <button
                     type="button"
@@ -284,7 +385,7 @@ export function CrewRotationDrawer({
                     }
                     className="h-9 rounded-lg border border-input px-3 text-sm font-medium"
                   >
-                    None necessary
+                    No one else needed
                   </button>
                 </div>
               ) : null}
@@ -296,7 +397,6 @@ export function CrewRotationDrawer({
                   outgoing={draft}
                   staffName={staffName}
                   sites={siteOptions}
-                  roles={roleOptions}
                   onCancel={() => setReplaceOpen(false)}
                   onCreate={({ personId, role, site, plannedIn, plannedOut, handoverFrom, handoverTo }) => {
                     const incomingId = `app:${personId}:${plannedIn}`;
@@ -350,55 +450,6 @@ export function CrewRotationDrawer({
             </div>
           ) : null}
 
-          {section === "actuals" ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1">
-                <span className="text-muted-foreground">Actual arrival date</span>
-                <input
-                  type="date"
-                  value={draft.actualIn || ""}
-                  onChange={(event) => commit({ ...draft, actualIn: event.target.value || null })}
-                  className="h-9 rounded-lg border border-input px-2"
-                />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-muted-foreground">Actual arrival time</span>
-                <input
-                  type="time"
-                  value={draft.actualInTime}
-                  onChange={(event) => commit({ ...draft, actualInTime: event.target.value })}
-                  className="h-9 rounded-lg border border-input px-2"
-                />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-muted-foreground">Actual departure date</span>
-                <input
-                  type="date"
-                  value={draft.actualOut || ""}
-                  onChange={(event) => commit({ ...draft, actualOut: event.target.value || null })}
-                  className="h-9 rounded-lg border border-input px-2"
-                />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-muted-foreground">Actual departure time</span>
-                <input
-                  type="time"
-                  value={draft.actualOutTime}
-                  onChange={(event) => commit({ ...draft, actualOutTime: event.target.value })}
-                  className="h-9 rounded-lg border border-input px-2"
-                />
-              </label>
-              <label className="grid gap-1 sm:col-span-2">
-                <span className="text-muted-foreground">Notes</span>
-                <textarea
-                  value={draft.notes}
-                  onChange={(event) => commit({ ...draft, notes: event.target.value })}
-                  rows={3}
-                  className="rounded-lg border border-input px-2 py-2"
-                />
-              </label>
-            </div>
-          ) : null}
         </div>
       </aside>
     </div>
@@ -407,9 +458,9 @@ export function CrewRotationDrawer({
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border px-3 py-2">
-      <p className="text-muted-foreground">{label}</p>
-      <p className="mt-0.5 font-medium">{value}</p>
+    <div>
+      <dt className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</dt>
+      <dd className="mt-1 text-sm font-medium text-foreground">{value}</dd>
     </div>
   );
 }
@@ -419,69 +470,163 @@ function ReadinessStrip({
 }: {
   readiness: ReturnType<typeof evaluateReadiness>;
 }) {
+  const status =
+    readiness.overall === "ready" ? "Ready" : readiness.overall === "at_risk" ? "At risk" : "Incomplete";
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <Mark label="Travel out" ok={readiness.travelOutbound} />
-      <Mark label="Travel return" ok={readiness.travelReturn} />
-      <Mark label="Stay" ok={readiness.stay} />
-      <div
-        className={cn(
-          "rounded-xl border px-3 py-2 text-center font-medium",
-          readiness.overall === "ready"
-            ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-            : readiness.overall === "at_risk"
-              ? "border-rose-200 bg-rose-50 text-rose-900"
-              : "border-amber-200 bg-amber-50 text-amber-950",
-        )}
-      >
-        {readiness.overall === "ready" ? "Ready" : readiness.overall === "at_risk" ? "At risk" : "Incomplete"}
+    <div className="space-y-3 border-b border-border pb-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Status</p>
+        <p className="text-sm font-semibold text-foreground">{status}</p>
       </div>
+      <ul className="space-y-2">
+        <StatusLine label="Outbound" booked={readiness.travelOutbound} icon="out" />
+        <StatusLine label="Inbound" booked={readiness.travelReturn} icon="in" />
+        <StatusLine label="Stay" booked={readiness.stay} icon="bed" />
+      </ul>
     </div>
   );
 }
 
-function Mark({ label, ok }: { label: string; ok: boolean }) {
+function StatusLine({
+  label,
+  booked,
+  icon,
+}: {
+  label: string;
+  booked: boolean;
+  icon?: "out" | "in" | "bed";
+}) {
   return (
-    <div className={cn("rounded-xl border px-3 py-2 text-center", ok ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50")}>
-      <p className="text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-base font-semibold">{ok ? "✓" : "✗"}</p>
-    </div>
+    <li className="flex items-center justify-between gap-3 text-sm">
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+        {icon === "out" ? <PlaneTakeoff className="size-3.5" /> : null}
+        {icon === "in" ? <PlaneLanding className="size-3.5" /> : null}
+        {icon === "bed" ? <BedDouble className="size-3.5" /> : null}
+        {label}
+      </span>
+      <span className={cn("font-medium", booked ? "text-foreground" : "text-rose-700")}>
+        {booked ? "Booked" : "Not booked"}
+      </span>
+    </li>
   );
 }
 
 function ChecklistHints({
   readiness,
   day,
+  personOps,
 }: {
   readiness: ReturnType<typeof evaluateReadiness>;
   day: number;
+  personOps?: CrewPersonOps | null;
 }) {
   const hints: string[] = [];
+  if (
+    personOps?.returnWindowPainted &&
+    personOps.returnBookFrom &&
+    personOps.returnBookTo &&
+    personOps.returnFlight !== "booked" &&
+    personOps.returnFlight !== "confirmed"
+  ) {
+    hints.push(
+      `Booking window set (${formatMedium(personOps.returnBookFrom)} to ${formatMedium(personOps.returnBookTo)}): book return flight`,
+    );
+  }
+  if (
+    personOps?.outboundWindowPainted &&
+    personOps.outboundBookFrom &&
+    personOps.outboundBookTo &&
+    personOps.outboundFlight !== "booked" &&
+    personOps.outboundFlight !== "confirmed"
+  ) {
+    hints.push(
+      `Booking window set (${formatMedium(personOps.outboundBookFrom)} to ${formatMedium(personOps.outboundBookTo)}): book flight to site`,
+    );
+  }
   if (!readiness.travelOutbound) hints.push("Book outbound flight to site");
   if (!readiness.stay) hints.push("Book accommodation for the whole stay");
   if (day >= 28 && !readiness.travelReturn) hints.push("4 weeks in: book return flight");
-  if (readiness.replacement === "missing") hints.push("Add worker to continue rotation");
+  if (readiness.replacement === "missing") hints.push("Extend rotation or add another person");
   if (readiness.handover === "not_planned") hints.push("Set handover / overlap dates");
-  if (!hints.length) return <p className="text-sm text-emerald-800">Checklist clear for this rotation.</p>;
+  if (!hints.length) {
+    return <p className="text-sm text-muted-foreground">Nothing open on this rotation.</p>;
+  }
   return (
-    <ul className="space-y-1 rounded-xl border border-border bg-muted/20 px-3 py-2">
-      {hints.map((hint) => (
-        <li key={hint} className="text-sm">
-          · {hint}
-        </li>
-      ))}
-    </ul>
+    <div>
+      <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">To do</p>
+      <ul className="mt-2 space-y-2 border-t border-border pt-3">
+        {hints.map((hint) => (
+          <li key={hint} className="text-sm text-foreground">
+            {hint}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ReturnWindowEditor({
+  from,
+  to,
+  stayFrom,
+  stayTo,
+  onChange,
+}: {
+  from: string;
+  to: string;
+  stayFrom: string;
+  stayTo: string;
+  onChange: (from: string, to: string) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3">
+      <p className="text-sm font-medium text-amber-950">Return booking window</p>
+      <p className="mt-1 text-xs text-amber-900/80">
+        Days when the return ticket should be booked. Also paintable in yellow on the Month calendar.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <label className="grid gap-1 text-sm">
+          <span className="text-muted-foreground">Window start</span>
+          <input
+            type="date"
+            value={from}
+            min={stayFrom}
+            max={to || stayTo}
+            onChange={(event) => onChange(event.target.value, to || event.target.value)}
+            className="h-9 rounded-lg border border-input bg-card px-2"
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="text-muted-foreground">Window end</span>
+          <input
+            type="date"
+            value={to}
+            min={from || stayFrom}
+            max={stayTo}
+            onChange={(event) => onChange(from || event.target.value, event.target.value)}
+            className="h-9 rounded-lg border border-input bg-card px-2"
+          />
+        </label>
+      </div>
+      {from && to ? (
+        <button
+          type="button"
+          onClick={() => onChange("", "")}
+          className="mt-2 text-xs font-medium text-amber-950 underline-offset-2 hover:underline"
+        >
+          Clear window
+        </button>
+      ) : null}
+    </div>
   );
 }
 
 function TravelForm({
   value,
   onChange,
-  onUpload,
 }: {
   value: RotationTravel;
   onChange: (patch: Partial<RotationTravel>) => void;
-  onUpload: (file: File | null) => void;
 }) {
   return (
     <div className="grid gap-3">
@@ -550,23 +695,6 @@ function TravelForm({
           onChange={(event) => onChange({ bookedOn: event.target.value || null })}
           className="h-9 rounded-lg border border-input px-2"
         />
-        {!value.bookedOn && value.confirmed ? (
-          <span className="text-sm text-muted-foreground">No booked-on date yet — add one above.</span>
-        ) : null}
-      </label>
-      <label className="grid gap-1">
-        <span className="text-muted-foreground">Confirmation PDF / image</span>
-        <input
-          type="file"
-          accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
-          onChange={(event) => onUpload(event.target.files?.[0] || null)}
-          className="text-sm"
-        />
-        {value.document ? (
-          <a href={value.document.dataUrl} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline">
-            View {value.document.name}
-          </a>
-        ) : null}
       </label>
       <label className="inline-flex items-center gap-2">
         <input
@@ -576,7 +704,6 @@ function TravelForm({
         />
         <span>Mark flight confirmed</span>
       </label>
-      <p className="text-sm text-muted-foreground">Confirmation needs an explicit check (PNR alone is not enough).</p>
     </div>
   );
 }
@@ -585,12 +712,10 @@ function StayForm({
   value,
   sites,
   onChange,
-  onUpload,
 }: {
   value: RotationStay;
   sites: string[];
   onChange: (patch: Partial<RotationStay>) => void;
-  onUpload: (file: File | null) => void;
 }) {
   return (
     <div className="grid gap-3">
@@ -619,38 +744,15 @@ function StayForm({
       </label>
       <div className="grid grid-cols-2 gap-3">
         <label className="grid gap-1">
-          <span className="text-muted-foreground">Check-in</span>
-          <input
-            type="date"
-            value={value.checkIn || ""}
-            onChange={(event) => onChange({ checkIn: event.target.value || null })}
-            className="h-9 rounded-lg border border-input px-2"
-          />
+          <span className="text-muted-foreground">Check-in · stay start</span>
+          <input type="date" value={value.checkIn || ""} readOnly className="h-9 rounded-lg border border-input bg-muted/40 px-2" />
         </label>
         <label className="grid gap-1">
-          <span className="text-muted-foreground">Check-out</span>
-          <input
-            type="date"
-            value={value.checkOut || ""}
-            onChange={(event) => onChange({ checkOut: event.target.value || null })}
-            className="h-9 rounded-lg border border-input px-2"
-          />
+          <span className="text-muted-foreground">OUT · end of stay</span>
+          <input type="date" value={value.checkOut || ""} readOnly className="h-9 rounded-lg border border-input bg-muted/40 px-2" />
         </label>
       </div>
-      <label className="grid gap-1">
-        <span className="text-muted-foreground">Confirmation PDF / image</span>
-        <input
-          type="file"
-          accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
-          onChange={(event) => onUpload(event.target.files?.[0] || null)}
-          className="text-sm"
-        />
-        {value.document ? (
-          <a href={value.document.dataUrl} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline">
-            View {value.document.name}
-          </a>
-        ) : null}
-      </label>
+      <p className="text-xs text-muted-foreground">OUT always matches the end of the place. Extend the rotation to move it.</p>
       <label className="inline-flex items-center gap-2">
         <input
           type="checkbox"
@@ -668,7 +770,6 @@ function ReplacementForm({
   book,
   outgoing,
   sites,
-  roles,
   onCancel,
   onCreate,
 }: {
@@ -677,7 +778,7 @@ function ReplacementForm({
   outgoing: CrewRotation;
   staffName: string;
   sites: string[];
-  roles: string[];
+  roles?: string[];
   onCancel: () => void;
   onCreate: (input: {
     personId: string;
@@ -689,19 +790,22 @@ function ReplacementForm({
     handoverTo: string | null;
   }) => void;
 }) {
-  const [role, setRole] = useState(outgoing.role);
   const [site, setSite] = useState(outgoing.site || sites[0] || "IQA");
   const [plannedIn, setPlannedIn] = useState(addDays(outgoing.plannedOut, -1));
-  const [days, setDays] = useState(String(MAX_ROTATION_DAYS));
+  const [days, setDays] = useState(String(DEFAULT_ROTATION_DAYS));
   const [handoverFrom, setHandoverFrom] = useState(addDays(outgoing.plannedOut, -3));
   const [handoverTo, setHandoverTo] = useState(addDays(outgoing.plannedOut, -1));
 
-  const plannedOut = plannedIn ? addDays(plannedIn, Math.min(MAX_ROTATION_DAYS, Math.max(1, Number(days) || 42))) : "";
+  const plannedOut = plannedIn
+    ? addDays(plannedIn, Math.min(MAX_ROTATION_DAYS, Math.max(1, Number(days) || DEFAULT_ROTATION_DAYS)))
+    : "";
   const freePeople = useMemo(
     () => peopleFreeForWindow(book, people, plannedIn, plannedOut, outgoing.personId),
     [book, people, plannedIn, plannedOut, outgoing.personId],
   );
   const [personId, setPersonId] = useState("");
+  const selectedPerson = freePeople.find((row) => row.id === personId) || null;
+  const role = selectedPerson?.role || outgoing.role;
 
   useEffect(() => {
     if (personId && freePeople.some((row) => row.id === personId)) return;
@@ -710,7 +814,7 @@ function ReplacementForm({
 
   return (
     <div className="space-y-3 rounded-xl border border-border p-4">
-      <p className="font-medium">Add worker to continue rotation</p>
+      <p className="font-medium">Add another person</p>
       <p className="text-sm text-muted-foreground">Only people free for the incoming dates are listed.</p>
       <label className="grid gap-1">
         <span className="text-muted-foreground">Employee</span>
@@ -729,16 +833,12 @@ function ReplacementForm({
         </select>
       </label>
       <div className="grid grid-cols-2 gap-3">
-        <label className="grid gap-1">
-          <span className="text-muted-foreground">Role this stay</span>
-          <select value={role} onChange={(event) => setRole(event.target.value)} className="h-9 rounded-lg border border-input px-2">
-            {[...new Set([role, ...roles, ...CREW_ROLES])].map((entry) => (
-              <option key={entry} value={entry}>
-                {entry}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="grid gap-1">
+          <span className="text-muted-foreground">Role</span>
+          <p className="flex h-9 items-center rounded-lg border border-border bg-muted/40 px-2 text-sm font-medium">
+            {role || "—"}
+          </p>
+        </div>
         <label className="grid gap-1">
           <span className="text-muted-foreground">Site</span>
           <select value={site} onChange={(event) => setSite(event.target.value)} className="h-9 rounded-lg border border-input px-2">
@@ -796,13 +896,4 @@ function ReplacementForm({
       </div>
     </div>
   );
-}
-
-function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }

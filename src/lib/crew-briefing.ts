@@ -8,6 +8,11 @@ import {
   type CrewProject,
   type CrewSnapshot,
 } from "@/lib/crew-schedule";
+import type { RotationBook } from "@/lib/crew-rotations";
+import {
+  buildSituationReminders,
+  formatRemindersForMail,
+} from "@/lib/crew-situation-reminders";
 import { formatLong, formatMedium } from "@/lib/dates";
 
 export type BriefingAction = {
@@ -137,6 +142,7 @@ export function buildCrewBriefing(input: {
   opsBook: CrewOpsBook;
   people: { id: string; name: string; projectIds: string[] }[];
   projects: CrewProject[];
+  rotationBook?: RotationBook;
   recipientName?: string;
   recipientEmail?: string;
   previousBriefingAt?: string | null;
@@ -145,39 +151,41 @@ export function buildCrewBriefing(input: {
   const overview = crewOverview(input.today, input.opsBook, input.people as Parameters<typeof crewOverview>[2]);
   const recipient = input.recipientName?.trim() || "Katrina";
   const montreal = montrealParts();
-  const whenLabel = `8:00 AM · ${montreal.weekday}, ${montreal.month} ${montreal.day}`;
+  const whenLabel = `Monday 8:30 AM · ${montreal.weekday}, ${montreal.month} ${montreal.day}`;
   const peopleById = new Map(input.people.map((person) => [person.id, person.name]));
   const actions = overview.rows
     .map((row) => actionFor(row, input.opsBook))
     .filter((item): item is BriefingAction => Boolean(item));
   const changes = recentChanges(input.opsBook, peopleById, input.previousBriefingAt ?? null);
   const appUrl = input.appUrl?.replace(/\/$/, "") || "http://127.0.0.1:47232";
+  const reminderBoard = buildSituationReminders({
+    rows: overview.rows,
+    opsBook: input.opsBook,
+    book: input.rotationBook || { version: 1, rotations: [] },
+    asOf: input.today,
+  });
+  const reminderLines = formatRemindersForMail(reminderBoard);
 
   const priorityLines = actions.length
     ? actions.map((action, index) => `${index + 1}. [${action.level}] ${action.text} · Owner: ${action.owner}`)
     : ["1. No urgent crew logistics actions this morning. Continue monitoring rotations."];
 
   const text = [
-    "Crew Logistics Daily Briefing",
+    "Crew Logistics Weekly Reminders",
     "",
     `To: ${recipient}${input.recipientEmail ? ` <${input.recipientEmail}>` : ""} · ${whenLabel}`,
     `Schedule year: ${CREW_SCHEDULE.year}`,
     "",
-    `Good morning, ${recipient}.`,
+    `Hello ${recipient},`,
     "",
-    "Here is today's crew logistics summary.",
+    "Here are your crew reminders for this week and next week.",
     "",
-    "On site",
-    `# ${overview.onSite}`,
-    "",
-    "Overdue departures",
-    `# ${overview.overdue}`,
-    "",
-    `Due within ${RETURN_SOON_DAYS} days`,
-    `# ${overview.dueSoon}`,
-    "",
-    "Travel attention",
-    `# ${overview.travelAttention}`,
+    ...reminderLines,
+    "Snapshot",
+    `On site: ${overview.onSite}`,
+    `Overdue departures: ${overview.overdue}`,
+    `Due within ${RETURN_SOON_DAYS} days: ${overview.dueSoon}`,
+    `Travel attention: ${overview.travelAttention}`,
     "",
     "Priority actions",
     ...priorityLines,
@@ -186,15 +194,23 @@ export function buildCrewBriefing(input: {
     ...changes.map((line) => `- ${line}`),
     "",
     `Open Crew Logistics to review the full roster: ${appUrl}`,
-    "",
-    `Confirmed facts are from the ${CREW_SCHEDULE.year} schedule and recorded ops. Missing flights or lodging are marked as action needed until confirmed.`,
   ].join("\n");
+
+  const reminderHtml = reminderBoard.weekSections.length || reminderBoard.lookaheadSections.length
+    ? `
+      <h2 style="font-size:16px;margin:0 0 8px">Reminders</h2>
+      <p style="margin:0 0 12px;color:#5a6578">Sent Mondays at 8:30 AM Montreal.</p>
+      ${reminderWindowHtml("This week", `${formatMedium(reminderBoard.weekStart)} to ${formatMedium(reminderBoard.weekEnd)}`, reminderBoard.weekSections)}
+      ${reminderWindowHtml("Next week", `${formatMedium(reminderBoard.lookaheadStart)} to ${formatMedium(reminderBoard.lookaheadEnd)}`, reminderBoard.lookaheadSections)}
+    `
+    : `<h2 style="font-size:16px;margin:0 0 8px">Reminders</h2><p style="margin:0 0 20px">Nothing pressing this week or next week.</p>`;
 
   const html = `
     <div style="font-family:Segoe UI,Arial,sans-serif;color:#152033;line-height:1.5;max-width:640px">
-      <p style="margin:0 0 4px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#5a6578">Crew Logistics Daily Briefing · ${CREW_SCHEDULE.year}</p>
-      <h1 style="margin:0 0 8px;font-size:22px">Good morning, ${escapeHtml(recipient)}</h1>
+      <p style="margin:0 0 4px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#5a6578">Crew Logistics Weekly Reminders · ${CREW_SCHEDULE.year}</p>
+      <h1 style="margin:0 0 8px;font-size:22px">Hello ${escapeHtml(recipient)}</h1>
       <p style="margin:0 0 20px;color:#5a6578">${escapeHtml(whenLabel)} · ${escapeHtml(formatLong(input.today))}</p>
+      ${reminderHtml}
       <table style="width:100%;border-collapse:collapse;margin:0 0 20px">
         ${statRow("On site", overview.onSite)}
         ${statRow("Overdue departures", overview.overdue)}
@@ -221,7 +237,7 @@ export function buildCrewBriefing(input: {
   `;
 
   return {
-    title: `Crew Logistics Daily Briefing · ${formatMedium(input.today)}`,
+    title: `Crew Logistics Weekly Reminders · ${formatMedium(input.today)}`,
     to: input.recipientEmail?.trim() || "",
     whenLabel,
     year: CREW_SCHEDULE.year,
@@ -238,6 +254,28 @@ export function buildCrewBriefing(input: {
     text,
     html,
   };
+}
+
+function reminderWindowHtml(
+  title: string,
+  range: string,
+  sections: ReturnType<typeof buildSituationReminders>["weekSections"],
+) {
+  if (!sections.length) {
+    return `<p style="margin:0 0 16px"><strong>${escapeHtml(title)}</strong> (${escapeHtml(range)}): clear.</p>`;
+  }
+  const body = sections
+    .map((section) => {
+      const rows = section.items
+        .map(
+          (item) =>
+            `<li style="margin:0 0 6px"><span style="color:#5a6578">${escapeHtml(item.dateLabel)}</span> · ${escapeHtml(item.text)}</li>`,
+        )
+        .join("");
+      return `<p style="margin:12px 0 4px;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#5a6578">${escapeHtml(section.label)}</p><ul style="margin:0 0 8px;padding-left:18px">${rows}</ul>`;
+    })
+    .join("");
+  return `<p style="margin:0 0 4px"><strong>${escapeHtml(title)}</strong></p><p style="margin:0 0 8px;color:#5a6578">${escapeHtml(range)}</p>${body}`;
 }
 
 function statRow(label: string, value: number) {

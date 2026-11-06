@@ -24,9 +24,13 @@ export type CrewPersonOps = {
   /** Katrina books outbound between these dates (inclusive). */
   outboundBookFrom: string | null;
   outboundBookTo: string | null;
+  /** True when the yellow outbound booking window was painted on the month grid. */
+  outboundWindowPainted: boolean;
   /** Katrina books inbound / return between these dates (inclusive). */
   returnBookFrom: string | null;
   returnBookTo: string | null;
+  /** True when the yellow return booking window was painted on the month grid. */
+  returnWindowPainted: boolean;
   flightNotes: string;
   accommodation: CrewBookingStatus;
   accommodationNotes: string;
@@ -62,8 +66,10 @@ export function emptyCrewOps(personId: string): CrewPersonOps {
     returnFlight: "not_started",
     outboundBookFrom: null,
     outboundBookTo: null,
+    outboundWindowPainted: false,
     returnBookFrom: null,
     returnBookTo: null,
+    returnWindowPainted: false,
     flightNotes: "",
     accommodation: "not_started",
     accommodationNotes: "",
@@ -110,8 +116,10 @@ export function readCrewOps(value: unknown): CrewOpsBook {
       returnFlight: isStatus(row.returnFlight) ? row.returnFlight : "not_started",
       outboundBookFrom: typeof row.outboundBookFrom === "string" ? row.outboundBookFrom.slice(0, 10) : null,
       outboundBookTo: typeof row.outboundBookTo === "string" ? row.outboundBookTo.slice(0, 10) : null,
+      outboundWindowPainted: row.outboundWindowPainted === true,
       returnBookFrom: typeof row.returnBookFrom === "string" ? row.returnBookFrom.slice(0, 10) : null,
       returnBookTo: typeof row.returnBookTo === "string" ? row.returnBookTo.slice(0, 10) : null,
+      returnWindowPainted: row.returnWindowPainted === true,
       flightNotes: typeof row.flightNotes === "string" ? row.flightNotes : "",
       accommodation: isStatus(row.accommodation) ? row.accommodation : "not_started",
       accommodationNotes: typeof row.accommodationNotes === "string" ? row.accommodationNotes : "",

@@ -1,6 +1,7 @@
 export type CrewNotifySettings = {
   recipientName: string;
   recipientEmail: string;
+  /** Kept for storage compat; means weekly Monday briefing when true. */
   dailyBriefing: boolean;
   instantAlerts: boolean;
   lastBriefingAt: string | null;
@@ -71,21 +72,31 @@ export function saveNotifySettings(settings: CrewNotifySettings) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 }
 
-/** True when Montreal local time is at/after 8:00 and we have not briefed today. */
-export function shouldOfferMorningBriefing(settings: CrewNotifySettings, now = new Date()) {
+/** True Monday at/after 8:30 AM Montreal when we have not briefed this Monday yet. */
+export function shouldOfferWeeklyBriefing(settings: CrewNotifySettings, now = new Date()) {
   if (!settings.dailyBriefing) return false;
   const montreal = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Montreal",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    weekday: "short",
     hour: "2-digit",
+    minute: "2-digit",
     hourCycle: "h23",
   }).formatToParts(now);
   const get = (type: string) => montreal.find((part) => part.type === type)?.value ?? "";
-  const today = `${get("year")}-${get("month")}-${get("day")}`;
+  const weekday = get("weekday");
+  if (weekday !== "Mon") return false;
   const hour = Number(get("hour"));
-  if (hour < 8) return false;
+  const minute = Number(get("minute"));
+  if (hour < 8 || (hour === 8 && minute < 30)) return false;
+  const today = `${get("year")}-${get("month")}-${get("day")}`;
   const lastDay = settings.lastBriefingAt?.slice(0, 10) ?? "";
   return lastDay !== today;
+}
+
+/** @deprecated use shouldOfferWeeklyBriefing */
+export function shouldOfferMorningBriefing(settings: CrewNotifySettings, now = new Date()) {
+  return shouldOfferWeeklyBriefing(settings, now);
 }

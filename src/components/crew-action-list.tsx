@@ -266,7 +266,7 @@ export function CrewActionList({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <div>
-            <h2 className="font-heading text-2xl tracking-tight">Action list</h2>
+            <h2 className="text-lg font-semibold tracking-tight">Action list</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Week of {formatMedium(week.start)} – {formatMedium(week.end)}
               {isCurrentWeek ? " · this week" : ""}
@@ -343,7 +343,7 @@ export function CrewActionList({
           style={{ top: panelPos.top, left: panelPos.left }}
         >
           <div className="border-b border-border px-4 py-3">
-            <p className="font-heading text-lg tracking-tight">Reminders</p>
+            <p className="text-base font-semibold tracking-tight">Reminders</p>
           </div>
           <div className="space-y-2 border-b border-border px-4 py-3">
             <input
@@ -420,7 +420,7 @@ export function CrewActionList({
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
                 <button type="button" onClick={() => onOpen(card.personId)} className="min-w-0 text-left hover:text-primary">
                   <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Employee</p>
-                  <p className="font-heading text-xl tracking-tight">{card.personName}</p>
+                  <p className="text-base font-semibold tracking-tight">{card.personName}</p>
                   <p className="mt-0.5 text-sm text-muted-foreground">
                     {card.role}
                     {card.site ? ` · ${siteLabel(card.site)}` : ""}
@@ -432,7 +432,7 @@ export function CrewActionList({
 
               <div className="grid gap-0 lg:grid-cols-2">
                 <section className="border-b border-border p-4 lg:border-b-0 lg:border-r">
-                  <h3 className="font-heading text-lg tracking-tight">Travel details</h3>
+                  <h3 className="text-sm font-semibold tracking-tight">Travel details</h3>
 
                   {card.travel.outbound.show || card.travel.inbound.show ? (
                     <div className="mt-3 space-y-3">
@@ -471,7 +471,7 @@ export function CrewActionList({
                 </section>
 
                 <section className="p-4">
-                  <h3 className="font-heading text-lg tracking-tight">Accommodation details</h3>
+                  <h3 className="text-sm font-semibold tracking-tight">Accommodation details</h3>
                   {card.accommodation.show ? (
                     <div
                       className={cn(

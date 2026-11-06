@@ -285,7 +285,7 @@ function FlightConfirmationForm({
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="font-heading text-xl tracking-tight">Add flight confirmation</h3>
+          <h3 className="text-base font-semibold tracking-tight">Add flight confirmation</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             {personName} · {role}
             {site ? ` · ${siteLabel(site)}` : ""}

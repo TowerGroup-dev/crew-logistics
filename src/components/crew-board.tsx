@@ -22,7 +22,7 @@ import {
 import {
   loadNotifySettings,
   saveNotifySettings,
-  shouldOfferMorningBriefing,
+  shouldOfferWeeklyBriefing,
   type CrewNotifySettings,
 } from "@/lib/crew-notify-settings";
 import {
@@ -44,6 +44,7 @@ import {
 } from "@/lib/crew-schedule";
 import {
   addNextRotation,
+  extendStay,
   emptyRoster,
   loadRoster,
   mergePeople,
@@ -57,7 +58,8 @@ import {
 import { CrewFlightPanel } from "@/components/crew-flight-panel";
 import { CrewMonthGrid, monthStartFromIso, shiftMonth } from "@/components/crew-month-grid";
 import { CrewNextRotationForm } from "@/components/crew-next-rotation";
-import { CrewOverview } from "@/components/crew-overview";
+import { CrewOverview, CrewReminders } from "@/components/crew-overview";
+import { buildSituationReminders } from "@/lib/crew-situation-reminders";
 import { CrewRoleHeader } from "@/components/crew-role-header";
 import { CrewAccommodationDesk } from "@/components/crew-accommodation-desk";
 import { CrewTravelDesk } from "@/components/crew-travel-desk";
@@ -65,6 +67,7 @@ import { CrewYearTape } from "@/components/crew-year-tape";
 import { CrewRotationDrawer } from "@/components/crew-rotation-drawer";
 import {
   currentRotationForPerson,
+  extendRotationOut,
   loadRotations,
   mergeRotationBook,
   assumeFlightsBooked,
@@ -165,7 +168,17 @@ function travelLabel(ops: ReturnType<typeof opsFor> | null, row: CrewSnapshot) {
   return bookingLabel(status);
 }
 
-export function CrewBoard({ view }: { view: CrewBoardView }) {
+export function CrewBoard({
+  view,
+  remindersOpen = false,
+  onCloseReminders,
+  onReminderCountChange,
+}: {
+  view: CrewBoardView;
+  remindersOpen?: boolean;
+  onCloseReminders?: () => void;
+  onReminderCountChange?: (count: number) => void;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const today = toISODate(new Date());
@@ -346,9 +359,11 @@ export function CrewBoard({ view }: { view: CrewBoardView }) {
   }, [scheduleYear, today]);
 
   function openPersonRotation(personId: string, iso = asOf) {
+    // Prefer the stay covering the clicked day, else current/next from today — never a past rotation.
     const hit =
       rotationForPersonOnDay(rotationBook, personId, iso) ||
-      currentRotationForPerson(rotationBook, personId, asOf);
+      currentRotationForPerson(rotationBook, personId, asOf) ||
+      (iso !== asOf ? currentRotationForPerson(rotationBook, personId, iso) : null);
     if (hit) {
       setSelectedRotationId(hit.id);
       setSelectedId(null);
@@ -396,10 +411,32 @@ export function CrewBoard({ view }: { view: CrewBoardView }) {
   );
 
   const overview = useMemo(() => crewOverview(asOf, opsBook, people), [asOf, opsBook, people]);
+  const activeOverviewRows = useMemo(
+    () => overview.rows.filter((row) => row.person.active !== false),
+    [overview.rows],
+  );
+  const reminderCount = useMemo(
+    () => {
+      const board = buildSituationReminders({
+        rows: activeOverviewRows,
+        opsBook,
+        book: rotationBook,
+        asOf,
+        planDays: notify.reminderPlanDays,
+      });
+      return board.week.length + board.lookahead.length;
+    },
+    [activeOverviewRows, asOf, opsBook, rotationBook, notify.reminderPlanDays],
+  );
+
+  useEffect(() => {
+    onReminderCountChange?.(reminderCount);
+  }, [onReminderCountChange, reminderCount]);
+
   const includeInactive = boardView === "employees";
   const workingRows = useMemo(
-    () => (includeInactive ? overview.rows : overview.rows.filter((row) => row.person.active !== false)),
-    [includeInactive, overview.rows],
+    () => (includeInactive ? overview.rows : activeOverviewRows),
+    [activeOverviewRows, includeInactive, overview.rows],
   );
 
   function withYearQuery(path: string, extra?: Record<string, string>) {
@@ -413,6 +450,7 @@ export function CrewBoard({ view }: { view: CrewBoardView }) {
       opsBook,
       people,
       projects,
+      rotationBook,
       recipientName: notify.recipientName,
       recipientEmail: notify.recipientEmail,
       previousBriefingAt: notify.lastBriefingAt,
@@ -443,10 +481,10 @@ export function CrewBoard({ view }: { view: CrewBoardView }) {
 
   useEffect(() => {
     if (!hydrated || !notify.dailyBriefing) return;
-    if (!shouldOfferMorningBriefing(notify)) return;
+    if (!shouldOfferWeeklyBriefing(notify)) return;
     if (!notify.recipientEmail) return;
     void sendBriefing();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when hydrated after 8 AM
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when hydrated after Monday 8:30
   }, [hydrated]);
 
   function addEmployee() {
@@ -608,7 +646,13 @@ export function CrewBoard({ view }: { view: CrewBoardView }) {
         </section>
       ) : null}
 
-      <section className={cn(boardView === "overview" || boardView === "settings" ? "" : "overflow-hidden rounded-2xl border border-border bg-card")}>
+      <section
+        className={cn(
+          boardView === "overview" || boardView === "settings"
+            ? ""
+            : "overflow-hidden rounded-2xl border border-border bg-card",
+        )}
+      >
         {boardView !== "overview" && boardView !== "settings" ? (
           <div className="flex flex-wrap items-end gap-3 border-b border-border px-3 py-3 sm:px-4">
             <label className="grid gap-1 text-sm text-muted-foreground">
@@ -667,6 +711,7 @@ export function CrewBoard({ view }: { view: CrewBoardView }) {
           <CrewOverview
             rows={overview.rows.filter((row) => row.person.active !== false)}
             rotationBook={rotationBook}
+            opsBook={opsBook}
             asOf={asOf}
             reminders={{
               planDays: notify.reminderPlanDays,
@@ -756,6 +801,19 @@ export function CrewBoard({ view }: { view: CrewBoardView }) {
               onAddRotation={(personId, input) =>
                 patchRoster((current) => addNextRotation(current, personId, input))
               }
+              onExtendStay={(personId, stintFrom, newOut) => {
+                // Place end is Out — extending the bar moves Out everywhere.
+                patchRoster((current) => extendStay(current, personId, stintFrom, newOut));
+                setRotationBook((current) => {
+                  const hit = current.rotations.find(
+                    (row) => row.personId === personId && row.plannedIn === stintFrom,
+                  );
+                  if (!hit) return current;
+                  const next = extendRotationOut(current, hit.id, newOut);
+                  saveRotations(next);
+                  return next;
+                });
+              }}
               onHidePerson={(personId) => patchScheduleView((current) => hidePerson(current, personId))}
               hiddenPeople={hiddenPeople}
               onShowPerson={(personId) => patchScheduleView((current) => showPerson(current, personId))}
@@ -966,9 +1024,31 @@ export function CrewBoard({ view }: { view: CrewBoardView }) {
           staffName={staffName}
           sites={sitesBook.sites}
           roles={[...new Set([...CREW_ROLES, ...rolesBook.extras])]}
+          personOps={opsFor(opsBook, selectedRotationPerson.id)}
           onClose={() => setSelectedRotationId(null)}
           onSaveBook={saveRotationBook}
           onSaveRoster={patchRoster}
+          onPatchOps={(recipe) => patchOps(selectedRotationPerson.id, recipe)}
+        />
+      ) : null}
+
+      {remindersOpen && onCloseReminders ? (
+        <CrewReminders
+          rows={activeOverviewRows}
+          rotationBook={rotationBook}
+          opsBook={opsBook}
+          asOf={asOf}
+          planDays={notify.reminderPlanDays}
+          onClose={onCloseReminders}
+          onOpenPerson={(personId) => {
+            openPersonRotation(personId);
+            onCloseReminders();
+          }}
+          onOpenRotation={(rotationId) => {
+            setSelectedRotationId(rotationId);
+            setSelectedId(null);
+            onCloseReminders();
+          }}
         />
       ) : null}
     </div>
@@ -1026,7 +1106,7 @@ function PersonProfile({
           <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
             Schedule year {year}
           </p>
-          <h2 id="crew-person-title" className="mt-1 font-heading text-3xl tracking-tight">
+          <h2 id="crew-person-title" className="mt-1 text-lg font-semibold tracking-tight">
             {snap.person.name}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{roleLabel(snap.person)}</p>
@@ -1135,7 +1215,10 @@ function PersonProfile({
             }
           />
           <Fact label="IN" value={snap.plannedIn ? formatMedium(snap.plannedIn) : "-"} />
-          <Fact label="OUT" value={snap.plannedOut ? formatMedium(snap.plannedOut) : "-"} />
+          <Fact
+            label="OUT"
+            value={snap.plannedOut ? `${formatMedium(snap.plannedOut)} · end of stay` : "-"}
+          />
         </dl>
         {progress != null ? (
           <div className="mt-1">

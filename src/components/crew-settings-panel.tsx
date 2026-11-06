@@ -242,6 +242,59 @@ export function CrewSettingsPanel({
 
       <section className="space-y-3">
         <div>
+          <h3 className="text-base font-semibold">Mail to Katrina</h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Reminders are emailed to Katrina every Monday at 8:30 am (Montreal).
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1">
+            <span className="text-muted-foreground">Name</span>
+            <input
+              value={notify.recipientName}
+              onChange={(event) =>
+                onNotifyChange((current) => ({ ...current, recipientName: event.target.value }))
+              }
+              className="h-9 rounded-md border border-input px-2"
+            />
+          </label>
+          <label className="grid gap-1">
+            <span className="text-muted-foreground">Email</span>
+            <input
+              type="email"
+              value={notify.recipientEmail}
+              onChange={(event) =>
+                onNotifyChange((current) => ({ ...current, recipientEmail: event.target.value }))
+              }
+              placeholder="katrina@…"
+              className="h-9 rounded-md border border-input px-2"
+            />
+          </label>
+        </div>
+        <label className="inline-flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={notify.dailyBriefing}
+            onChange={(event) =>
+              onNotifyChange((current) => ({ ...current, dailyBriefing: event.target.checked }))
+            }
+          />
+          <span>Send weekly reminders on Mondays at 8:30 am</span>
+        </label>
+        <label className="inline-flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={notify.instantAlerts}
+            onChange={(event) =>
+              onNotifyChange((current) => ({ ...current, instantAlerts: event.target.checked }))
+            }
+          />
+          <span>Instant alerts for critical changes</span>
+        </label>
+      </section>
+
+      <section className="space-y-3">
+        <div>
           <h3 className="text-base font-semibold">Reminder timing</h3>
           <p className="mt-0.5 text-sm text-muted-foreground">Drives the Needs attention checklist and return booking window.</p>
         </div>

@@ -16,7 +16,7 @@ import {
 import { CrewRoleHeader } from "@/components/crew-role-header";
 import { CrewPlaceDialog, type PlaceRotationInput } from "@/components/crew-place-dialog";
 import { CrewScheduleHiddenBar } from "@/components/crew-schedule-hidden-bar";
-import { MAX_ROTATION_DAYS } from "@/lib/crew-roster";
+import { DEFAULT_ROTATION_DAYS, MAX_ROTATION_DAYS } from "@/lib/crew-roster";
 import { DEFAULT_SITES, siteColour, worksiteFromMark, type CrewSite } from "@/lib/crew-sites";
 import { addDays, formatMedium } from "@/lib/dates";
 import { cn } from "@/lib/cn";
@@ -132,7 +132,7 @@ export function CrewYearTape({
       from = monthStart;
     }
     let to = from;
-    for (let i = 1; i < MAX_ROTATION_DAYS; i += 1) {
+    for (let i = 1; i < DEFAULT_ROTATION_DAYS; i += 1) {
       const next = addDays(from, i);
       if (occupiedOn(person, next)) break;
       to = next;
@@ -147,9 +147,9 @@ export function CrewYearTape({
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="border-b border-border bg-[#356dbd] px-4 py-4 text-white sm:px-5">
-        <h2 className="font-heading text-3xl tracking-tight sm:text-4xl">{year}</h2>
+        <h2 className="text-xl font-semibold tracking-tight">{year}</h2>
         <p className="mt-1 text-sm text-white/85">
-          Click a month on a person to place them (max {MAX_ROTATION_DAYS} days). Header months open Month view.
+          Click a month on a person to place them (standard 6 weeks; can extend past). Header months open Month view.
         </p>
       </div>
       {hiddenPeople?.length && onShowPerson && onShowAllHidden ? (

@@ -7,7 +7,7 @@ export const CREW_SCHEDULE_DATA = {
     "defaultRotationDays": 42,
     "mechanicRotationDays": 28,
     "calendarStarts": "2025-12-08",
-    "calendarEnds": "2026-12-31"
+    "calendarEnds": "2026-12-18"
   },
   "sites": {
     "IQA": "Iqaluit",
@@ -303,16 +303,16 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
+          "date": "2026-10-29",
+          "mark": "Out"
+        },
+        {
           "date": "2026-11-12",
           "mark": "POND"
         },
         {
           "date": "2026-11-13",
           "mark": "IQA"
-        },
-        {
-          "date": "2026-10-29",
-          "mark": "Out"
         }
       ],
       "stints": [
@@ -344,14 +344,24 @@ export const CREW_SCHEDULE_DATA = {
           "site": "POND",
           "sites": [
             "POND",
-            "IQA",
-            "POND",
             "IQA"
           ],
           "from": "2026-09-17",
           "out": "2026-10-29",
           "arrival": "marked",
           "departure": "rotation",
+          "tentative": false
+        },
+        {
+          "site": "POND",
+          "sites": [
+            "POND",
+            "IQA"
+          ],
+          "from": "2026-11-12",
+          "out": null,
+          "arrival": "marked",
+          "departure": null,
           "tentative": false
         }
       ],
@@ -564,7 +574,7 @@ export const CREW_SCHEDULE_DATA = {
     {
       "id": "william-matthews-manager",
       "name": "William Matthews",
-      "role": "Manager",
+      "role": "Surveyor",
       "sheetRow": 7,
       "active": true,
       "homeSites": [
@@ -2825,7 +2835,7 @@ export const CREW_SCHEDULE_DATA = {
     "bridgedColumns": [],
     "dateSpan": [
       "2025-12-08",
-      "2026-12-31"
+      "2026-12-18"
     ],
     "markValues": {
       "Out": 72,

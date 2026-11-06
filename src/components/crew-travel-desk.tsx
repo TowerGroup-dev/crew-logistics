@@ -28,39 +28,55 @@ export function CrewTravelDesk({
   today: string;
   onOpen: (personId: string) => void;
 }) {
-  const outbound = rows.filter((row) => {
-    const live = row.duty === "in_transit" || withinSoon(row.plannedIn, today);
-    if (!live) return false;
-    if (flightIsArranged(activeBookingFor(flightBook, row.person.id, "outbound"))) return false;
-    const ops = opsFor(opsBook, row.person.id);
-    return bookingNeedsAttention(ops.outboundFlight);
-  });
+  const byTravelDate = (a: CrewSnapshot, b: CrewSnapshot, direction: "outbound" | "return") => {
+    const dateA = (direction === "outbound" ? a.plannedIn : a.plannedOut) || "9999-12-31";
+    const dateB = (direction === "outbound" ? b.plannedIn : b.plannedOut) || "9999-12-31";
+    return dateA.localeCompare(dateB) || a.person.name.localeCompare(b.person.name);
+  };
 
-  const inbound = rows.filter((row) => {
-    const live =
-      row.duty === "on_site" && (row.dueSoon || row.overdue || withinSoon(row.plannedOut, today));
-    if (!live) return false;
-    if (flightIsArranged(activeBookingFor(flightBook, row.person.id, "return"))) return false;
-    const ops = opsFor(opsBook, row.person.id);
-    return bookingNeedsAttention(ops.returnFlight) || row.dueSoon || row.overdue;
-  });
+  const outbound = rows
+    .filter((row) => {
+      const live = row.duty === "in_transit" || withinSoon(row.plannedIn, today);
+      if (!live) return false;
+      if (flightIsArranged(activeBookingFor(flightBook, row.person.id, "outbound"))) return false;
+      const ops = opsFor(opsBook, row.person.id);
+      return bookingNeedsAttention(ops.outboundFlight);
+    })
+    .sort((a, b) => byTravelDate(a, b, "outbound"));
 
-  const booked = rows.filter((row) => {
-    const live =
-      row.duty === "on_site" ||
-      row.duty === "in_transit" ||
-      withinSoon(row.plannedIn, today) ||
-      withinSoon(row.plannedOut, today);
-    if (!live) return false;
-    const out = flightIsArranged(activeBookingFor(flightBook, row.person.id, "outbound"));
-    const ret = flightIsArranged(activeBookingFor(flightBook, row.person.id, "return"));
-    return out || ret;
-  });
+  const inbound = rows
+    .filter((row) => {
+      const live =
+        row.duty === "on_site" && (row.dueSoon || row.overdue || withinSoon(row.plannedOut, today));
+      if (!live) return false;
+      if (flightIsArranged(activeBookingFor(flightBook, row.person.id, "return"))) return false;
+      const ops = opsFor(opsBook, row.person.id);
+      return bookingNeedsAttention(ops.returnFlight) || row.dueSoon || row.overdue;
+    })
+    .sort((a, b) => byTravelDate(a, b, "return"));
+
+  const booked = rows
+    .filter((row) => {
+      const live =
+        row.duty === "on_site" ||
+        row.duty === "in_transit" ||
+        withinSoon(row.plannedIn, today) ||
+        withinSoon(row.plannedOut, today);
+      if (!live) return false;
+      const out = flightIsArranged(activeBookingFor(flightBook, row.person.id, "outbound"));
+      const ret = flightIsArranged(activeBookingFor(flightBook, row.person.id, "return"));
+      return out || ret;
+    })
+    .sort(
+      (a, b) =>
+        (a.plannedIn || a.plannedOut || "9999-12-31").localeCompare(b.plannedIn || b.plannedOut || "9999-12-31") ||
+        a.person.name.localeCompare(b.person.name),
+    );
 
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="font-heading text-2xl tracking-tight">Travel</h2>
+        <h2 className="text-lg font-semibold tracking-tight">Travel</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Current moves only: arrivals and returns in the next 2 weeks. Arrange on Canadian North, then add the confirmation on the crew profile.
         </p>
@@ -120,7 +136,7 @@ function Queue({
   return (
     <section className={cn("overflow-hidden rounded-2xl border bg-card", urgent ? "border-amber-300" : "border-border")}>
       <div className="border-b border-border px-4 py-3">
-        <h3 className="font-heading text-lg tracking-tight">{title}</h3>
+        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
       </div>
       {rows.length === 0 ? (
         <p className="px-4 py-6 text-sm text-muted-foreground">{empty}</p>

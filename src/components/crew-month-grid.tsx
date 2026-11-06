@@ -7,6 +7,8 @@ import {
   isCampSite,
   isOffRotation,
   roleLabel,
+  scheduleYearLastDay,
+  scheduleYearOutExclusive,
   siteLabel,
   statusOnDate,
   workLabelForAssignment,
@@ -16,7 +18,7 @@ import { CrewRoleHeader } from "@/components/crew-role-header";
 import { CrewPlaceDialog, type PlaceRotationInput } from "@/components/crew-place-dialog";
 import { CrewScheduleHiddenBar } from "@/components/crew-schedule-hidden-bar";
 import { opsFor, type CrewOpsBook, type CrewPersonOps } from "@/lib/crew-ops";
-import { MAX_ROTATION_DAYS } from "@/lib/crew-roster";
+import { MAX_ROTATION_DAYS, STANDARD_ROTATION_DAYS } from "@/lib/crew-roster";
 import { DEFAULT_SITES, siteColour, worksiteFromMark, type CrewSite } from "@/lib/crew-sites";
 import { addDays, daysBetween, formatMedium, toISODate } from "@/lib/dates";
 import { cn } from "@/lib/cn";
@@ -31,14 +33,17 @@ function siteTone(site: string, sites: CrewSite[]) {
 }
 
 function siteOnDay(person: CrewPerson, iso: string) {
+  const seasonExclusive = scheduleYearOutExclusive(Number(iso.slice(0, 4)));
   for (const stint of person.stints || []) {
-    if (stint.from <= iso && (!stint.out || iso < stint.out)) {
+    const out = stint.out && stint.out < seasonExclusive ? stint.out : seasonExclusive;
+    if (stint.from <= iso && iso < out) {
       const site = worksiteFromMark(stint.site) || stint.sites.map(worksiteFromMark).find(Boolean);
       return site || null;
     }
   }
   const mark = statusOnDate(person, iso);
   if (!mark || isOffRotation(mark)) return null;
+  if (iso > scheduleYearLastDay(Number(iso.slice(0, 4)))) return null;
   return worksiteFromMark(mark);
 }
 
@@ -71,7 +76,9 @@ function orderedRange(a: string, b: string) {
 function clampPlaceRange(from: string, to: string) {
   const range = orderedRange(from, to);
   const maxTo = addDays(range.from, MAX_ROTATION_DAYS - 1);
-  return { from: range.from, to: range.to > maxTo ? maxTo : range.to };
+  const seasonEnd = scheduleYearLastDay(Number(range.from.slice(0, 4)));
+  const capped = range.to > maxTo ? maxTo : range.to;
+  return { from: range.from, to: capped > seasonEnd ? seasonEnd : capped };
 }
 
 function overlapMessage(person: CrewPerson, from: string, to: string) {
@@ -84,7 +91,16 @@ function overlapMessage(person: CrewPerson, from: string, to: string) {
   return null;
 }
 
-type DragMode = "place" | "book" | "clear" | "open";
+type DragMode = "place" | "book" | "clear" | "open" | "extend";
+
+function stintCovering(person: CrewPerson, iso: string) {
+  const seasonExclusive = scheduleYearOutExclusive(Number(iso.slice(0, 4)));
+  for (const stint of person.stints || []) {
+    const out = stint.out && stint.out < seasonExclusive ? stint.out : seasonExclusive;
+    if (stint.from <= iso && iso < out) return stint;
+  }
+  return null;
+}
 
 export function CrewMonthGrid({
   monthStart,
@@ -99,6 +115,7 @@ export function CrewMonthGrid({
   onThisMonth,
   onSetBookWindow,
   onAddRotation,
+  onExtendStay,
   onHidePerson,
   hiddenPeople,
   onShowPerson,
@@ -120,6 +137,8 @@ export function CrewMonthGrid({
     recipe: (current: CrewPersonOps) => CrewPersonOps,
   ) => void;
   onAddRotation: (personId: string, input: PlaceRotationInput) => void;
+  /** Extend an existing stay's exclusive OUT to a later date. */
+  onExtendStay?: (personId: string, stintFrom: string, newOut: string) => void;
   onHidePerson?: (personId: string) => void;
   hiddenPeople?: { id: string; name: string }[];
   onShowPerson?: (personId: string) => void;
@@ -152,16 +171,19 @@ export function CrewMonthGrid({
   const syncing = useRef(false);
 
   /**
-   * Focused month plus enough following days that a place started on the
-   * last day of this month can still paint a full 42-day stay.
+   * Focused month plus enough following days that a place/extend started late
+   * in the month can still paint a long stay.
    */
   const days = useMemo(() => {
     const start = monthStart;
+    const year = Number(start.slice(0, 4));
+    const scheduleEnd = scheduleYearLastDay(year);
     const nextMonthStart = addDays(`${start.slice(0, 7)}-28`, 10).slice(0, 7) + "-01";
     const lastOfFocused = addDays(nextMonthStart, -1);
+    // Paint ahead for place/extend, but never past season end (18 Dec 2026).
     const endExclusive = addDays(lastOfFocused, MAX_ROTATION_DAYS);
     const list: string[] = [];
-    for (let d = start; d < endExclusive; d = addDays(d, 1)) list.push(d);
+    for (let d = start; d < endExclusive && d <= scheduleEnd; d = addDays(d, 1)) list.push(d);
     return list;
   }, [monthStart]);
 
@@ -186,6 +208,42 @@ export function CrewMonthGrid({
     });
   }
 
+  const dateHeader = (
+    <div className="grid border-b border-border bg-card" style={{ gridTemplateColumns: columns, width: trackWidth }}>
+      <div className="sticky left-0 z-30 bg-card px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+        Crew
+      </div>
+      {days.map((iso) => {
+        const d = Number(iso.slice(8, 10));
+        const date = new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, d);
+        const weekend = date.getDay() === 0 || date.getDay() === 6;
+        const isToday = iso === today;
+        const otherMonth = iso >= nextMonthStart;
+        const monthBoundary = iso === nextMonthStart;
+        return (
+          <div
+            key={iso}
+            title={formatMedium(iso)}
+            className={cn(
+              "border-l border-border px-0.5 py-2 text-center text-[10px]",
+              weekend && "bg-muted/60",
+              otherMonth && "bg-sky-50/80",
+              monthBoundary && "border-l-2 border-l-primary",
+              isToday && "bg-rose-50 font-bold text-rose-700",
+            )}
+          >
+            <div>{d}</div>
+            <div className="text-muted-foreground">
+              {d === 1 || monthBoundary
+                ? date.toLocaleDateString("en-US", { month: "short" })
+                : date.toLocaleDateString("en-US", { weekday: "narrow" })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   function autoScrollToward(iso: string) {
     const main = mainScrollRef.current;
     if (!main) return;
@@ -206,19 +264,11 @@ export function CrewMonthGrid({
 
   const title = useMemo(() => {
     const [y, m] = monthStart.split("-").map(Number);
-    const current = new Date(y, (m ?? 1) - 1, 1).toLocaleDateString("en-GB", {
+    return new Date(y, (m ?? 1) - 1, 1).toLocaleDateString("en-GB", {
       month: "long",
       year: "numeric",
     });
-    const endIso = days[days.length - 1];
-    if (!endIso) return current;
-    const endLabel = new Date(
-      Number(endIso.slice(0, 4)),
-      Number(endIso.slice(5, 7)) - 1,
-      Number(endIso.slice(8, 10)),
-    ).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    return `${current} → ${endLabel} (42-day place)`;
-  }, [days, monthStart]);
+  }, [monthStart]);
 
   const groups = useMemo(() => {
     const roleRank = (value: string) => {
@@ -278,6 +328,7 @@ export function CrewMonthGrid({
         ...current,
         returnBookFrom: null,
         returnBookTo: null,
+        returnWindowPainted: false,
         returnFlight:
           current.returnFlight === "booked" || current.returnFlight === "confirmed"
             ? current.returnFlight
@@ -293,11 +344,23 @@ export function CrewMonthGrid({
         ...current,
         returnBookFrom: range.from,
         returnBookTo: range.to,
+        returnWindowPainted: true,
         returnFlight:
           current.returnFlight === "booked" || current.returnFlight === "confirmed"
             ? current.returnFlight
             : "needed",
       }));
+      return;
+    }
+
+    if (active.mode === "extend") {
+      const person = peopleById.get(active.personId);
+      const stint = person ? stintCovering(person, active.anchor) : null;
+      if (!stint || !onExtendStay) return;
+      const painted = orderedRange(active.start, active.end);
+      const lastInclusive = clampPlaceRange(stint.from, painted.to).to;
+      const newOut = addDays(lastInclusive, 1);
+      if (!stint.out || newOut > stint.out) onExtendStay(active.personId, stint.from, newOut);
       return;
     }
 
@@ -318,7 +381,36 @@ export function CrewMonthGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function startDrag(personId: string, iso: string) {
+  function setReturnWindow(personId: string, from: string, to: string) {
+    onSetBookWindow(personId, (current) => ({
+      ...current,
+      returnBookFrom: from,
+      returnBookTo: to,
+      returnWindowPainted: true,
+      returnFlight:
+        current.returnFlight === "booked" || current.returnFlight === "confirmed"
+          ? current.returnFlight
+          : "needed",
+    }));
+  }
+
+  /** Right-click on a stay day paints a return booking window (yellow). */
+  function addReturnWindowAt(personId: string, iso: string) {
+    const person = peopleById.get(personId);
+    if (!person || !siteOnDay(person, iso)) return;
+    const stint = stintCovering(person, iso);
+    const seasonEnd = scheduleYearLastDay(Number(monthStart.slice(0, 4)));
+    const lastInclusive = stint?.out ? addDays(stint.out, -1) : seasonEnd;
+    const placeEnd = lastInclusive > seasonEnd ? seasonEnd : lastInclusive;
+    // Default window: clicked day through end of stay, capped at 2 weeks for booking.
+    const to = placeEnd >= iso ? placeEnd : iso;
+    const capped = daysBetween(iso, to) > 13 ? addDays(iso, 13) : to;
+    setReturnWindow(personId, iso, capped);
+  }
+
+  function startDrag(personId: string, iso: string, button = 0) {
+    // Only left button starts place / open / clear / drag-book.
+    if (button !== 0) return;
     const person = peopleById.get(personId);
     if (!person) return;
     const ops = opsFor(opsBook, personId);
@@ -344,8 +436,30 @@ export function CrewMonthGrid({
     const active = dragRef.current;
     if (!active || active.personId !== personId || active.mode === "clear") return;
 
-    // Dragging on a stay upgrades click→open into return-book paint (exact range).
-    if (active.mode === "open" || active.mode === "book") {
+    // Dragging on a stay: inside stay = return-book window; past OUT = extend stay.
+    if (active.mode === "open" || active.mode === "book" || active.mode === "extend") {
+      const person = peopleById.get(personId);
+      const stint = person ? stintCovering(person, active.anchor) : null;
+      if (stint?.out && iso >= stint.out && onExtendStay) {
+        let end = addDays(stint.out, -1);
+        for (let d = stint.out; d <= iso; d = addDays(d, 1)) {
+          if (siteOnDay(person!, d)) break;
+          end = d;
+        }
+        const range = clampPlaceRange(stint.from, end);
+        dragRef.current = {
+          personId,
+          anchor: active.anchor,
+          start: stint.from,
+          end: range.to,
+          mode: "extend",
+          moved: true,
+        };
+        setDraft({ personId, start: stint.from, end: range.to, mode: "extend" });
+        autoScrollToward(iso);
+        return;
+      }
+
       const range = paintBookRange(personId, active.anchor, iso);
       if (!range) return;
       dragRef.current = {
@@ -390,11 +504,9 @@ export function CrewMonthGrid({
 
   const placePerson = placePrompt ? peopleById.get(placePrompt.personId) : null;
   const draftDays =
-    draft && draft.mode === "place"
+    draft && (draft.mode === "place" || draft.mode === "book" || draft.mode === "extend")
       ? daysBetween(orderedRange(draft.start, draft.end).from, orderedRange(draft.start, draft.end).to) + 1
-      : draft && draft.mode === "book"
-        ? daysBetween(orderedRange(draft.start, draft.end).from, orderedRange(draft.start, draft.end).to) + 1
-        : null;
+      : null;
 
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -409,9 +521,9 @@ export function CrewMonthGrid({
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0 flex-1">
-          <h2 className="font-heading text-2xl tracking-tight">{title}</h2>
+          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Drag empty days to place · click a stay to open · drag a stay to set the return booking window
+            Drag empty days to place · drag past OUT to extend · click a stay to open · right-click a stay to add return booking
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
             {siteList.map((site) => (
@@ -436,36 +548,55 @@ export function CrewMonthGrid({
             <div
               className={cn(
                 "mt-3 max-w-md rounded-xl border px-3 py-2.5",
-                draft?.mode === "book" ? "border-amber-300 bg-amber-50" : "border-sky-300 bg-sky-50",
+                draft?.mode === "book"
+                  ? "border-amber-300 bg-amber-50"
+                  : draft?.mode === "extend"
+                    ? "border-emerald-300 bg-emerald-50"
+                    : "border-sky-300 bg-sky-50",
               )}
             >
               <div className="flex items-baseline justify-between gap-3">
                 <p className="text-sm font-semibold text-foreground">
-                  {draft?.mode === "book" ? "Return booking window" : "New rotation"}
+                  {draft?.mode === "book"
+                    ? "Return booking window"
+                    : draft?.mode === "extend"
+                      ? "Extend stay"
+                      : "New rotation"}
                 </p>
                 <p className="text-sm font-semibold tabular-nums">
                   {draft?.mode === "book"
                     ? `${draftDays} day${draftDays === 1 ? "" : "s"}`
-                    : `${draftDays} / ${MAX_ROTATION_DAYS} days`}
+                    : draftDays > STANDARD_ROTATION_DAYS
+                      ? `${draftDays} days · past 6 weeks`
+                      : `${draftDays} / ${STANDARD_ROTATION_DAYS} days`}
                 </p>
               </div>
-              {draft?.mode === "place" ? (
+              {(draft?.mode === "place" || draft?.mode === "extend") && draftDays <= STANDARD_ROTATION_DAYS ? (
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-sky-200/80">
                   <div
-                    className={cn(
-                      "h-full rounded-full transition-[width]",
-                      draftDays >= MAX_ROTATION_DAYS ? "bg-emerald-600" : "bg-sky-600",
-                    )}
-                    style={{ width: `${Math.min(100, (draftDays / MAX_ROTATION_DAYS) * 100)}%` }}
+                    className="h-full rounded-full bg-sky-600 transition-[width]"
+                    style={{ width: `${Math.min(100, (draftDays / STANDARD_ROTATION_DAYS) * 100)}%` }}
                   />
                 </div>
               ) : null}
-              {draft?.mode === "place" && draftDays >= MAX_ROTATION_DAYS ? (
-                <p className="mt-1.5 text-xs font-medium text-emerald-800">Full 42-day stay selected</p>
-              ) : draft?.mode === "place" ? (
-                <p className="mt-1.5 text-xs text-sky-900">Keep dragging to extend · max {MAX_ROTATION_DAYS} days</p>
-              ) : (
+              {draft?.mode === "book" ? (
                 <p className="mt-1.5 text-xs text-amber-950">Release to save this yellow booking window</p>
+              ) : draft?.mode === "extend" && draftDays > STANDARD_ROTATION_DAYS ? (
+                <p className="mt-1.5 text-xs font-medium text-emerald-900">
+                  Extending past 6 weeks · release to save (max {MAX_ROTATION_DAYS} days)
+                </p>
+              ) : draft?.mode === "extend" ? (
+                <p className="mt-1.5 text-xs text-emerald-900">Release to push OUT later</p>
+              ) : draftDays > STANDARD_ROTATION_DAYS ? (
+                <p className="mt-1.5 text-xs font-medium text-amber-950">
+                  Extending past 6 weeks · keep dragging if needed (max {MAX_ROTATION_DAYS})
+                </p>
+              ) : draftDays === STANDARD_ROTATION_DAYS ? (
+                <p className="mt-1.5 text-xs text-sky-900">
+                  Full 6 weeks · keep dragging to extend past 6 weeks
+                </p>
+              ) : (
+                <p className="mt-1.5 text-xs text-sky-900">Keep dragging · standard max is 6 weeks</p>
               )}
             </div>
           ) : null}
@@ -501,12 +632,13 @@ export function CrewMonthGrid({
         </div>
       </div>
 
+      {/* Date bar stays fixed while crew rows scroll vertically; horizontal scroll stays in sync. */}
       <div
         ref={topScrollRef}
-        className="overflow-x-auto border-b border-border bg-muted/30"
+        className="shrink-0 overflow-x-auto overflow-y-hidden border-b border-border bg-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onScroll={() => syncScroll("top")}
       >
-        <div className="flex h-3 items-stretch" style={{ width: trackWidth }}>
+        <div className="flex h-3 items-stretch bg-muted/30" style={{ width: trackWidth }}>
           <div className="w-[11rem] shrink-0" />
           <div className="flex flex-1">
             <div
@@ -517,10 +649,11 @@ export function CrewMonthGrid({
             <div
               className="bg-primary/10"
               style={{ flex: Math.max(1, days.filter((iso) => iso >= nextMonthStart).length) }}
-              title="Following days (full 42-day place)"
+              title="Following days"
             />
           </div>
         </div>
+        {dateHeader}
       </div>
 
       <div
@@ -531,43 +664,6 @@ export function CrewMonthGrid({
         onPointerCancel={commitDrag}
       >
         <div className="min-w-max">
-          <div
-            className="sticky top-0 z-20 grid border-b border-border bg-card"
-            style={{ gridTemplateColumns: columns }}
-          >
-            <div className="sticky left-0 z-30 bg-card px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-              Crew
-            </div>
-            {days.map((iso) => {
-              const d = Number(iso.slice(8, 10));
-              const date = new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, d);
-              const weekend = date.getDay() === 0 || date.getDay() === 6;
-              const isToday = iso === today;
-              const otherMonth = iso >= nextMonthStart;
-              const monthBoundary = iso === nextMonthStart;
-              return (
-                <div
-                  key={iso}
-                  title={formatMedium(iso)}
-                  className={cn(
-                    "border-l border-border px-0.5 py-2 text-center text-[10px]",
-                    weekend && "bg-muted/60",
-                    otherMonth && "bg-sky-50/80",
-                    monthBoundary && "border-l-2 border-l-primary",
-                    isToday && "bg-rose-50 font-bold text-rose-700",
-                  )}
-                >
-                  <div>{d}</div>
-                  <div className="text-muted-foreground">
-                    {d === 1 || monthBoundary
-                      ? date.toLocaleDateString("en-US", { month: "short" })
-                      : date.toLocaleDateString("en-US", { weekday: "narrow" })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
           {groups.length === 0 ? (
             <p className="px-4 py-8 text-sm text-muted-foreground">No crew match these filters.</p>
           ) : (
@@ -620,6 +716,8 @@ export function CrewMonthGrid({
                         const weekend = date.getDay() === 0 || date.getDay() === 6;
                         const otherMonth = iso >= nextMonthStart;
                         const stintStart = Boolean(site && !siteOnDay(person, addDays(iso, -1)));
+                        // Last day of the place = OUT (place end).
+                        const stintEnd = Boolean(site && !siteOnDay(person, addDays(iso, 1)));
                         const work = site ? workLabelForAssignment(person, site, iso, iso) : "";
                         const inDraft =
                           Boolean(draftRange && iso >= draftRange.from && iso <= draftRange.to);
@@ -627,6 +725,8 @@ export function CrewMonthGrid({
                           inBookWindow(iso, ops.returnBookFrom, ops.returnBookTo) ||
                           (inDraft && draftMode === "book");
                         const placePreview = inDraft && draftMode === "place";
+                        const extendPreview = inDraft && draftMode === "extend";
+                        const paintPreview = placePreview || extendPreview;
 
                         return (
                           <div
@@ -637,53 +737,62 @@ export function CrewMonthGrid({
                               flight
                                 ? `${flight === "in" ? "Inbound" : "Outbound"} · ${formatMedium(iso)}`
                                 : site
-                                  ? `${assignmentRole ? `${assignmentRole} · ` : ""}${work ? `${work} · ` : ""}${siteLabel(site)} · ${formatMedium(iso)}`
+                                  ? `${stintEnd ? "OUT · " : ""}${assignmentRole ? `${assignmentRole} · ` : ""}${work ? `${work} · ` : ""}${siteLabel(site)} · ${formatMedium(iso)} · right-click for return booking · drag past OUT to extend`
                                   : `Empty · ${formatMedium(iso)} · drag to place`
                             }
                             onPointerDown={(event) => {
+                              if (event.button !== 0) return;
                               event.preventDefault();
-                              startDrag(person.id, iso);
+                              startDrag(person.id, iso, event.button);
+                            }}
+                            onContextMenu={(event) => {
+                              event.preventDefault();
+                              if (!site) return;
+                              addReturnWindowAt(person.id, iso);
                             }}
                             onPointerEnter={() => moveDrag(person.id, iso)}
                             className={cn(
                               "relative flex h-11 cursor-cell select-none items-center justify-center border-l border-border text-[8px] font-bold",
-                              !site && !flight && !returnWindow && !placePreview && weekend && "bg-muted/40",
-                              !site && !flight && !returnWindow && !placePreview && otherMonth && "bg-sky-50/50",
-                              site && !flight && !returnWindow && !placePreview && siteTone(site, siteList),
-                              flight === "in" && !returnWindow && !placePreview && "bg-teal-600 text-white",
-                              flight === "out" && !returnWindow && !placePreview && "bg-indigo-600 text-white",
+                              !site && !flight && !returnWindow && !paintPreview && weekend && "bg-muted/40",
+                              !site && !flight && !returnWindow && !paintPreview && otherMonth && "bg-sky-50/50",
+                              site && !flight && !returnWindow && !paintPreview && siteTone(site, siteList),
+                              flight === "in" && !returnWindow && !paintPreview && "bg-teal-600 text-white",
+                              flight === "out" && !returnWindow && !paintPreview && "bg-indigo-600 text-white",
                               returnWindow && "bg-[#FFD600] text-stone-900",
                               placePreview && "bg-sky-500/45 text-sky-950 ring-1 ring-inset ring-sky-600/40",
+                              extendPreview && "bg-emerald-500/40 text-emerald-950 ring-1 ring-inset ring-emerald-600/40",
                             )}
                           >
                             <span className="relative z-[1]">
-                              {placePreview
+                              {paintPreview
                                 ? (() => {
                                     const dayNum = daysBetween(draftRange!.from, iso) + 1;
                                     const last = iso === draftRange!.to;
+                                    if (dayNum === 1 && last) return "OUT";
                                     if (dayNum === 1) return "IN";
-                                    if (last || dayNum === MAX_ROTATION_DAYS) return String(dayNum);
+                                    if (last) return "OUT";
                                     return dayNum % 7 === 0 ? String(dayNum) : "";
                                   })()
-                                : returnWindow && inDraft && draftMode === "book"
-                                  ? iso === draftRange!.from
-                                    ? "BK"
-                                    : iso === draftRange!.to
-                                      ? String(draftDays ?? "")
-                                      : ""
-                                : returnWindow
-                                  ? ""
-                                  : flight === "in"
-                                    ? "IN"
-                                    : flight === "out"
-                                      ? "OUT"
-                                      : stintStart && assignmentRole
-                                        ? assignmentRole.slice(0, 5)
-                                        : stintStart && work
-                                          ? work.split(" · ")[0]?.slice(0, 5)
-                                          : stintStart && site
-                                            ? site.slice(0, 3)
-                                            : ""}
+                                : // OUT always wins on the last day of the stay, even over yellow return window.
+                                  flight === "out" || stintEnd
+                                  ? "OUT"
+                                  : returnWindow && inDraft && draftMode === "book"
+                                    ? iso === draftRange!.from
+                                      ? "BK"
+                                      : iso === draftRange!.to
+                                        ? String(draftDays ?? "")
+                                        : ""
+                                    : returnWindow
+                                      ? ""
+                                      : flight === "in"
+                                        ? "IN"
+                                        : stintStart && assignmentRole
+                                          ? assignmentRole.slice(0, 5)
+                                          : stintStart && work
+                                            ? work.split(" · ")[0]?.slice(0, 5)
+                                            : stintStart && site
+                                              ? site.slice(0, 3)
+                                              : ""}
                             </span>
                           </div>
                         );

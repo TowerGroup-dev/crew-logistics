@@ -40,7 +40,7 @@ export function CrewAccommodationDesk({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="font-heading text-2xl tracking-tight">Accommodation</h2>
+        <h2 className="text-lg font-semibold tracking-tight">Accommodation</h2>
         <p className="mt-1 text-sm text-muted-foreground">Only people on site, in transit, or arriving within 2 weeks.</p>
       </div>
 
@@ -84,7 +84,7 @@ function Queue({
   return (
     <section className={cn("overflow-hidden rounded-2xl border bg-card", urgent ? "border-amber-300" : "border-border")}>
       <div className="border-b border-border px-4 py-3">
-        <h3 className="font-heading text-lg tracking-tight">{title}</h3>
+        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
       </div>
       {rows.length === 0 ? (
         <p className="px-4 py-6 text-sm text-muted-foreground">{empty}</p>

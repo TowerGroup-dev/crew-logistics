@@ -34,7 +34,7 @@ export function CrewReports({
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-        <h2 className="font-heading text-2xl tracking-tight">Reports</h2>
+        <h2 className="text-lg font-semibold tracking-tight">Reports</h2>
         <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
           <ReportStat label="On site" value={rows.filter((r) => r.duty === "on_site").length} />
           <ReportStat label="Leaving soon / overdue" value={dueSoon.length} />
@@ -45,7 +45,7 @@ export function CrewReports({
 
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="border-b border-border px-4 py-3">
-          <h3 className="font-heading text-lg tracking-tight">Attention report</h3>
+          <h3 className="text-sm font-semibold tracking-tight">Attention report</h3>
         </div>
         {dueSoon.length + fourWeek.length === 0 ? (
           <p className="px-4 py-6 text-sm text-muted-foreground">None.</p>
@@ -75,7 +75,7 @@ export function CrewReports({
 
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="border-b border-border px-4 py-3">
-          <h3 className="font-heading text-lg tracking-tight">Updates</h3>
+          <h3 className="text-sm font-semibold tracking-tight">Updates</h3>
         </div>
         {updates.length === 0 ? (
           <p className="px-4 py-6 text-sm text-muted-foreground">No updates yet.</p>
@@ -104,7 +104,7 @@ function ReportStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl border border-border bg-muted/40 px-3 py-2">
       <dt className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{label}</dt>
-      <dd className="mt-1 font-heading text-2xl tracking-tight">{value}</dd>
+      <dd className="mt-1 text-xl font-semibold tracking-tight tabular-nums">{value}</dd>
     </div>
   );
 }

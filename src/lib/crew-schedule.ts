@@ -139,7 +139,12 @@ export function mergePeopleByName(people: CrewPerson[]): CrewPerson[] {
     if (group.length === 1) {
       const sole = group[0]!;
       const roles = sole.roles?.length ? sole.roles : [sole.role];
-      return { ...sole, roles, role: roles[0] ?? sole.role };
+      return {
+        ...sole,
+        roles,
+        role: roles[0] ?? sole.role,
+        events: mergeEvents(sole.events),
+      };
     }
 
     const sorted = [...group].sort(
@@ -360,7 +365,7 @@ export const CREW_SCHEDULE: CrewScheduleData = {
           inDate: person.inDate,
           outDate: person.outDate,
           rotationDays: person.rotationDays,
-          events: person.events.map((event) => ({ date: event.date, mark: event.mark })),
+          events: mergeEvents(person.events.map((event) => ({ date: event.date, mark: event.mark }))),
           active: true,
           sheetRow: "sheetRow" in person ? Number(person.sheetRow) : undefined,
           stints: "stints" in person ? person.stints.map((stint) => ({ ...stint, sites: [...stint.sites] })) : undefined,
@@ -417,7 +422,8 @@ export function isCampSite(mark: string | null | undefined) {
 /** Expand sparse spreadsheet events forward until the next event. */
 export function statusOnDate(person: CrewPerson, iso: string): string | null {
   let current: string | null = null;
-  for (const event of person.events) {
+  const events = [...person.events].sort((a, b) => a.date.localeCompare(b.date));
+  for (const event of events) {
     if (event.date > iso) break;
     current = event.mark;
   }
@@ -468,11 +474,12 @@ export function dayCounts(iso: string) {
 
 export function personSegments(person: CrewPerson) {
   if (person.events.length === 0) return [] as { from: string; to: string; mark: string }[];
+  const events = [...person.events].sort((a, b) => a.date.localeCompare(b.date));
   const segments: { from: string; to: string; mark: string }[] = [];
-  for (let index = 0; index < person.events.length; index += 1) {
-    const event = person.events[index];
-    const next = person.events[index + 1];
-    const to = next ? addDays(next.date, -1) : `${CREW_SCHEDULE.year}-12-31`;
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index]!;
+    const next = events[index + 1];
+    const to = next ? addDays(next.date, -1) : scheduleYearLastDay();
     segments.push({ from: event.date, to: to < event.date ? event.date : to, mark: event.mark });
   }
   return segments;
@@ -601,8 +608,8 @@ export function workLabelForAssignment(
 /** On-site bars for the year tape (Out stretches are left blank). */
 export function yearOnSiteBars(person: CrewPerson, year = CREW_SCHEDULE.year) {
   const yearStart = `${year}-01-01`;
-  const yearEnd = `${year}-12-31`;
-  const yearDays = daysBetween(yearStart, yearEnd) + 1;
+  const seasonEnd = scheduleYearLastDay(year);
+  const yearDays = daysBetween(yearStart, seasonEnd) + 1;
 
   const raw =
     person.stints && person.stints.length > 0
@@ -613,9 +620,10 @@ export function yearOnSiteBars(person: CrewPerson, year = CREW_SCHEDULE.year) {
               stint.sites.map(worksiteFromMarkLocal).find(Boolean) ||
               null;
             if (!site) return null;
+            const to = stint.out ? addDays(stint.out, -1) : seasonEnd;
             return {
               from: stint.from,
-              to: stint.out ? addDays(stint.out, -1) : yearEnd,
+              to: to > seasonEnd ? seasonEnd : to,
               site,
               role: stint.role,
             };
@@ -625,7 +633,7 @@ export function yearOnSiteBars(person: CrewPerson, year = CREW_SCHEDULE.year) {
           .filter((segment) => !isOffRotation(segment.mark) && worksiteFromMarkLocal(segment.mark))
           .map((segment) => ({
             from: segment.from,
-            to: segment.to,
+            to: segment.to > seasonEnd ? seasonEnd : segment.to,
             site: worksiteFromMarkLocal(segment.mark) || segment.mark,
             role: undefined as string | undefined,
           }));
@@ -633,8 +641,8 @@ export function yearOnSiteBars(person: CrewPerson, year = CREW_SCHEDULE.year) {
   return raw
     .map((bar) => {
       const from = bar.from < yearStart ? yearStart : bar.from;
-      const to = bar.to > yearEnd ? yearEnd : bar.to;
-      if (to < yearStart || from > yearEnd || to < from) return null;
+      const to = bar.to > seasonEnd ? seasonEnd : bar.to;
+      if (to < yearStart || from > seasonEnd || to < from) return null;
       const start = daysBetween(yearStart, from);
       const end = daysBetween(yearStart, to) + 1;
       return {
@@ -652,9 +660,9 @@ export function yearOnSiteBars(person: CrewPerson, year = CREW_SCHEDULE.year) {
 
 export function yearTodayMarker(iso: string, year = CREW_SCHEDULE.year) {
   const yearStart = `${year}-01-01`;
-  const yearEnd = `${year}-12-31`;
-  if (iso < yearStart || iso > yearEnd) return null;
-  const yearDays = daysBetween(yearStart, yearEnd) + 1;
+  const seasonEnd = scheduleYearLastDay(year);
+  if (iso < yearStart || iso > seasonEnd) return null;
+  const yearDays = daysBetween(yearStart, seasonEnd) + 1;
   return (daysBetween(yearStart, iso) / yearDays) * 100;
 }
 
@@ -689,21 +697,55 @@ function primarySite(mark: string | null) {
 }
 
 /**
- * Planned Out for a stretch starting at plannedIn.
- * Prefer the next Out event after In. Ignore sheet outDate values that belong to an earlier cycle.
- * Fall back to In + rotation (sheet Days = Out − In).
+ * Season end / last day on site when no Out is marked.
+ * 2026 crew finishes 18 Dec — Out is that day for everyone still open.
  */
-export function resolvePlannedOut(person: CrewPerson, plannedIn: string) {
-  const rotationDays = rotationFor(person);
-  const nextOut = person.events.find((event) => event.date > plannedIn && isOffRotation(event.mark));
-  if (nextOut?.date && nextOut.date > plannedIn) return nextOut.date;
-  if (person.outDate && person.outDate > plannedIn) return person.outDate;
-  return addDays(plannedIn, rotationDays);
+export function scheduleYearLastDay(year = CREW_SCHEDULE.year) {
+  const rules = "rules" in CREW_SCHEDULE_DATA ? CREW_SCHEDULE_DATA.rules : null;
+  const ends =
+    rules && "calendarEnds" in rules && typeof rules.calendarEnds === "string"
+      ? rules.calendarEnds.slice(0, 10)
+      : null;
+  if (ends && ends.startsWith(`${year}-`)) return ends;
+  return `${year}-12-18`;
 }
 
-/** Planned Out for a sheet stint; falls back to In + rotation when the sheet has no end yet. */
-function stintOut(person: CrewPerson, stint: CrewStint) {
-  return stint.out ?? addDays(stint.from, rotationFor(person));
+/** Exclusive Out for open stays: day after season end (place runs through Dec 18). */
+export function scheduleYearOutExclusive(year = CREW_SCHEDULE.year) {
+  return addDays(scheduleYearLastDay(year), 1);
+}
+
+/**
+ * Exclusive Out (first day off site) for a stretch starting at plannedIn.
+ * Prefer the next Out event after In. No Out on the sheet → day after season end
+ * (18 Dec 2026). Place end / displayed Out = exclusive − 1 day.
+ */
+export function resolvePlannedOut(person: CrewPerson, plannedIn: string) {
+  const seasonExclusive = scheduleYearOutExclusive();
+  const events = [...person.events].sort((a, b) => a.date.localeCompare(b.date));
+  const nextOut = events.find((event) => event.date > plannedIn && isOffRotation(event.mark));
+  if (nextOut?.date && nextOut.date > plannedIn) {
+    return nextOut.date > seasonExclusive ? seasonExclusive : nextOut.date;
+  }
+  if (person.outDate && person.outDate > plannedIn) {
+    return person.outDate > seasonExclusive ? seasonExclusive : person.outDate;
+  }
+  return seasonExclusive;
+}
+
+/** Exclusive Out for a sheet stint. Open stints run through season end (Out = Dec 18). */
+function stintOut(_person: CrewPerson, stint: CrewStint) {
+  const seasonExclusive = scheduleYearOutExclusive();
+  if (!stint.out) return seasonExclusive;
+  return stint.out > seasonExclusive ? seasonExclusive : stint.out;
+}
+
+/** Last day on site (place end). Out in the UI is always this date; extensions move it. */
+export function placeEndFromExclusiveOut(exclusiveOut: string | null | undefined) {
+  if (!exclusiveOut) return null;
+  const end = addDays(exclusiveOut, -1);
+  const yearEnd = scheduleYearLastDay();
+  return end > yearEnd ? yearEnd : end;
 }
 
 function stintOutSource(stint: CrewStint): "typed" | "shading" | "rotation" {
@@ -714,9 +756,14 @@ function stintOutSource(stint: CrewStint): "typed" | "shading" | "rotation" {
 /** Stint covering `iso` (arrival day included, Out day excluded), else the next one. */
 export function stintFor(person: CrewPerson, iso: string) {
   const stints = person.stints ?? [];
-  const current = stints.find((stint) => stint.from <= iso && (!stint.out || iso < stint.out)) ?? null;
+  const yearEndExclusive = scheduleYearOutExclusive();
+  const current =
+    stints.find((stint) => {
+      const out = stint.out || yearEndExclusive;
+      return stint.from <= iso && iso < out && iso <= scheduleYearLastDay();
+    }) ?? null;
   if (current) return { stint: current, upcoming: false };
-  const next = stints.find((stint) => stint.from > iso) ?? null;
+  const next = stints.find((stint) => stint.from > iso && stint.from <= scheduleYearLastDay()) ?? null;
   return next ? { stint: next, upcoming: true } : null;
 }
 
@@ -825,19 +872,23 @@ export function crewSnapshot(person: CrewPerson, iso: string, ops?: CrewPersonOp
   const duty = dutyFromMark(mark, stretch.upcoming && Boolean(stretch.plannedIn && stretch.plannedIn > iso));
   const rotationDays = rotationFor(person);
   const plannedIn = ops?.plannedInOverride || stretch.plannedIn;
-  const plannedOutRaw = ops?.plannedOutOverride || stretch.plannedOut;
-  const plannedOut =
-    plannedIn && plannedOutRaw && plannedOutRaw > plannedIn
-      ? plannedOutRaw
+  // Stretch / overrides store exclusive Out (first day off). UI Out = place end.
+  const exclusiveOutRaw = ops?.plannedOutOverride || stretch.plannedOut;
+  const exclusiveOut =
+    plannedIn && exclusiveOutRaw && exclusiveOutRaw > plannedIn
+      ? exclusiveOutRaw
       : plannedIn
         ? resolvePlannedOut(person, plannedIn)
-        : plannedOutRaw;
+        : exclusiveOutRaw;
+  const plannedOut = placeEndFromExclusiveOut(exclusiveOut);
   const actualIn = ops?.actualIn ?? null;
   const actualOut = ops?.actualOut ?? null;
   const activeOnSite = duty === "on_site" || duty === "in_transit";
   const arrivedOn = activeOnSite ? actualIn || plannedIn : null;
-  // Planned Out drives reminders; actual Out only clears overdue once recorded.
-  const expectedOut = activeOnSite ? plannedOut || (arrivedOn ? addDays(arrivedOn, rotationDays) : null) : plannedOut;
+  // Out is always the end of the place; extensions move it. Drives reminders.
+  const expectedOut = activeOnSite
+    ? plannedOut || (arrivedOn ? placeEndFromExclusiveOut(addDays(arrivedOn, rotationDays)) : null)
+    : plannedOut;
   const daysOnSite = activeOnSite && arrivedOn && arrivedOn <= iso ? daysBetween(arrivedOn, iso) : null;
   const rotationDay = daysOnSite == null ? null : daysOnSite + 1;
   const weeksAway = daysOnSite == null ? null : Math.round((daysOnSite / 7) * 10) / 10;
