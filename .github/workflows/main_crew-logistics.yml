@@ -35,7 +35,5 @@ jobs:
         with:
           app-name: 'crew-logistics'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_662351FE02174430ACF464A374872DB5 }}
           package: release
-          clean: true
-          restart: true
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_662351FE02174430ACF464A374872DB5 }}
