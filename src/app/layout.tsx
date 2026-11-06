@@ -26,10 +26,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${sans.variable} ${display.variable} h-full`}>
       <body className="min-h-full flex flex-col">
         <header className="border-b border-border bg-card">
-          <div className="mx-auto flex w-full max-w-[1600px] items-center gap-3 px-5 py-3 sm:px-8">
-            <div className="flex items-baseline gap-3">
-              <p className="font-heading text-xl tracking-tight">Crew Schedule</p>
+          <div className="mx-auto flex w-full max-w-[1600px] items-center gap-3 px-5 py-4 sm:px-8">
+            <div className="min-w-0">
               <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Tower Arctic Ltd</p>
+              <p className="font-heading text-3xl tracking-tight sm:text-4xl">Crew Schedule</p>
             </div>
             <CrewAuthBar />
           </div>

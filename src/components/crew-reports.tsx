@@ -103,7 +103,7 @@ export function CrewReports({
 function ReportStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl border border-border bg-muted/40 px-3 py-2">
-      <dt className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{label}</dt>
+      <dt className="text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">{label}</dt>
       <dd className="mt-1 text-xl font-semibold tracking-tight tabular-nums">{value}</dd>
     </div>
   );

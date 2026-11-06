@@ -127,7 +127,7 @@ export function CrewStatusBar({
     <section className="rounded-2xl border border-border bg-card px-3 py-3 sm:px-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+          <p className="text-[13px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
             Weekly action list
           </p>
           <p className="text-sm font-medium">
@@ -154,7 +154,7 @@ export function CrewStatusBar({
             >
               <Bell className="size-5" />
               {bellCount > 0 ? (
-                <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[11px] font-semibold text-white">
+                <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[13px] font-semibold text-white">
                   {bellCount}
                 </span>
               ) : null}
@@ -245,7 +245,7 @@ function StatChip({ label, value, hot }: { label: string; value: number; hot?: b
         hot ? "border-rose-300 bg-rose-50 text-rose-950" : "border-border bg-muted/40",
       )}
     >
-      <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">{label}</p>
+      <p className="text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">{label}</p>
       <p className="text-base font-semibold leading-none tabular-nums">{value}</p>
     </div>
   );

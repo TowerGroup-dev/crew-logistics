@@ -897,7 +897,7 @@ export function CrewBoard({
         ) : null}
 
         <div className={cn("min-w-0 max-h-[min(70vh,40rem)] overflow-auto", boardView !== "list" && "hidden")}>
-          <div className="sticky top-0 z-10 grid min-w-[56rem] grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] gap-2 border-b border-border bg-card px-4 py-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+          <div className="sticky top-0 z-10 grid min-w-[56rem] grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] gap-2 border-b border-border bg-card px-4 py-2 text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
             <span>Crew</span>
             <span>Site</span>
             <span>Status</span>
@@ -961,7 +961,7 @@ export function CrewBoard({
                       </span>
                       <span className="text-sm tabular-nums text-muted-foreground">
                         {row.rotationDay == null ? "-" : `Day ${row.rotationDay} of ${row.rotationDays}`}
-                        {progress != null ? <span className="mt-0.5 block text-[11px]">{progress}%</span> : null}
+                        {progress != null ? <span className="mt-0.5 block text-[13px]">{progress}%</span> : null}
                       </span>
                       <span
                         className={cn(
@@ -1103,7 +1103,7 @@ function PersonProfile({
     <div className="flex h-full flex-col">
       <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-7">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+          <p className="text-[13px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
             Schedule year {year}
           </p>
           <h2 id="crew-person-title" className="mt-1 text-lg font-semibold tracking-tight">
@@ -1157,7 +1157,7 @@ function PersonProfile({
       <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-7">
       <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4">
         <div>
-          <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Employment</p>
+          <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">Employment</p>
           <p className="mt-1 text-sm">
             {isActive
               ? "Included in live ops, travel, and action lists."
@@ -1201,7 +1201,7 @@ function PersonProfile({
       </section>
 
       <section className="grid gap-3 rounded-xl bg-muted/40 p-3">
-        <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Current assignment</p>
+        <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">Current assignment</p>
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <Fact label="Site" value={snap.site ? siteLabel(snap.site) : "No current assignment"} />
           <Fact label="Status" value={dutyLabel(snap.duty)} />
@@ -1233,7 +1233,7 @@ function PersonProfile({
       </section>
 
       <section className="grid gap-3">
-        <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">IN &amp; OUT</p>
+        <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">IN &amp; OUT</p>
         <div className="grid gap-2 sm:grid-cols-2">
           <DateField
             label="IN"
@@ -1261,7 +1261,7 @@ function PersonProfile({
       />
 
       <section className="grid gap-3">
-        <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+        <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
           Accommodation
         </p>
         <label className="flex items-start gap-3 rounded-xl border border-border bg-card px-3 py-3 text-sm">
@@ -1289,7 +1289,7 @@ function PersonProfile({
         </label>
         {(snap.person.flights?.length ?? 0) > 0 ? (
           <div className="space-y-2 rounded-xl border border-border bg-card p-3">
-            <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Sheet flights</p>
+            <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">Sheet flights</p>
             <ul className="space-y-2 text-sm">
               {snap.person.flights!.map((flight, index) => (
                 <li key={`${snap.person.id}-flight-${index}`} className="rounded-lg bg-muted/50 px-3 py-2">
@@ -1322,7 +1322,7 @@ function PersonProfile({
       </section>
 
       <section className="grid gap-3">
-        <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Updates</p>
+        <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">Updates</p>
         <div className="flex gap-2">
           <input
             value={note}
@@ -1361,7 +1361,7 @@ function PersonProfile({
       </section>
 
       <section className="grid gap-2">
-        <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Work & travel timeline</p>
+        <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">Work & travel timeline</p>
         {segments.length === 0 ? (
           <p className="text-sm text-muted-foreground">No dated marks for this person yet.</p>
         ) : (

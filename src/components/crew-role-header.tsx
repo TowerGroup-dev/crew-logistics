@@ -22,7 +22,7 @@ export function CrewRoleHeader({
     >
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-[13px] font-semibold text-slate-800">{role}</p>
-        {count != null ? <span className="text-[11px] text-muted-foreground">{count}</span> : null}
+        {count != null ? <span className="text-[13px] text-muted-foreground">{count}</span> : null}
       </div>
     </div>
   );

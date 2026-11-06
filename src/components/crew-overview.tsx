@@ -142,7 +142,7 @@ export function CrewReminders({
         role="dialog"
         aria-modal="true"
         aria-labelledby="crew-reminders-title"
-        className="relative flex max-h-[min(90vh,44rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-[0_24px_64px_-16px_rgba(28,25,23,0.35)]"
+        className="relative flex max-h-[min(90vh,44rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[0_24px_64px_-16px_rgba(28,25,23,0.35)]"
       >
         <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5 pb-3">
           <div className="min-w-0">
@@ -430,24 +430,30 @@ function RemindersSheet({
         window.sections.length ? (
           <div key={window.label} className="space-y-2">
             <div className="px-2 pt-1">
-              <p className="text-[11px] font-semibold tracking-[0.12em] text-stone-500 uppercase">{window.label}</p>
-              <p className="text-[11px] text-stone-400">{window.range}</p>
+              <p className="text-[13px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{window.label}</p>
+              <p className="text-[13px] text-muted-foreground/80">{window.range}</p>
             </div>
             {window.sections.map((section) => (
-              <div key={`${window.label}-${section.key}`} className="space-y-1">
-                <p className="px-2 text-[11px] font-medium text-stone-600">{section.label}</p>
-                <ul className="space-y-1">
+              <div key={`${window.label}-${section.key}`} className="overflow-hidden rounded-xl border border-border/70">
+                <p className="border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[13px] font-medium text-muted-foreground">
+                  {section.label}
+                </p>
+                <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 border-b border-border/60 px-3 py-1.5 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  <span>Date</span>
+                  <span>Description</span>
+                </div>
+                <ul>
                   {section.items.map((item) => (
-                    <li key={item.id}>
+                    <li key={item.id} className="border-b border-border/50 last:border-b-0">
                       <button
                         type="button"
                         onClick={() => onOpen(item)}
-                        className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-stone-100/80"
+                        className="grid w-full grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 px-3 py-2.5 text-left transition hover:bg-muted/50"
                       >
-                        <span className="mt-0.5 shrink-0 rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-stone-600">
+                        <span className="min-w-0 break-words text-xs font-medium tabular-nums text-muted-foreground">
                           {item.dateLabel}
                         </span>
-                        <span className="min-w-0 text-sm leading-snug text-stone-800">{item.text}</span>
+                        <span className="min-w-0 break-words text-sm leading-snug text-foreground">{item.text}</span>
                       </button>
                     </li>
                   ))}
@@ -522,7 +528,7 @@ function ReminderWindow({
       >
         <span className="min-w-0">
           <span className="block text-xs font-semibold tracking-wide text-foreground uppercase">{label}</span>
-          <span className="block text-[11px] text-muted-foreground">
+          <span className="block text-[13px] text-muted-foreground">
             {range}
             {count ? ` · ${count}` : " · clear"}
           </span>
@@ -534,21 +540,25 @@ function ReminderWindow({
           <div className="border-t border-border/70">
             {sections.map((section) => (
               <div key={section.key} className="border-b border-border/60 last:border-b-0">
-                <p className="px-4 pt-3 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <p className="px-4 pt-3 pb-1 text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">
                   {section.label}
                 </p>
+                <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 px-4 pb-1 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  <span>Date</span>
+                  <span>Description</span>
+                </div>
                 <ul>
                   {section.items.map((item) => (
                     <li key={item.id}>
                       <button
                         type="button"
                         onClick={() => onOpen(item)}
-                        className="flex w-full items-start gap-3 px-4 py-2.5 text-left hover:bg-muted/40"
+                        className="grid w-full grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 px-4 py-2.5 text-left hover:bg-muted/40"
                       >
-                        <span className="w-24 shrink-0 pt-0.5 text-xs font-medium tabular-nums text-muted-foreground">
+                        <span className="min-w-0 break-words text-xs font-medium tabular-nums text-muted-foreground">
                           {item.dateLabel}
                         </span>
-                        <span className="min-w-0 text-sm text-foreground">{item.text}</span>
+                        <span className="min-w-0 break-words text-sm text-foreground">{item.text}</span>
                       </button>
                     </li>
                   ))}
@@ -614,7 +624,7 @@ function WeekStoryList({
           >
             <span
               className={cn(
-                "mt-0.5 w-14 shrink-0 text-[10px] font-semibold tracking-wide uppercase",
+                "mt-0.5 w-14 shrink-0 text-[12px] font-semibold tracking-wide uppercase",
                 line.kind === "here" && "text-emerald-700",
                 line.kind === "arriving" && "text-teal-700",
                 line.kind === "leaving" && "text-indigo-700",
@@ -626,7 +636,7 @@ function WeekStoryList({
             >
               {weekKindLabel(line.kind)}
             </span>
-            <span className="min-w-0 text-sm leading-snug text-foreground">{line.text}</span>
+            <span className="min-w-0 flex-1 break-words text-sm leading-snug text-foreground">{line.text}</span>
           </button>
         </li>
       ))}
@@ -816,7 +826,7 @@ function OnSiteTable({ rows, onOpen }: { rows: OnSiteRow[]; onOpen: (rotationId:
   if (!rows.length) return <p className="px-4 py-7 text-sm text-muted-foreground">Nobody on site right now.</p>;
   return (
     <div>
-      <div className="hidden grid-cols-[minmax(12rem,1.4fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(7rem,0.85fr)_minmax(7rem,0.85fr)_minmax(7rem,0.85fr)] gap-4 border-b border-border px-4 py-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase lg:grid">
+      <div className="hidden grid-cols-[minmax(12rem,1.4fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(7rem,0.85fr)_minmax(7rem,0.85fr)_minmax(7rem,0.85fr)] gap-4 border-b border-border px-4 py-2 text-[13px] font-medium tracking-wide text-muted-foreground uppercase lg:grid">
         <span>Crew</span>
         <span>Time in</span>
         <span>To go</span>

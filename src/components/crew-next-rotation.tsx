@@ -129,7 +129,7 @@ export function CrewNextRotationForm({
         >
           {isActive ? "Add rotation" : "Set active + add rotation"}
         </button>
-        <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap gap-2 text-[13px] text-muted-foreground">
           {SITES.map((row) => (
             <span key={row.code} className="inline-flex items-center gap-1">
               <span className={cn("size-2 rounded-sm", row.swatch)} aria-hidden />

@@ -56,7 +56,7 @@ export function CrewFlightPanel({
     <section className="grid gap-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="flex items-center gap-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+          <p className="flex items-center gap-2 text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
             <Plane className="size-3.5" /> Canadian North flights
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -137,7 +137,7 @@ function DirectionCard({
         </div>
         <span
           className={cn(
-            "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+            "rounded-full px-2 py-0.5 text-[13px] font-semibold",
             arranged ? "bg-emerald-100 text-emerald-950" : "bg-amber-100 text-amber-950",
           )}
         >

@@ -164,9 +164,9 @@ export function CrewYearTape({
 
       <div className="overflow-x-auto">
         <div className="min-w-[72rem]">
-          <div className="sticky top-0 z-20 grid grid-cols-[11rem_1fr] border-b border-border bg-card shadow-sm">
-            <div className="flex items-end px-3 py-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Crew · {year}
+          <div className="sticky top-0 z-20 grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)] border-b border-border bg-card shadow-sm">
+            <div className="flex items-end overflow-hidden px-3 py-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              <span className="truncate">List · {year}</span>
             </div>
             <div className="grid grid-cols-12 border-l border-border">
               {MONTHS.map((month, index) => {
@@ -178,14 +178,14 @@ export function CrewYearTape({
                     title={`Open ${month.long} ${year}`}
                     onClick={() => onMonthClick?.(year, index + 1)}
                     className={cn(
-                      "border-r border-border px-1 py-3 text-center last:border-r-0 hover:bg-primary/10",
+                      "overflow-hidden border-r border-border px-1 py-3 text-center last:border-r-0 hover:bg-primary/10",
                       active && "bg-rose-50",
                     )}
                   >
-                    <p className={cn("text-[11px] font-bold tracking-wide", active ? "text-rose-700" : "text-foreground")}>
+                    <p className={cn("truncate text-[13px] font-bold tracking-wide", active ? "text-rose-700" : "text-foreground")}>
                       {month.short}
                     </p>
-                    <p className={cn("mt-0.5 text-[10px]", active ? "font-medium text-rose-600" : "text-muted-foreground")}>
+                    <p className={cn("mt-0.5 truncate text-[12px]", active ? "font-medium text-rose-600" : "text-muted-foreground")}>
                       {year}
                     </p>
                   </button>
@@ -205,7 +205,7 @@ export function CrewYearTape({
                     {group.people.map((person) => {
                       const bars = yearOnSiteBars(person, year);
                       return (
-                        <li key={person.id} className="grid grid-cols-[11rem_1fr] hover:bg-muted/40">
+                        <li key={person.id} className="grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)] hover:bg-muted/40">
                           <div className="flex min-w-0 items-center gap-0.5 px-1 py-2">
                             <button
                               type="button"
@@ -259,7 +259,7 @@ export function CrewYearTape({
                                   key={`${person.id}-${bar.from}-${bar.site}`}
                                   title={`${label} · ${siteLabel(bar.site)} · ${formatMedium(bar.from)} – ${formatMedium(bar.to)}`}
                                   className={cn(
-                                    "pointer-events-none absolute top-3 z-[1] flex h-8 items-center overflow-hidden rounded-md px-1.5 text-[10px] font-semibold text-white",
+                                    "pointer-events-none absolute top-3 z-[1] flex h-8 items-center overflow-hidden rounded-md px-1.5 text-[12px] font-semibold text-white",
                                     siteBarTone(bar.site, siteList),
                                   )}
                                   style={{ left: `${bar.leftPct}%`, width: `${bar.widthPct}%` }}

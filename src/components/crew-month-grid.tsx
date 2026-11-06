@@ -192,7 +192,7 @@ export function CrewMonthGrid({
     [monthStart],
   );
 
-  const columns = `11rem repeat(${days.length}, 2.25rem)`;
+  const columns = `minmax(0,11rem) repeat(${days.length}, minmax(0,2.25rem))`;
   const trackWidth = `calc(11rem + ${days.length * 2.25}rem)`;
 
   function syncScroll(from: "top" | "main") {
@@ -209,9 +209,9 @@ export function CrewMonthGrid({
   }
 
   const dateHeader = (
-    <div className="grid border-b border-border bg-card" style={{ gridTemplateColumns: columns, width: trackWidth }}>
-      <div className="sticky left-0 z-30 bg-card px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-        Crew
+    <div className="grid bg-card" style={{ gridTemplateColumns: columns, width: trackWidth }}>
+      <div className="sticky left-0 z-30 min-w-0 overflow-hidden bg-card px-3 py-2 text-[13px] font-semibold tracking-wide text-muted-foreground uppercase shadow-[2px_0_0_0_var(--border)]">
+        List
       </div>
       {days.map((iso) => {
         const d = Number(iso.slice(8, 10));
@@ -225,17 +225,17 @@ export function CrewMonthGrid({
             key={iso}
             title={formatMedium(iso)}
             className={cn(
-              "border-l border-border px-0.5 py-2 text-center text-[10px]",
+              "min-w-0 overflow-hidden border-l border-border px-0.5 py-2 text-center text-[12px] leading-tight tabular-nums",
               weekend && "bg-muted/60",
               otherMonth && "bg-sky-50/80",
               monthBoundary && "border-l-2 border-l-primary",
               isToday && "bg-rose-50 font-bold text-rose-700",
             )}
           >
-            <div>{d}</div>
-            <div className="text-muted-foreground">
+            <div className="truncate">{d}</div>
+            <div className="truncate text-muted-foreground">
               {d === 1 || monthBoundary
-                ? date.toLocaleDateString("en-US", { month: "short" })
+                ? date.toLocaleDateString("en-US", { month: "narrow" })
                 : date.toLocaleDateString("en-US", { weekday: "narrow" })}
             </div>
           </div>
@@ -525,7 +525,7 @@ export function CrewMonthGrid({
           <p className="mt-1 text-sm text-muted-foreground">
             Drag empty days to place · drag past OUT to extend · click a stay to open · right-click a stay to add return booking
           </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
             {siteList.map((site) => (
               <span
                 key={site.code}
@@ -635,7 +635,7 @@ export function CrewMonthGrid({
       {/* Date bar stays fixed while crew rows scroll vertically; horizontal scroll stays in sync. */}
       <div
         ref={topScrollRef}
-        className="shrink-0 overflow-x-auto overflow-y-hidden border-b border-border bg-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative z-20 shrink-0 overflow-x-auto overflow-y-hidden border-b border-border bg-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onScroll={() => syncScroll("top")}
       >
         <div className="flex h-3 items-stretch bg-muted/30" style={{ width: trackWidth }}>
@@ -681,7 +681,7 @@ export function CrewMonthGrid({
                       className="grid w-full border-b border-border"
                       style={{ gridTemplateColumns: columns }}
                     >
-                      <div className="sticky left-0 z-10 flex min-w-0 items-center gap-0.5 bg-card px-1 py-1">
+                      <div className="sticky left-0 z-10 flex min-w-0 items-center gap-0.5 overflow-hidden bg-card px-1 py-1 shadow-[2px_0_0_0_var(--border)]">
                         <button
                           type="button"
                           onClick={() => onOpen(person.id)}
@@ -689,7 +689,7 @@ export function CrewMonthGrid({
                         >
                           <span className="block truncate text-sm font-semibold">{person.name}</span>
                           {(person.roles?.length ?? 0) > 1 ? (
-                            <span className="block truncate text-[10px] text-muted-foreground">{roleLabel(person)}</span>
+                            <span className="block truncate text-[12px] text-muted-foreground">{roleLabel(person)}</span>
                           ) : null}
                         </button>
                         {onHidePerson ? (
@@ -752,7 +752,7 @@ export function CrewMonthGrid({
                             }}
                             onPointerEnter={() => moveDrag(person.id, iso)}
                             className={cn(
-                              "relative flex h-11 cursor-cell select-none items-center justify-center border-l border-border text-[8px] font-bold",
+                              "relative flex h-11 min-w-0 cursor-cell select-none items-center justify-center overflow-hidden border-l border-border text-[10px] font-bold",
                               !site && !flight && !returnWindow && !paintPreview && weekend && "bg-muted/40",
                               !site && !flight && !returnWindow && !paintPreview && otherMonth && "bg-sky-50/50",
                               site && !flight && !returnWindow && !paintPreview && siteTone(site, siteList),
@@ -763,7 +763,7 @@ export function CrewMonthGrid({
                               extendPreview && "bg-emerald-500/40 text-emerald-950 ring-1 ring-inset ring-emerald-600/40",
                             )}
                           >
-                            <span className="relative z-[1]">
+                            <span className="relative z-[1] block max-w-full truncate px-0.5">
                               {paintPreview
                                 ? (() => {
                                     const dayNum = daysBetween(draftRange!.from, iso) + 1;

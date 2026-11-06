@@ -301,7 +301,7 @@ export function CrewActionList({
             >
               <Bell className="size-5" />
               {bellCount > 0 ? (
-                <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[11px] font-semibold text-white">
+                <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[13px] font-semibold text-white">
                   {bellCount}
                 </span>
               ) : null}
@@ -419,7 +419,7 @@ export function CrewActionList({
             <li key={card.personId} className="overflow-hidden rounded-2xl border border-border bg-card">
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
                 <button type="button" onClick={() => onOpen(card.personId)} className="min-w-0 text-left hover:text-primary">
-                  <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Employee</p>
+                  <p className="text-[13px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Employee</p>
                   <p className="text-base font-semibold tracking-tight">{card.personName}</p>
                   <p className="mt-0.5 text-sm text-muted-foreground">
                     {card.role}

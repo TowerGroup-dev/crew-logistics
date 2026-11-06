@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Bell, CalendarDays, ChevronLeft, ChevronRight, Contact, ListChecks, Rows3, Settings } from "lucide-react";
+import { Bell, CalendarDays, ChevronLeft, ChevronRight, Contact, ListChecks, Settings } from "lucide-react";
 import { CREW_SCHEDULE } from "@/lib/crew-schedule";
 import { loadScheduleYears } from "@/lib/crew-years";
 import { cn } from "@/lib/cn";
@@ -23,9 +23,8 @@ const SECTIONS: Section[] = [
     href: "/month",
     label: "Calendar",
     icon: CalendarDays,
-    match: (path) => path.startsWith("/month") || path.startsWith("/year"),
+    match: (path) => path.startsWith("/month") || path.startsWith("/year") || path.startsWith("/list"),
   },
-  { key: "list", href: "/list", label: "Crew list", icon: Rows3, match: (path) => path.startsWith("/list") },
   { key: "employees", href: "/employees", label: "Employees", icon: Contact, match: (path) => path.startsWith("/employees") },
 ];
 
@@ -40,6 +39,7 @@ const SETTINGS: Section = {
 const CALENDAR_VIEWS = [
   { href: "/month", label: "Month" },
   { href: "/year", label: "Year" },
+  { href: "/list", label: "List" },
 ] as const;
 
 function basePath(pathname: string) {
@@ -64,7 +64,8 @@ export function CrewNav({
   const [years, setYears] = useState<number[]>(() => [...loadScheduleYears()]);
   const year =
     yearParam && Number.isInteger(yearParam) ? yearParam : CREW_SCHEDULE.year || new Date().getFullYear();
-  const inCalendar = pathname.startsWith("/month") || pathname.startsWith("/year");
+  const inCalendar =
+    pathname.startsWith("/month") || pathname.startsWith("/year") || pathname.startsWith("/list");
 
   function hrefFor(path: string, forYear = year) {
     const params = new URLSearchParams({ year: String(forYear) });
@@ -126,7 +127,7 @@ export function CrewNav({
             >
               <Bell className="size-4" />
               {reminderCount > 0 ? (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[12px] font-semibold text-white">
                   {reminderCount > 99 ? "99+" : reminderCount}
                 </span>
               ) : null}

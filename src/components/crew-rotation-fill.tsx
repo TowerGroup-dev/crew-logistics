@@ -127,7 +127,7 @@ export function CrewRotationFill({
                         >
                           <span className="min-w-0">
                             <span className="block truncate text-sm">{opt.person.name}</span>
-                            <span className="block text-[11px] text-muted-foreground">
+                            <span className="block text-[13px] text-muted-foreground">
                               {dutyLabel(opt.duty)}
                               {opt.person.homeSites?.length
                                 ? ` · ${opt.person.homeSites.join(", ")}`
@@ -136,7 +136,7 @@ export function CrewRotationFill({
                           </span>
                           <span
                             className={cn(
-                              "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium",
+                              "shrink-0 rounded px-1.5 py-0.5 text-[12px] font-medium",
                               opt.duty === "unassigned"
                                 ? "bg-rose-50 text-rose-900"
                                 : "bg-card text-muted-foreground",
@@ -148,7 +148,7 @@ export function CrewRotationFill({
                       </li>
                     ))}
                     {options.length > 6 ? (
-                      <li className="px-3 py-1.5 text-[11px] text-muted-foreground">
+                      <li className="px-3 py-1.5 text-[13px] text-muted-foreground">
                         +{options.length - 6} more in Available to place
                       </li>
                     ) : null}
@@ -185,7 +185,7 @@ export function CrewRotationFill({
                   </span>
                   <span
                     className={cn(
-                      "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                      "shrink-0 rounded-full px-2 py-0.5 text-[13px] font-medium",
                       row.duty === "unassigned" ? "bg-rose-50 text-rose-900" : "bg-muted text-muted-foreground",
                     )}
                   >
