@@ -1,0 +1,93 @@
+name: Build and deploy Node.js app to Azure Web App - crew-logistics
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Install and build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Pack the app
+        run: |
+          mkdir -p release
+          cp -a .next package.json package-lock.json next.config.ts tsconfig.json release/
+          if [ -d public ]; then cp -a public release/; fi
+          cd release
+          npm ci --omit=dev
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_2A353D0767E94317902F6EE06F305B60 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_6514A4B7A43744F595BDF378890D8C44 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_88C349B9D1894FFAB03BE543ED0AAB25 }}
+
+      - name: Run Next.js on startup
+        run: |
+          group=$(az webapp list --query "[?name=='crew-logistics'].resourceGroup" -o tsv)
+          if [ -z "$group" ]; then
+            echo "Azure Web App 'crew-logistics' was not found. Create it in the portal first."
+            exit 1
+          fi
+          az webapp config set --name crew-logistics --resource-group "$group" --startup-file "npm start"
+          az webapp config appsettings set \
+            --name crew-logistics \
+            --resource-group "$group" \
+            --output none \
+            --settings \
+            SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+            WEBSITE_NODE_DEFAULT_VERSION="~22"
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: "crew-logistics"
+          slot-name: "Production"
+          package: release
+          clean: true
+          restart: true
+
+      - name: Save Microsoft Graph mail settings
+        env:
+          GRAPH_TENANT_ID: ${{ secrets.GRAPH_TENANT_ID }}
+          GRAPH_CLIENT_ID: ${{ secrets.GRAPH_CLIENT_ID }}
+          GRAPH_CLIENT_SECRET: ${{ secrets.GRAPH_CLIENT_SECRET }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+        run: |
+          group=$(az webapp list --query "[?name=='crew-logistics'].resourceGroup" -o tsv)
+          if [ -z "$GRAPH_TENANT_ID" ] || [ -z "$GRAPH_CLIENT_ID" ] || [ -z "$GRAPH_CLIENT_SECRET" ]; then
+            echo "Microsoft Graph settings are not in GitHub yet. Briefing email stays unconfigured."
+            exit 0
+          fi
+          az webapp config appsettings set \
+            --name crew-logistics \
+            --resource-group "$group" \
+            --output none \
+            --settings \
+            GRAPH_TENANT_ID="$GRAPH_TENANT_ID" \
+            GRAPH_CLIENT_ID="$GRAPH_CLIENT_ID" \
+            GRAPH_CLIENT_SECRET="$GRAPH_CLIENT_SECRET" \
+            MAIL_FROM="${MAIL_FROM:-campmanager@towerarctic.ca}"
+
+      - name: Restart the app
+        run: |
+          group=$(az webapp list --query "[?name=='crew-logistics'].resourceGroup" -o tsv)
+          az webapp restart --name crew-logistics --resource-group "$group"
