@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { BedDouble, PlaneLanding, PlaneTakeoff, X } from "lucide-react";
-import { type CrewPerson } from "@/lib/crew-schedule";
+import { roleLabel, type CrewPerson } from "@/lib/crew-schedule";
 import {
   daysLeftOnRotation,
   emptyStay,
@@ -804,8 +804,8 @@ function ReplacementForm({
     [book, people, plannedIn, plannedOut, outgoing.personId],
   );
   const [personId, setPersonId] = useState("");
-  const selectedPerson = freePeople.find((row) => row.id === personId) || null;
-  const role = selectedPerson?.role || outgoing.role;
+  const selectedPerson = people.find((row) => row.id === personId) || null;
+  const role = selectedPerson ? roleLabel(selectedPerson) : outgoing.role;
 
   useEffect(() => {
     if (personId && freePeople.some((row) => row.id === personId)) return;
