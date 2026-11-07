@@ -15,8 +15,8 @@ export function CrewRoleHeader({
   return (
     <div
       className={cn(
-        "border-b border-border bg-slate-100 px-4 py-1.5",
-        spaced && "mt-2",
+        "border-b border-border bg-slate-100 px-4 py-1.5 pl-5",
+        spaced && "mt-3",
         className,
       )}
     >

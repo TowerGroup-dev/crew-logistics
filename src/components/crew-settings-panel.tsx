@@ -296,7 +296,7 @@ export function CrewSettingsPanel({
       <section className="space-y-3">
         <div>
           <h3 className="text-base font-semibold">Reminder timing</h3>
-          <p className="mt-0.5 text-sm text-muted-foreground">Drives the Needs attention checklist and return booking window.</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">Drives the Needs attention checklist and return window.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <NumberField

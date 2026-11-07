@@ -212,7 +212,7 @@ export function buildSituationReminders({
       push({
         id: `${row.person.id}:return-window`,
         section: "check_in",
-        text: `Return flight for ${name} has a booking window but is not booked yet.`,
+        text: `Return flight for ${name} has a return window but is not booked yet.`,
         dateLabel: `${shortDate(ops.returnBookFrom)}–${shortDate(ops.returnBookTo)}`,
         personId: row.person.id,
         rotationId,
@@ -230,7 +230,7 @@ export function buildSituationReminders({
       push({
         id: `${row.person.id}:outbound-window`,
         section: "check_in",
-        text: `Flight to site for ${name} has a booking window but is not booked yet.`,
+        text: `Flight to site for ${name} has an outbound window but is not booked yet.`,
         dateLabel: `${shortDate(ops.outboundBookFrom)}–${shortDate(ops.outboundBookTo)}`,
         personId: row.person.id,
         rotationId,

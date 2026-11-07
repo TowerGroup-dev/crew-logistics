@@ -529,7 +529,7 @@ function ChecklistHints({
     personOps.returnFlight !== "confirmed"
   ) {
     hints.push(
-      `Booking window set (${formatMedium(personOps.returnBookFrom)} to ${formatMedium(personOps.returnBookTo)}): book return flight`,
+      `Return window set (${formatMedium(personOps.returnBookFrom)} to ${formatMedium(personOps.returnBookTo)}): book return flight`,
     );
   }
   if (
@@ -580,9 +580,9 @@ function ReturnWindowEditor({
 }) {
   return (
     <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3">
-      <p className="text-sm font-medium text-amber-950">Return booking window</p>
+      <p className="text-sm font-medium text-amber-950">Return window</p>
       <p className="mt-1 text-xs text-amber-900/80">
-        Days when the return ticket should be booked. Also paintable in yellow on the Month calendar.
+        Days for the return flight. Paint yellow on the Month calendar with right-click or drag.
       </p>
       <div className="mt-3 grid grid-cols-2 gap-3">
         <label className="grid gap-1 text-sm">

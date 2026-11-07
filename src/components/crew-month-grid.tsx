@@ -210,7 +210,7 @@ export function CrewMonthGrid({
 
   const dateHeader = (
     <div className="grid bg-card" style={{ gridTemplateColumns: columns, width: trackWidth }}>
-      <div className="sticky left-0 z-30 min-w-0 overflow-hidden bg-card px-3 py-2 text-[13px] font-semibold tracking-wide text-muted-foreground uppercase shadow-[2px_0_0_0_var(--border)]">
+      <div className="sticky left-0 z-30 min-w-0 overflow-hidden bg-card px-4 py-2 pl-5 text-[13px] font-semibold tracking-wide text-muted-foreground uppercase shadow-[2px_0_0_0_var(--border)]">
         List
       </div>
       {days.map((iso) => {
@@ -523,7 +523,7 @@ export function CrewMonthGrid({
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Drag empty days to place · drag past OUT to extend · click a stay to open · right-click a stay to add return booking
+            Drag empty days to place · drag past OUT to extend · click a stay to open · right-click a stay to add return window
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
             {siteList.map((site) => (
@@ -558,7 +558,7 @@ export function CrewMonthGrid({
               <div className="flex items-baseline justify-between gap-3">
                 <p className="text-sm font-semibold text-foreground">
                   {draft?.mode === "book"
-                    ? "Return booking window"
+                    ? "Return window"
                     : draft?.mode === "extend"
                       ? "Extend stay"
                       : "New rotation"}
@@ -580,7 +580,7 @@ export function CrewMonthGrid({
                 </div>
               ) : null}
               {draft?.mode === "book" ? (
-                <p className="mt-1.5 text-xs text-amber-950">Release to save this yellow booking window</p>
+                <p className="mt-1.5 text-xs text-amber-950">Release to save this yellow return window</p>
               ) : draft?.mode === "extend" && draftDays > STANDARD_ROTATION_DAYS ? (
                 <p className="mt-1.5 text-xs font-medium text-emerald-900">
                   Extending past 6 weeks · release to save (max {MAX_ROTATION_DAYS} days)
@@ -681,7 +681,7 @@ export function CrewMonthGrid({
                       className="grid w-full border-b border-border"
                       style={{ gridTemplateColumns: columns }}
                     >
-                      <div className="sticky left-0 z-10 flex min-w-0 items-center gap-0.5 overflow-hidden bg-card px-1 py-1 shadow-[2px_0_0_0_var(--border)]">
+                      <div className="sticky left-0 z-10 flex min-w-0 items-center gap-0.5 overflow-hidden bg-card py-1 pr-1 pl-4 shadow-[2px_0_0_0_var(--border)]">
                         <button
                           type="button"
                           onClick={() => onOpen(person.id)}
@@ -737,7 +737,7 @@ export function CrewMonthGrid({
                               flight
                                 ? `${flight === "in" ? "Inbound" : "Outbound"} · ${formatMedium(iso)}`
                                 : site
-                                  ? `${stintEnd ? "OUT · " : ""}${assignmentRole ? `${assignmentRole} · ` : ""}${work ? `${work} · ` : ""}${siteLabel(site)} · ${formatMedium(iso)} · right-click for return booking · drag past OUT to extend`
+                                  ? `${stintEnd ? "OUT · " : ""}${assignmentRole ? `${assignmentRole} · ` : ""}${work ? `${work} · ` : ""}${siteLabel(site)} · ${formatMedium(iso)} · right-click for return window · drag past OUT to extend`
                                   : `Empty · ${formatMedium(iso)} · drag to place`
                             }
                             onPointerDown={(event) => {

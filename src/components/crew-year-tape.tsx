@@ -165,7 +165,7 @@ export function CrewYearTape({
       <div className="overflow-x-auto">
         <div className="min-w-[72rem]">
           <div className="sticky top-0 z-20 grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)] border-b border-border bg-card shadow-sm">
-            <div className="flex items-end overflow-hidden px-3 py-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            <div className="flex items-end overflow-hidden px-3 py-3 pl-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               <span className="truncate">List · {year}</span>
             </div>
             <div className="grid grid-cols-12 border-l border-border">
@@ -206,7 +206,7 @@ export function CrewYearTape({
                       const bars = yearOnSiteBars(person, year);
                       return (
                         <li key={person.id} className="grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)] hover:bg-muted/40">
-                          <div className="flex min-w-0 items-center gap-0.5 px-1 py-2">
+                          <div className="flex min-w-0 items-center gap-0.5 py-2 pr-1 pl-4">
                             <button
                               type="button"
                               onClick={() => onOpen(person.id)}
