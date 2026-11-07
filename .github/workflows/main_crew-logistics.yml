@@ -31,7 +31,8 @@ jobs:
           cp -a .next/static release/.next/static
           if [ -d public ]; then cp -a public release/public; fi
           # Azure runs `npm start` — point it at the standalone server.
-          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('release/package.json','utf8')); p.scripts={...(p.scripts||{}), start:'node server.js'}; fs.writeFileSync('release/package.json', JSON.stringify(p,null,2));"
+          # Bind 0.0.0.0 so Azure can reach the standalone server (localhost-only = 500/timeout).
+          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('release/package.json','utf8')); p.scripts={...(p.scripts||{}), start:'HOSTNAME=0.0.0.0 node server.js'}; fs.writeFileSync('release/package.json', JSON.stringify(p,null,2));"
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
