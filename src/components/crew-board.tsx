@@ -856,8 +856,8 @@ export function CrewBoard({
                         onClick={() => openPersonRotation(row.person.id)}
                         className="min-w-0 flex-1 text-left hover:opacity-80"
                       >
-                        <p className="font-semibold">{row.person.name}</p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm font-medium">{row.person.name}</p>
+                        <p className="text-xs text-muted-foreground">
                           {roleLabel(row.person)}
                           {row.person.manual ? " · Manual" : ""}
                         </p>
@@ -933,7 +933,7 @@ export function CrewBoard({
                       className="grid min-w-[56rem] w-full grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] items-center gap-2 px-4 py-3 text-left hover:bg-muted/50"
                     >
                       <span className="min-w-0">
-                        <span className="block truncate font-medium">{row.person.name}</span>
+                        <span className="block truncate text-sm font-medium">{row.person.name}</span>
                         <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                           {row.site ? catalogSiteLabel(row.site, sitesBook) : "Off site"}
                           {row.fourWeeksOut ? " · 4 weeks out" : ""}

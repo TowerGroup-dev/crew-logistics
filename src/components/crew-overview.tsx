@@ -843,7 +843,7 @@ function OnSiteTable({ rows, onOpen }: { rows: OnSiteRow[]; onOpen: (rotationId:
               className="grid w-full grid-cols-1 gap-3 px-4 py-3 text-left transition hover:bg-muted/40 lg:grid-cols-[minmax(12rem,1.4fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(7rem,0.85fr)_minmax(7rem,0.85fr)_minmax(7rem,0.85fr)] lg:items-center lg:gap-4"
             >
               <span className="min-w-0">
-                <span className="block truncate font-medium">{row.name}</span>
+                <span className="block truncate text-sm font-medium">{row.name}</span>
                 <span className="block truncate text-xs text-muted-foreground">
                   {row.role}
                   {row.site ? ` · ${row.site}` : ""}
@@ -973,7 +973,7 @@ function Movement({
                   className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{row.name}</span>
+                    <span className="block truncate text-sm font-medium">{row.name}</span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {shortDate(row.inDate)} · {whenText(row.daysUntil)}
                       {row.site ? ` · ${row.site}` : ""}
@@ -1005,7 +1005,7 @@ function Movement({
                   className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{row.name}</span>
+                    <span className="block truncate text-sm font-medium">{row.name}</span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {shortDate(row.outDate)} · {whenText(row.daysUntil)}
                       {row.site ? ` · ${row.site}` : ""}

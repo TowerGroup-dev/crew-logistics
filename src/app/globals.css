@@ -22,15 +22,6 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
-  /* Slightly larger type scale app-wide */
-  --text-xs: 0.8125rem;
-  --text-sm: 0.9375rem;
-  --text-base: 1.0625rem;
-  --text-lg: 1.1875rem;
-  --text-xl: 1.375rem;
-  --text-2xl: 1.625rem;
-  --text-3xl: 2rem;
-  --text-4xl: 2.375rem;
 }
 
 :root {
@@ -57,13 +48,10 @@
   * {
     @apply border-border;
   }
-  html {
-    font-size: 106.25%; /* 17px when browser default is 16px */
-  }
   body {
-    @apply bg-background text-foreground font-sans text-base antialiased;
+    @apply bg-background text-foreground font-sans text-sm antialiased;
   }
-  /* Type scale: body = base, labels = sm/xs, titles = lg/semibold, brand uses display. */
+  /* Type scale: body = sm, labels = xs, titles = base/semibold, brand uses display. */
   h1,
   h2,
   h3 {
