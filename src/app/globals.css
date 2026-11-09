@@ -49,11 +49,7 @@
     @apply border-border;
   }
   body {
-    /* subpixel smoothing stays sharper on Windows than grayscale antialiased */
-    @apply bg-background text-foreground font-sans text-sm;
-    -webkit-font-smoothing: auto;
-    -moz-osx-font-smoothing: auto;
-    text-rendering: optimizeLegibility;
+    @apply bg-background text-foreground font-sans text-sm antialiased;
   }
   /* Type scale: body = sm, labels = xs, titles = base/semibold, brand uses display. */
   h1,

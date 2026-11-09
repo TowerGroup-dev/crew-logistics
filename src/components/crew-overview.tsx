@@ -373,7 +373,7 @@ function Panel({
             aria-hidden
           />
           {icon}
-          <h2 className="text-base font-semibold tracking-normal text-foreground">{title}</h2>
+          <h2 className="text-base font-semibold tracking-tight">{title}</h2>
           <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition", !expanded && "-rotate-90")} />
         </button>
         {aside ? (
@@ -624,14 +624,14 @@ function WeekStoryList({
           >
             <span
               className={cn(
-                "mt-0.5 w-14 shrink-0 text-[11px] font-bold tracking-wide uppercase",
-                line.kind === "here" && "text-emerald-800",
-                line.kind === "arriving" && "text-teal-800",
-                line.kind === "leaving" && "text-indigo-800",
-                line.kind === "travelling" && "text-amber-900",
-                line.kind === "move" && "text-sky-800",
-                line.kind === "flight" && "text-rose-800",
-                line.kind === "stay" && "text-orange-800",
+                "mt-0.5 w-14 shrink-0 text-[12px] font-semibold tracking-wide uppercase",
+                line.kind === "here" && "text-emerald-700",
+                line.kind === "arriving" && "text-teal-700",
+                line.kind === "leaving" && "text-indigo-700",
+                line.kind === "travelling" && "text-amber-700",
+                line.kind === "move" && "text-sky-700",
+                line.kind === "flight" && "text-rose-700",
+                line.kind === "stay" && "text-orange-700",
               )}
             >
               {weekKindLabel(line.kind)}

@@ -856,8 +856,8 @@ export function CrewBoard({
                         onClick={() => openPersonRotation(row.person.id)}
                         className="min-w-0 flex-1 text-left hover:opacity-80"
                       >
-                        <p className="text-base font-semibold tracking-normal">{row.person.name}</p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm font-medium">{row.person.name}</p>
+                        <p className="text-xs text-muted-foreground">
                           {roleLabel(row.person)}
                           {row.person.manual ? " · Manual" : ""}
                         </p>

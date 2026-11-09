@@ -86,7 +86,7 @@ export function CrewNav({
   const nextYear = yearIndex >= 0 && yearIndex < years.length - 1 ? years[yearIndex + 1] : null;
 
   return (
-    <nav className="sticky top-0 z-30 -mx-5 border-b border-border bg-background px-5 sm:-mx-8 sm:px-8">
+    <nav className="sticky top-0 z-30 -mx-5 border-b border-border bg-background/95 px-5 backdrop-blur sm:-mx-8 sm:px-8">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 py-2">
         <div className="-mb-px flex flex-wrap items-center gap-1">
           {SECTIONS.map((section) => (
