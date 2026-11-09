@@ -687,7 +687,7 @@ export function CrewMonthGrid({
                           onClick={() => onOpen(person.id)}
                           className="min-w-0 flex-1 px-2 py-1 text-left hover:bg-muted/40"
                         >
-                          <span className="block truncate text-sm font-semibold">{person.name}</span>
+                          <span className="block truncate text-sm font-medium">{person.name}</span>
                           {(person.roles?.length ?? 0) > 1 ? (
                             <span className="block truncate text-[12px] text-muted-foreground">{roleLabel(person)}</span>
                           ) : null}
