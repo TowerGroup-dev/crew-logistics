@@ -8,7 +8,7 @@ import {
   type ProjectPhase,
 } from "@/lib/crew-schedule";
 import { assignmentForPerson } from "@/lib/crew-roster";
-import { formatMedium, toISODate } from "@/lib/dates";
+import { formatMedium, todayInZone } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 const REGIONS = ["Iqaluit", "Kugluktuk", "Pond Inlet", "Alert"] as const;
@@ -26,7 +26,7 @@ export function CrewProjectsPanel({
   projects,
   year,
   people,
-  today = toISODate(new Date()),
+  today = todayInZone(),
   onCreate,
   onExtend,
   onSetCrew,

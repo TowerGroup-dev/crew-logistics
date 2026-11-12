@@ -5,6 +5,20 @@ export function toISODate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+/** Tower Arctic ops day — same on server and browser (avoids SSR hydration mismatches). */
+export const CREW_TIME_ZONE = "America/Iqaluit";
+
+export function todayInZone(timeZone = CREW_TIME_ZONE, at = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(at);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "01";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
 export function parseISODate(iso: string) {
   const [year, month, day] = iso.split("-").map(Number);
   return new Date(year, (month ?? 1) - 1, day ?? 1);

@@ -111,7 +111,7 @@ import {
   type CrewSitesBook,
 } from "@/lib/crew-sites";
 import { CrewSettingsPanel } from "@/components/crew-settings-panel";
-import { formatLong, formatMedium, toISODate } from "@/lib/dates";
+import { formatLong, formatMedium, todayInZone } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 export type CrewBoardView =
@@ -181,7 +181,7 @@ export function CrewBoard({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const today = toISODate(new Date());
+  const today = todayInZone();
   const boardView = view;
   const [opsBook, setOpsBook] = useState<CrewOpsBook>({});
   const [flightBook, setFlightBook] = useState<FlightBook>(emptyFlightBook);
@@ -219,7 +219,7 @@ export function CrewBoard({
   }, [searchParams]);
 
   useEffect(() => {
-    const todayIso = toISODate(new Date());
+    const todayIso = todayInZone();
     const loadedOps = loadCrewOps();
     const seededOps = autoSeedTravelOps(CREW_SCHEDULE.people, loadedOps, todayIso);
     if (seededOps !== loadedOps) saveCrewOps(seededOps);
