@@ -106,6 +106,8 @@ export type CrewPerson = {
   events: CrewEvent[];
   /** True when added in the app rather than imported from the sheet. */
   manual?: boolean;
+  /** What-if hire — not committed until Save. */
+  provisional?: boolean;
   /** False when the person's row is hidden on the sheet (not on the current schedule). */
   active?: boolean;
   sheetRow?: number;
@@ -159,11 +161,11 @@ export function crewCategoryFor(
 export function crewCategoryLabel(category: CrewCategory) {
   switch (category) {
     case "Local":
-      return "Local";
+      return "LOC";
     case "Subcontractor":
-      return "Sub";
+      return "SUB";
     default:
-      return "Regular";
+      return "REG";
   }
 }
 

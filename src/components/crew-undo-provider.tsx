@@ -96,7 +96,7 @@ export function CrewUndoButton({ className }: { className?: string } = {}) {
       title={canUndo ? "Undo last Month calendar change (Ctrl+Z)" : "Nothing to undo"}
       aria-label="Undo last Month calendar change"
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-lg border border-input bg-card px-2.5 py-1.5 text-sm font-medium text-foreground transition enabled:hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-40",
+        "inline-flex items-center gap-1.5 rounded-lg border border-input bg-card px-2.5 py-1.5 text-[12px] font-semibold text-foreground transition enabled:hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-40",
         className,
       )}
     >

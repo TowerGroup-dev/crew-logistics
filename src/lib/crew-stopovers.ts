@@ -103,6 +103,14 @@ export function setStopover(
   return next;
 }
 
+/** Drop all painted stopovers for a person (discard / delete hire). */
+export function clearStopoversForPerson(book: CrewStopoverBook, personId: string): CrewStopoverBook {
+  if (!book[personId]) return book;
+  const next = { ...book };
+  delete next[personId];
+  return next;
+}
+
 /** Paint the same pass-through hub on each listed day (legend Travel brush). */
 export function paintStopoverDays(
   book: CrewStopoverBook,

@@ -12,6 +12,7 @@ import {
 import {
   CREW_BOOKING_STATUSES,
   bookingLabel,
+  clearOpsForPerson,
   loadCrewOps,
   opsFor,
   saveCrewOps,
@@ -45,10 +46,15 @@ import {
 } from "@/lib/crew-schedule";
 import {
   addNextRotation,
+  addProvisionalEmployee,
+  commitProvisionalEmployee,
+  discardProvisionalEmployee,
   emptyRoster,
+  isManualEmployee,
   loadRoster,
   mergePeople,
   mergeProjects,
+  removeManualEmployee,
   removeRotationPlan,
   saveRoster,
   setEmploymentStatus,
@@ -82,6 +88,7 @@ import {
 import { autoSeedTravelOps } from "@/lib/crew-auto-ops";
 import {
   emptyFlightBook,
+  clearFlightsForPerson,
   loadFlights,
   saveFlights,
   syncOpsFromFlights,
@@ -92,6 +99,7 @@ import {
 import {
   loadStopovers,
   saveStopovers,
+  clearStopoversForPerson,
   paintStopoverDays,
   toggleStopover,
   type CrewStopoverBook,
@@ -404,6 +412,34 @@ export function CrewBoard({
       saveRoster(next);
       return next;
     });
+  }
+
+  /** Clear placements / ops / flights / stopovers for a discarded or deleted hire. */
+  function purgePersonSideState(personId: string) {
+    setStopoverBook((prev) => {
+      const next = clearStopoversForPerson(prev, personId);
+      saveStopovers(next);
+      return next;
+    });
+    setOpsBook((prev) => {
+      const next = clearOpsForPerson(prev, personId);
+      saveCrewOps(next);
+      return next;
+    });
+    setFlightBook((prev) => {
+      const next = clearFlightsForPerson(prev, personId);
+      saveFlights(next);
+      return next;
+    });
+    setRotationBook((prev) => {
+      const next = {
+        ...prev,
+        rotations: prev.rotations.filter((row) => row.personId !== personId),
+      };
+      saveRotations(next);
+      return next;
+    });
+    if (selectedId === personId) setSelectedId(null);
   }
 
   function saveFlightBooking(booking: FlightBooking) {
@@ -935,6 +971,30 @@ export function CrewBoard({
               hiddenPeople={hiddenPeople}
               onShowPerson={(personId) => patchScheduleView((current) => showPerson(current, personId))}
               onShowAllHidden={() => patchScheduleView((current) => showAllPeople(current))}
+              onTryPerson={({ name, role }) => {
+                let personId = "";
+                patchRoster(
+                  (current) => {
+                    const created = addProvisionalEmployee(current, { name, role });
+                    if (!created) return current;
+                    personId = created.personId;
+                    return created.roster;
+                  },
+                  { history: true },
+                );
+                return personId || undefined;
+              }}
+              onCommitProvisional={(personId, name) => {
+                patchRoster((current) => commitProvisionalEmployee(current, personId, name), {
+                  history: true,
+                });
+              }}
+              onDiscardProvisional={(personId) => {
+                captureHistory();
+                patchRoster((current) => discardProvisionalEmployee(current, personId));
+                purgePersonSideState(personId);
+                patchScheduleView((current) => showPerson(current, personId));
+              }}
             />
           </div>
         ) : null}
@@ -971,6 +1031,7 @@ export function CrewBoard({
               <ul className="divide-y divide-border">
                 {rows.map((row) => {
                   const isActive = row.person.active !== false;
+                  const canDelete = isManualEmployee(roster, row.person.id);
                   return (
                     <li key={row.person.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                       <button
@@ -978,7 +1039,14 @@ export function CrewBoard({
                         onClick={() => openPersonRotation(row.person.id)}
                         className="min-w-0 flex-1 text-left hover:opacity-80"
                       >
-                        <p className="text-sm font-medium">{row.person.name}</p>
+                        <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                          <span>{row.person.name}</span>
+                          {row.person.provisional ? (
+                            <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                              Draft
+                            </span>
+                          ) : null}
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {roleLabel(row.person)}
                           {row.person.manual ? " · Manual" : ""}
@@ -1010,6 +1078,24 @@ export function CrewBoard({
                       >
                         {isActive ? "Set inactive" : "Set active"}
                       </button>
+                      {canDelete ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ok = window.confirm(
+                              `Delete ${row.person.name}? This removes the hire and any placements painted for them.`,
+                            );
+                            if (!ok) return;
+                            captureHistory();
+                            patchRoster((current) => removeManualEmployee(current, row.person.id));
+                            purgePersonSideState(row.person.id);
+                            patchScheduleView((current) => showPerson(current, row.person.id));
+                          }}
+                          className="h-8 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-900 hover:bg-rose-100"
+                        >
+                          Delete
+                        </button>
+                      ) : null}
                     </li>
                   );
                 })}

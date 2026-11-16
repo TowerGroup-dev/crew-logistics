@@ -212,7 +212,7 @@ export function CrewYearTape({
                               onClick={() => onOpen(person.id)}
                               className="min-w-0 flex-1 px-2 py-1 text-left"
                             >
-                              <span className="block truncate text-sm font-semibold">{person.name}</span>
+                              <span className="block truncate text-sm font-medium">{person.name}</span>
                             </button>
                             {onHidePerson ? (
                               <button

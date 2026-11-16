@@ -40,6 +40,8 @@ export type ManualCrewPerson = {
   createdAt: string;
   /** Defaults to active when omitted. */
   employmentStatus?: EmploymentStatus;
+  /** What-if hire — place on Calendar, then Save or Discard. */
+  provisional?: boolean;
 };
 
 /** Next on-site stretch added in the app (painted onto the schedule). */
@@ -170,7 +172,98 @@ function readEmployee(value: unknown): ManualCrewPerson | null {
         : row.employmentStatus === "active"
           ? "active"
           : undefined,
+    provisional: row.provisional === true,
   };
+}
+
+/** Add a draft person for Calendar what-if planning. */
+export function addProvisionalEmployee(
+  roster: CrewRosterBook,
+  input: { name: string; role?: string },
+): { roster: CrewRosterBook; personId: string } | null {
+  const name = input.name.trim();
+  if (!name) return null;
+  const role = (input.role || "Labourer").trim() || "Labourer";
+  let id = slugEmployee(name, role);
+  if (roster.employees.some((row) => row.id === id)) {
+    id = `${id}-${Date.now().toString(36)}`;
+  }
+  const employee: ManualCrewPerson = {
+    id,
+    name,
+    role,
+    homeSites: [],
+    projectIds: [],
+    rotationDays: 42,
+    notes: "",
+    createdAt: new Date().toISOString(),
+    employmentStatus: "active",
+    provisional: true,
+  };
+  return {
+    personId: id,
+    roster: {
+      ...roster,
+      employees: [...roster.employees, employee],
+      employmentStatus: { ...roster.employmentStatus, [id]: "active" },
+    },
+  };
+}
+
+/** Keep the person; clear the Draft flag (optionally rename). */
+export function commitProvisionalEmployee(
+  roster: CrewRosterBook,
+  personId: string,
+  name?: string,
+): CrewRosterBook {
+  const employees = roster.employees.map((row) => {
+    if (row.id !== personId) return row;
+    const nextName = name?.trim();
+    return {
+      ...row,
+      name: nextName || row.name,
+      provisional: false,
+    };
+  });
+  return { ...roster, employees };
+}
+
+/** Remove a manual employee and their app rotation plans. */
+export function removeManualEmployee(roster: CrewRosterBook, personId: string): CrewRosterBook {
+  const employees = roster.employees.filter((row) => row.id !== personId);
+  if (employees.length === roster.employees.length) return roster;
+  const rotationPlans = { ...(roster.rotationPlans ?? {}) };
+  delete rotationPlans[personId];
+  const employmentStatus = { ...roster.employmentStatus };
+  delete employmentStatus[personId];
+  const projectLinks = { ...roster.projectLinks };
+  delete projectLinks[personId];
+  const stintOutOverrides = { ...roster.stintOutOverrides };
+  for (const key of Object.keys(stintOutOverrides)) {
+    if (key.startsWith(`${personId}:`)) delete stintOutOverrides[key];
+  }
+  return {
+    ...roster,
+    employees,
+    rotationPlans,
+    employmentStatus,
+    projectLinks,
+    stintOutOverrides,
+  };
+}
+
+export function discardProvisionalEmployee(roster: CrewRosterBook, personId: string): CrewRosterBook {
+  const row = roster.employees.find((employee) => employee.id === personId);
+  if (!row?.provisional) return roster;
+  return removeManualEmployee(roster, personId);
+}
+
+export function isProvisionalEmployee(roster: CrewRosterBook, personId: string) {
+  return roster.employees.some((row) => row.id === personId && row.provisional === true);
+}
+
+export function isManualEmployee(roster: CrewRosterBook, personId: string) {
+  return roster.employees.some((row) => row.id === personId);
 }
 
 export function readRoster(value: unknown): CrewRosterBook {
@@ -418,6 +511,7 @@ type ImportedPerson = {
   events: { date: string; mark: string }[];
   stints?: StintLike[];
   manual?: boolean;
+  provisional?: boolean;
   active?: boolean;
   aliases?: string[];
 };
@@ -707,6 +801,7 @@ export function mergePeople(imported: ImportedPerson[], roster: CrewRosterBook):
         roster.stintOutOverrides,
       ),
       manual: true,
+      provisional: employee.provisional === true,
       active: employmentStatusFor(roster, employee.id) === "active",
     });
   }

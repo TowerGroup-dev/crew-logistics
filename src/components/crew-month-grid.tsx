@@ -321,6 +321,9 @@ export function CrewMonthGrid({
   onShowAllHidden,
   interactionMode = "view",
   onInteractionModeChange,
+  onTryPerson,
+  onCommitProvisional,
+  onDiscardProvisional,
 }: {
   /** Selected schedule year — grid scrolls freely Jan 1 → Dec 31. */
   year: number;
@@ -363,9 +366,15 @@ export function CrewMonthGrid({
   /** view = browse/scroll only; edit = drag-place gestures. */
   interactionMode?: CalendarInteractionMode;
   onInteractionModeChange?: (mode: CalendarInteractionMode) => void;
+  /** What-if hire: name + role → provisional row on the calendar. */
+  onTryPerson?: (input: { name: string; role: string }) => string | void;
+  onCommitProvisional?: (personId: string, name?: string) => void;
+  onDiscardProvisional?: (personId: string) => void;
 }) {
   const canEdit = interactionMode === "edit";
   const siteList = sortSitesForDisplay(sites.length ? sites : DEFAULT_SITES);
+  const [tryOpen, setTryOpen] = useState(false);
+  const [tryDraft, setTryDraft] = useState({ name: "", role: "Labourer" });
 
   // Leaving Edit cancels an in-progress drag so View stays scroll-only.
   useEffect(() => {
@@ -477,7 +486,7 @@ export function CrewMonthGrid({
   }, [year]);
 
   /** Fixed rem widths so month bands line up exactly with day columns (1st → last). */
-  const typeColRem = 6;
+  const typeColRem = 4.5;
   const nameColRem = 13;
   const listColRem = typeColRem + nameColRem;
   const dayColRem = 2.85;
@@ -528,7 +537,7 @@ export function CrewMonthGrid({
       className="flex shrink-0 flex-col border-r border-border bg-card"
       style={{ width: `${listColRem}rem` }}
     >
-      <div className="flex h-8 items-center border-b border-border bg-muted/40 px-3 text-[12px] font-semibold tracking-wide text-foreground">
+      <div className="flex h-8 items-center justify-center border-b border-border bg-muted/40 px-3 text-sm font-medium tracking-wide text-foreground">
         {year}
       </div>
       <div className="flex min-h-10">
@@ -536,12 +545,12 @@ export function CrewMonthGrid({
           className="flex items-center border-r border-border px-1.5"
           style={{ width: `${typeColRem}rem` }}
         >
-          <span className="truncate text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+          <span className="truncate text-sm font-medium tracking-wide text-muted-foreground uppercase">
             Type
           </span>
         </div>
         <div className="flex min-w-0 flex-1 items-center px-2">
-          <span className="truncate text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+          <span className="truncate text-sm font-medium tracking-wide text-muted-foreground uppercase">
             Name
           </span>
         </div>
@@ -1028,10 +1037,64 @@ export function CrewMonthGrid({
         </div>
       ) : null}
       <div className="border-b border-border px-4 py-3">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          {flash ? (
-            <p className="text-[12px] font-medium text-muted-foreground tabular-nums">{flash}</p>
-          ) : null}
+        {flash ? (
+          <p className="mb-2 text-[12px] font-medium text-muted-foreground tabular-nums">{flash}</p>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2 text-[13px]">
+          <div
+            className={cn(
+              "flex flex-wrap items-center gap-2",
+              !canEdit && "pointer-events-none opacity-50",
+            )}
+          >
+            {siteList.map((site) => {
+              const active = paintBrush.kind === "site" && paintBrush.code === site.code;
+              const tone = siteColour(site);
+              return (
+                <button
+                  key={site.code}
+                  type="button"
+                  disabled={!canEdit}
+                  title={`${site.code}: drag empty days · first = IN · last = OUT`}
+                  onClick={() => setPaintBrush({ kind: "site", code: site.code })}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold transition-colors",
+                    active
+                      ? cn(tone.chip, "border-transparent ring-2 ring-inset ring-black/10")
+                      : "border-border bg-card text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  <span className={cn("size-2.5 rounded-sm", tone.swatch)} aria-hidden />
+                  {site.code}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              disabled={!canEdit}
+              title="Travel / in transit: drag days, then switch hubs for city → city"
+              onClick={() =>
+                setPaintBrush((current) =>
+                  current.kind === "travel"
+                    ? defaultSiteBrush()
+                    : { kind: "travel", hub: menuHubs[0]?.code || "YK" },
+                )
+              }
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold transition-colors",
+                paintBrush.kind === "travel"
+                  ? "border-transparent bg-stone-100 text-stone-800 ring-2 ring-inset ring-black/10"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted",
+              )}
+            >
+              <span className="size-2.5 rounded-sm bg-stone-500" aria-hidden />
+              Travel
+            </button>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-950">
+              <span className="size-2 rounded-sm bg-[#FFD600]" aria-hidden />
+              Return
+            </span>
+          </div>
           <div className="ml-auto flex items-center gap-2">
             <div
               className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5"
@@ -1063,63 +1126,71 @@ export function CrewMonthGrid({
                 Edit
               </button>
             </div>
+            {canEdit && onTryPerson ? (
+              <button
+                type="button"
+                title="Add a draft person to try on the schedule"
+                onClick={() => {
+                  setTryOpen((open) => !open);
+                  setTryDraft({ name: "", role: "Labourer" });
+                }}
+                className="inline-flex h-8 items-center rounded-lg border border-input bg-card px-2.5 text-[12px] font-semibold hover:bg-muted"
+              >
+                Simulate
+              </button>
+            ) : null}
             {canEdit ? <CrewUndoButton className="h-8" /> : null}
           </div>
         </div>
-        <div
-          className={cn(
-            "flex flex-wrap items-center gap-2 text-[13px]",
-            !canEdit && "pointer-events-none opacity-50",
-          )}
-        >
-          {siteList.map((site) => {
-            const active = paintBrush.kind === "site" && paintBrush.code === site.code;
-            const tone = siteColour(site);
-            return (
-              <button
-                key={site.code}
-                type="button"
-                disabled={!canEdit}
-                title={`${site.code}: drag empty days · first = IN · last = OUT`}
-                onClick={() => setPaintBrush({ kind: "site", code: site.code })}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold transition-colors",
-                  active
-                    ? cn(tone.chip, "border-transparent ring-2 ring-inset ring-black/10")
-                    : "border-border bg-card text-muted-foreground hover:bg-muted",
-                )}
-              >
-                <span className={cn("size-2.5 rounded-sm", tone.swatch)} aria-hidden />
-                {site.code}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            disabled={!canEdit}
-            title="Travel / in transit: drag days, then switch hubs for city → city"
-            onClick={() =>
-              setPaintBrush((current) =>
-                current.kind === "travel"
-                  ? defaultSiteBrush()
-                  : { kind: "travel", hub: menuHubs[0]?.code || "YK" },
-              )
-            }
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold transition-colors",
-              paintBrush.kind === "travel"
-                ? "border-transparent bg-stone-100 text-stone-800 ring-2 ring-inset ring-black/10"
-                : "border-border bg-card text-muted-foreground hover:bg-muted",
-            )}
-          >
-            <span className="size-2.5 rounded-sm bg-stone-500" aria-hidden />
-            Travel
-          </button>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-950">
-            <span className="size-2 rounded-sm bg-[#FFD600]" aria-hidden />
-            Return
-          </span>
-        </div>
+        {canEdit && tryOpen && onTryPerson ? (
+          <div className="mt-2 flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-border bg-muted/30 px-3 py-2.5">
+            <label className="grid gap-1 text-[12px] text-muted-foreground">
+              <span>Name</span>
+              <input
+                value={tryDraft.name}
+                onChange={(event) => setTryDraft((current) => ({ ...current, name: event.target.value }))}
+                placeholder="John"
+                className="h-8 w-44 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+                autoFocus
+              />
+            </label>
+            <label className="grid gap-1 text-[12px] text-muted-foreground">
+              <span>Role</span>
+              <input
+                value={tryDraft.role}
+                onChange={(event) => setTryDraft((current) => ({ ...current, role: event.target.value }))}
+                list="crew-try-roles"
+                className="h-8 w-36 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+              />
+              <datalist id="crew-try-roles">
+                {(CREW_ROLE_ORDER as readonly string[]).map((role) => (
+                  <option key={role} value={role} />
+                ))}
+              </datalist>
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                const name = tryDraft.name.trim();
+                if (!name) return;
+                const id = onTryPerson({ name, role: tryDraft.role.trim() || "Labourer" });
+                setTryOpen(false);
+                setTryDraft({ name: "", role: "Labourer" });
+                showFlash(id ? `Draft · ${name}` : `Draft · ${name}`);
+              }}
+              className="h-8 rounded-lg bg-stone-900 px-3 text-[12px] font-semibold text-white hover:opacity-90"
+            >
+              Add draft
+            </button>
+            <button
+              type="button"
+              onClick={() => setTryOpen(false)}
+              className="h-8 rounded-lg border border-input px-3 text-[12px] font-medium hover:bg-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
         {canEdit && paintBrush.kind === "travel" ? (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -1337,12 +1408,12 @@ export function CrewMonthGrid({
                           >
                             <span
                               className={cn(
-                                "block w-full truncate text-[11px] font-semibold leading-tight",
+                                "block w-full truncate text-sm font-medium leading-tight tracking-wide uppercase",
                                 category === "Local"
                                   ? "text-teal-800"
                                   : category === "Subcontractor"
                                     ? "text-amber-800"
-                                    : "text-slate-700",
+                                    : "text-blue-700",
                               )}
                             >
                               {crewCategoryLabel(category)}
@@ -1369,7 +1440,14 @@ export function CrewMonthGrid({
                               onClick={() => onOpen(person.id)}
                               className="min-w-0 flex-1 px-1.5 py-1 text-left hover:bg-muted/40"
                             >
-                              <span className="block truncate text-sm font-medium">{person.name}</span>
+                              <span className="flex min-w-0 items-center gap-1.5">
+                                <span className="truncate text-sm font-medium">{person.name}</span>
+                                {person.provisional ? (
+                                  <span className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                    Draft
+                                  </span>
+                                ) : null}
+                              </span>
                               {journeyLine ? (
                                 <span
                                   className="mt-0.5 block truncate rounded bg-stone-100 px-1 py-0.5 text-[11px] font-semibold tracking-tight text-stone-800"
@@ -1383,7 +1461,43 @@ export function CrewMonthGrid({
                                 </span>
                               ) : null}
                             </button>
-                            {onHidePerson ? (
+                            {person.provisional && (onCommitProvisional || onDiscardProvisional) ? (
+                              <div className="flex shrink-0 items-center gap-1 pr-1">
+                                {onCommitProvisional ? (
+                                  <button
+                                    type="button"
+                                    title="Keep this person on the roster"
+                                    onClick={() => {
+                                      onCommitProvisional(person.id);
+                                      showFlash(`Saved · ${person.name}`);
+                                    }}
+                                    className="h-7 rounded-md border border-input bg-card px-2 text-[11px] font-semibold hover:bg-muted"
+                                  >
+                                    Save
+                                  </button>
+                                ) : null}
+                                {onDiscardProvisional ? (
+                                  <button
+                                    type="button"
+                                    title="Remove draft and placements"
+                                    onClick={() => {
+                                      const hasPlans = Boolean(roster?.rotationPlans?.[person.id]?.length);
+                                      const ok = window.confirm(
+                                        hasPlans
+                                          ? `Discard ${person.name}? This removes the draft and their placements.`
+                                          : `Discard ${person.name}?`,
+                                      );
+                                      if (!ok) return;
+                                      onDiscardProvisional(person.id);
+                                      showFlash(`Discarded · ${person.name}`);
+                                    }}
+                                    className="h-7 rounded-md border border-rose-200 bg-rose-50 px-2 text-[11px] font-semibold text-rose-900 hover:bg-rose-100"
+                                  >
+                                    Discard
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : onHidePerson ? (
                               <button
                                 type="button"
                                 title={`Hide ${person.name}`}

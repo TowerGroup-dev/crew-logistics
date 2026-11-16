@@ -1,13 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   addNextRotation,
+  addProvisionalEmployee,
+  commitProvisionalEmployee,
+  discardProvisionalEmployee,
   emptyRoster,
   findRotationPlanAt,
+  isManualEmployee,
+  isProvisionalEmployee,
+  mergePeople,
+  removeManualEmployee,
   removeRotationPlan,
   setRotationPlanNote,
   setStayOut,
   stintOverrideKey,
 } from "@/lib/crew-roster";
+import type { CrewPerson } from "@/lib/crew-schedule";
 
 /** NAV-01 / NAV-07 / NAV-08 — rotation plan CRUD (Excel place / clear / note). */
 describe("crew-roster rotation plans", () => {
@@ -71,5 +79,55 @@ describe("crew-roster rotation plans", () => {
   it("setStayOut shortens extracted sheet stays via override", () => {
     const shortened = setStayOut(emptyRoster(), "sheet-1", "2026-06-01", "2026-06-07");
     expect(shortened.stintOutOverrides[stintOverrideKey("sheet-1", "2026-06-01")]).toBe("2026-06-07");
+  });
+});
+
+describe("provisional / manual hire helpers", () => {
+  it("addProvisionalEmployee creates a Draft hire", () => {
+    const created = addProvisionalEmployee(emptyRoster(), { name: "John", role: "Labourer" });
+    expect(created).not.toBeNull();
+    expect(created!.roster.employees[0]).toMatchObject({
+      name: "John",
+      role: "Labourer",
+      provisional: true,
+      employmentStatus: "active",
+    });
+    expect(isProvisionalEmployee(created!.roster, created!.personId)).toBe(true);
+    expect(isManualEmployee(created!.roster, created!.personId)).toBe(true);
+  });
+
+  it("commitProvisionalEmployee clears the Draft flag", () => {
+    const created = addProvisionalEmployee(emptyRoster(), { name: "John", role: "Labourer" })!;
+    const saved = commitProvisionalEmployee(created.roster, created.personId);
+    expect(saved.employees[0]!.provisional).toBe(false);
+    expect(isProvisionalEmployee(saved, created.personId)).toBe(false);
+  });
+
+  it("discardProvisionalEmployee removes draft placements", () => {
+    const created = addProvisionalEmployee(emptyRoster(), { name: "John", role: "Labourer" })!;
+    const placed = addNextRotation(created.roster, created.personId, {
+      site: "IQA",
+      from: "2026-06-01",
+      out: "2026-07-13",
+    });
+    const discarded = discardProvisionalEmployee(placed, created.personId);
+    expect(discarded.employees).toHaveLength(0);
+    expect(discarded.rotationPlans[created.personId]).toBeUndefined();
+  });
+
+  it("removeManualEmployee deletes a saved hire", () => {
+    const created = addProvisionalEmployee(emptyRoster(), { name: "Sam Local", role: "Labourer" })!;
+    const saved = commitProvisionalEmployee(created.roster, created.personId);
+    const removed = removeManualEmployee(saved, created.personId);
+    expect(removed.employees).toHaveLength(0);
+    expect(isManualEmployee(removed, created.personId)).toBe(false);
+  });
+
+  it("mergePeople surfaces provisional on calendar rows", () => {
+    const created = addProvisionalEmployee(emptyRoster(), { name: "Try John", role: "Labourer" })!;
+    const people = mergePeople([] as CrewPerson[], created.roster);
+    const row = people.find((person) => person.id === created.personId);
+    expect(row?.provisional).toBe(true);
+    expect(row?.manual).toBe(true);
   });
 });

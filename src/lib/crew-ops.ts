@@ -166,6 +166,14 @@ export function opsFor(book: CrewOpsBook, personId: string) {
   return book[personId] ?? emptyCrewOps(personId);
 }
 
+/** Drop booking/ops state for a removed hire. */
+export function clearOpsForPerson(book: CrewOpsBook, personId: string): CrewOpsBook {
+  if (!book[personId]) return book;
+  const next = { ...book };
+  delete next[personId];
+  return next;
+}
+
 export function bookingNeedsAttention(status: CrewBookingStatus) {
   return status === "not_started" || status === "needed";
 }

@@ -218,6 +218,13 @@ export function syncOpsFromFlights(opsBook: CrewOpsBook, flightBook: FlightBook,
   };
 }
 
+/** Drop all flight bookings for a removed hire. */
+export function clearFlightsForPerson(book: FlightBook, personId: string): FlightBook {
+  const bookings = book.bookings.filter((row) => row.personId !== personId);
+  if (bookings.length === book.bookings.length) return book;
+  return { ...book, bookings };
+}
+
 export function upsertFlightBooking(book: FlightBook, booking: FlightBooking): FlightBook {
   const existing = book.bookings.findIndex((row) => row.id === booking.id);
   if (existing >= 0) {
