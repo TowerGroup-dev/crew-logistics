@@ -41,6 +41,7 @@ export type CrewSitesBook = {
 
 const STORAGE_KEY = "tower-arctic-crew-sites-v1";
 
+/** Legend / toolbar order — IQA first, then the other camps. */
 export const DEFAULT_SITES: CrewSite[] = [
   { code: "IQA", name: "Iqaluit", colourId: "sky", camp: true },
   { code: "POND", name: "Pond Inlet", colourId: "emerald" },
@@ -48,7 +49,20 @@ export const DEFAULT_SITES: CrewSite[] = [
   { code: "KUG", name: "Kugluktuk", colourId: "violet" },
 ];
 
-/** Sheet marks / airports — not places you assign a rotation to. */
+const DEFAULT_SITE_ORDER = DEFAULT_SITES.map((site) => site.code);
+
+/** Keep IQA → POND → ALRT → KUG, then any extras A–Z. */
+export function sortSitesForDisplay(sites: CrewSite[]): CrewSite[] {
+  const rank = new Map(DEFAULT_SITE_ORDER.map((code, index) => [code, index]));
+  return [...sites].sort((a, b) => {
+    const aRank = rank.get(a.code) ?? DEFAULT_SITE_ORDER.length;
+    const bRank = rank.get(b.code) ?? DEFAULT_SITE_ORDER.length;
+    if (aRank !== bRank) return aRank - bRank;
+    return a.code.localeCompare(b.code);
+  });
+}
+
+/** Sheet marks / airports — pass-through only, never worksite legend entries. */
 const NOT_WORKSITES = new Set([
   "IN",
   "OUT",
@@ -57,11 +71,22 @@ const NOT_WORKSITES = new Set([
   "YEG",
   "YF",
   "YK",
+  "YZF",
   "YFB",
+  "YCO",
+  "YIO",
   "YYZ",
   "YOW",
   "YYC",
   "YUL",
+  "YVR",
+  "YHZ",
+  "YYT",
+  "YDF",
+  "YXP",
+  "YRT",
+  "CAM",
+  "YMQ",
   "OFF",
   "HOME",
   "TRAVEL",
@@ -71,16 +96,20 @@ const NOT_WORKSITES = new Set([
 export function isWorksiteCode(code: string) {
   const key = code.trim().toUpperCase();
   if (!key || NOT_WORKSITES.has(key)) return false;
+  // Connecting marks ("via KUG") are pass-through, not a stay at the camp.
+  if (key.startsWith("VIA ")) return false;
   // Single-letter / weird marks from the sheet
   if (key.length < 2) return false;
   return true;
 }
 
-/** Pull a real camp/worksite code out of a sheet mark (ignore IN/OUT/airports). */
+/** Pull a real camp/worksite code out of a sheet mark (ignore IN/OUT/airports/via). */
 export function worksiteFromMark(mark: string | null | undefined): string | null {
   if (!mark) return null;
-  for (const part of mark.split(/[/|,]/)) {
+  if (/^via\s+/i.test(mark.trim())) return null;
+  for (const part of mark.split(/[/|,→>\-]+/)) {
     const code = part.trim().toUpperCase();
+    if (code.startsWith("VIA ")) continue;
     if (isWorksiteCode(code)) return code;
   }
   return null;
@@ -143,7 +172,7 @@ export function ensureDefaultSites(book: CrewSitesBook): CrewSitesBook {
   }
   return {
     version: 1,
-    sites: [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code)),
+    sites: sortSitesForDisplay([...byCode.values()]),
   };
 }
 
@@ -157,8 +186,9 @@ export function loadSitesBook(): CrewSitesBook {
   try {
     const stored = readSitesBook(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}"));
     const cleaned = ensureDefaultSites(stored);
-    // Persist the cleanup so the junk codes do not keep coming back.
-    if (cleaned.sites.length !== stored.sites.length) saveSitesBook(cleaned);
+    // Persist cleanup + stable legend order (IQA first).
+    const orderChanged = cleaned.sites.map((s) => s.code).join() !== stored.sites.map((s) => s.code).join();
+    if (cleaned.sites.length !== stored.sites.length || orderChanged) saveSitesBook(cleaned);
     return cleaned;
   } catch {
     return ensureDefaultSites(emptySitesBook());
@@ -198,7 +228,7 @@ export function upsertSite(book: CrewSitesBook, site: CrewSite): CrewSitesBook {
     camp: Boolean(site.camp),
   };
   const index = book.sites.findIndex((row) => row.code === code);
-  if (index === -1) return { ...book, sites: [...book.sites, next].sort((a, b) => a.code.localeCompare(b.code)) };
+  if (index === -1) return { ...book, sites: sortSitesForDisplay([...book.sites, next]) };
   const sites = book.sites.slice();
   sites[index] = next;
   return { ...book, sites };

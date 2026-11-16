@@ -61,14 +61,12 @@ SITE_ALIASES = {
     "KUG": "KUG", "KU": "KUG", "KUGLUKTUK": "KUG",
 }
 TRANSIT_ALIASES = {"YK": "YK", "YZF": "YK", "YEG": "YEG", "YF": "YF"}
+# Worksite legend only — pass-through hubs belong in the app travel-hubs list.
 SITE_NAMES = {
     "IQA": "Iqaluit",
     "POND": "Pond Inlet",
     "ALRT": "Alert",
     "KUG": "Kugluktuk",
-    "YK": "Yellowknife",
-    "YEG": "Edmonton",
-    "YF": "Airport / transfer",
     "TBC": "Site to be confirmed",
     "Out": "Off rotation",
     "In": "Arriving",

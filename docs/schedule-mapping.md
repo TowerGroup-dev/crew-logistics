@@ -31,7 +31,9 @@ row 55+              Project:  timeline grouped by location (1430- IQALUIT, KUGL
 | `KU`, `Kug`, `KUG` | Kugluktuk | site `KUG` |
 | `ALRT` / `ALERT` | Alert | site `ALRT` |
 | `OUT` / `out` | Flying home: last day on site | stint ends (planned Out) |
-| `YK`, `YEG`, `YF` | Connecting through Yellowknife / Edmonton / hub | `in_transit` |
+| `YK`, `YEG`, `YF` | Connecting through Yellowknife / Edmonton | `in_transit` (YF = Yellowknife) |
+| Consecutive travel days `IQA` then `YF` then `KU` | Multi-leg journey: Iqaluit → Yellowknife → Kugluktuk | only the last camp opens the on-site stint; earlier legs stay `in_transit` |
+| One cell `IQA YF KU` | Same multi-leg journey written in one cell | path kept on the mark; arrival = last camp |
 | `KU --> PD` | Transfer between sites | moves to the destination (`POND`) |
 | `In` (yellow) | Arriving, site not decided yet | site `TBC`, marked **tentative** |
 | Two identical marks on consecutive days (`ALRT ALRT`, `KU KU`) | Two-day travel | single arrival |

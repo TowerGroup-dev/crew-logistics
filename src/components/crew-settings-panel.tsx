@@ -19,6 +19,13 @@ import {
   type CrewSitesBook,
 } from "@/lib/crew-sites";
 import {
+  WORK_SITE_CODES,
+  removeTravelHub,
+  upsertTravelHub,
+  type CrewTravelHubsBook,
+  type TravelHub,
+} from "@/lib/crew-travel-hubs";
+import {
   type CrewNotifySettings,
 } from "@/lib/crew-notify-settings";
 import { addScheduleYear } from "@/lib/crew-years";
@@ -26,19 +33,23 @@ import { cn } from "@/lib/cn";
 
 export function CrewSettingsPanel({
   sitesBook,
+  travelHubsBook,
   rolesBook,
   notify,
   years,
   onSitesChange,
+  onTravelHubsChange,
   onRolesChange,
   onNotifyChange,
   onYearsChange,
 }: {
   sitesBook: CrewSitesBook;
+  travelHubsBook: CrewTravelHubsBook;
   rolesBook: CrewRolesBook;
   notify: CrewNotifySettings;
   years: number[];
   onSitesChange: (book: CrewSitesBook) => void;
+  onTravelHubsChange: (book: CrewTravelHubsBook) => void;
   onRolesChange: (book: CrewRolesBook) => void;
   onNotifyChange: (recipe: (current: CrewNotifySettings) => CrewNotifySettings) => void;
   onYearsChange: (years: number[]) => void;
@@ -49,6 +60,7 @@ export function CrewSettingsPanel({
     colourId: nextColourId(sitesBook),
     camp: false,
   });
+  const [hubDraft, setHubDraft] = useState<TravelHub>({ code: "", name: "" });
   const [roleDraft, setRoleDraft] = useState("");
   const [yearDraft, setYearDraft] = useState(String(new Date().getFullYear() + 1));
   const [message, setMessage] = useState("");
@@ -79,6 +91,21 @@ export function CrewSettingsPanel({
     onRolesChange(next);
     setRoleDraft("");
     setMessage(`Added role ${roleDraft.trim()}.`);
+  }
+
+  function saveHub() {
+    const code = hubDraft.code.trim().toUpperCase();
+    if (!/^[A-Z0-9]{2,8}$/.test(code)) {
+      setMessage("Travel code needs 2–8 letters/numbers (e.g. YOW).");
+      return;
+    }
+    if (WORK_SITE_CODES.has(code)) {
+      setMessage(`${code} is a worksite — use the Sites list above, not travel places.`);
+      return;
+    }
+    onTravelHubsChange(upsertTravelHub(travelHubsBook, { code, name: hubDraft.name.trim() || code }));
+    setHubDraft({ code: "", name: "" });
+    setMessage(`Saved travel place ${code}.`);
   }
 
   function addYear() {
@@ -194,6 +221,70 @@ export function CrewSettingsPanel({
             className="h-9 rounded-md bg-stone-900 px-3 text-sm font-medium text-white hover:opacity-90"
           >
             Add site
+          </button>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-base font-semibold">Travel places</h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Short codes for stopovers (Ottawa, Toronto, Yellowknife, …). Shown on stay hover and in the
+            right-click Add travel menu — not in the Month colour legend.
+          </p>
+        </div>
+        <ul className="divide-y divide-border border border-border">
+          {travelHubsBook.hubs.map((hub) => (
+            <li key={hub.code} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+              <input
+                value={hub.code}
+                readOnly
+                className="h-8 w-[5.5rem] rounded-md border border-input bg-muted/40 px-2 font-semibold uppercase tabular-nums"
+              />
+              <input
+                value={hub.name}
+                onChange={(event) =>
+                  onTravelHubsChange(upsertTravelHub(travelHubsBook, { ...hub, name: event.target.value }))
+                }
+                className="h-8 min-w-[10rem] flex-1 rounded-md border border-input px-2"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (travelHubsBook.hubs.length <= 1) {
+                    setMessage("Keep at least one travel place.");
+                    return;
+                  }
+                  onTravelHubsChange(removeTravelHub(travelHubsBook, hub.code));
+                  setMessage(`Removed ${hub.code}.`);
+                }}
+                className="text-sm font-medium text-rose-700 hover:underline"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="grid gap-2 rounded-xl border border-dashed border-border p-3 sm:grid-cols-[7rem_1fr_auto]">
+          <input
+            value={hubDraft.code}
+            onChange={(event) => setHubDraft((current) => ({ ...current, code: event.target.value.toUpperCase() }))}
+            placeholder="YOW"
+            className="h-9 rounded-md border border-input px-2 uppercase"
+            maxLength={8}
+          />
+          <input
+            value={hubDraft.name}
+            onChange={(event) => setHubDraft((current) => ({ ...current, name: event.target.value }))}
+            placeholder="Ottawa"
+            className="h-9 rounded-md border border-input px-2"
+          />
+          <button
+            type="button"
+            onClick={saveHub}
+            className="h-9 rounded-md bg-stone-900 px-3 text-sm font-medium text-white hover:opacity-90"
+          >
+            Add travel place
           </button>
         </div>
       </section>

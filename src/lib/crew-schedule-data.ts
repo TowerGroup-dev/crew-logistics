@@ -1,259 +1,24 @@
 export const CREW_SCHEDULE_DATA = {
   "year": 2026,
-  "source": "2026_ Crew Schedules (Master) 2.csv",
-  "sheet": "Crew - Schedule - 2026 (CSV export)",
-  "note": "Imported from unhidden CSV. Cell shading is not in CSV, so Out dates use typed OUT or rotation fallback.",
+  "source": "2026_ Crew Schedules (Master) 2(AutoRecovered).xlsx",
+  "sheet": "Crew - Schedule - 2026 (2)",
   "rules": {
     "defaultRotationDays": 42,
     "mechanicRotationDays": 28,
     "calendarStarts": "2025-12-08",
-    "calendarEnds": "2026-12-18"
+    "calendarEnds": "2026-12-31"
   },
   "sites": {
     "IQA": "Iqaluit",
     "POND": "Pond Inlet",
     "ALRT": "Alert",
     "KUG": "Kugluktuk",
-    "YK": "Yellowknife",
-    "YEG": "Edmonton",
-    "YF": "Airport / transfer",
     "TBC": "Site to be confirmed",
     "Out": "Off rotation",
     "In": "Arriving",
     "Transfer": "In transit"
   },
-  "projects": [
-    {
-      "id": "46-plex",
-      "name": "46 Plex",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": true,
-      "windows": []
-    },
-    {
-      "id": "av328-prov-av93-96",
-      "name": "AV328 Prov. AV93-96",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "cbc-access-road-and-piles",
-      "name": "CBC - Access road and piles",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "critical-pipeline-project",
-      "name": "Critical Pipeline Project",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "daycare",
-      "name": "Daycare",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Pond Inlet",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "elder-s-facility-civil",
-      "name": "Elder's Facility Civil",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Pending Project",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "hospital-hill-bdl",
-      "name": "Hospital Hill (BDL)",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "idp-project-pond",
-      "name": "IDP Project (Pond)",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Pond Inlet",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "kugluktuk-airside-rehab",
-      "name": "Kugluktuk Airside Rehab",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Kugluktuk",
-      "active": true,
-      "starred": true,
-      "windows": []
-    },
-    {
-      "id": "nccd-deficiencies",
-      "name": "NCCD deficiencies",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Pending Project",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "nikku-lane",
-      "name": "Nikku Lane",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": true,
-      "windows": []
-    },
-    {
-      "id": "noble-house",
-      "name": "Noble House",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": true,
-      "windows": []
-    },
-    {
-      "id": "nrc",
-      "name": "NRC",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": true,
-      "windows": []
-    },
-    {
-      "id": "nunavut-heritage-center",
-      "name": "Nunavut Heritage Center",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "pond-inlet-airside-rehab",
-      "name": "Pond Inlet Airside Rehab",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Pond Inlet",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "quarry",
-      "name": "Quarry",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "siteworks",
-      "name": "Siteworks",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "steam-building",
-      "name": "Steam Building",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "trigram",
-      "name": "Trigram",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": true,
-      "windows": []
-    },
-    {
-      "id": "valve-replacement",
-      "name": "Valve Replacement",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": true,
-      "windows": []
-    },
-    {
-      "id": "water-sewer",
-      "name": "Water/Sewer",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Iqaluit",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "waterline-project",
-      "name": "Waterline Project",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Alert",
-      "active": true,
-      "starred": false,
-      "windows": []
-    },
-    {
-      "id": "wtp-project",
-      "name": "WTP Project",
-      "year": 2026,
-      "source": "project-timeline",
-      "region": "Pond Inlet",
-      "active": true,
-      "starred": false,
-      "windows": []
-    }
-  ],
+  "projects": [],
   "people": [
     {
       "id": "eric-jacobsen-manager",
@@ -295,24 +60,12 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "Out"
         },
         {
-          "date": "2026-09-17",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-09-21",
+          "date": "2026-09-23",
           "mark": "IQA"
         },
         {
-          "date": "2026-10-29",
+          "date": "2026-10-07",
           "mark": "Out"
-        },
-        {
-          "date": "2026-11-12",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-11-13",
-          "mark": "IQA"
         }
       ],
       "stints": [
@@ -341,31 +94,21 @@ export const CREW_SCHEDULE_DATA = {
           "tentative": false
         },
         {
-          "site": "POND",
+          "site": "IQA",
           "sites": [
-            "POND",
             "IQA"
           ],
-          "from": "2026-09-17",
-          "out": "2026-10-29",
+          "from": "2026-09-23",
+          "out": "2026-10-07",
           "arrival": "marked",
-          "departure": "rotation",
-          "tentative": false
-        },
-        {
-          "site": "POND",
-          "sites": [
-            "POND",
-            "IQA"
-          ],
-          "from": "2026-11-12",
-          "out": null,
-          "arrival": "marked",
-          "departure": null,
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
-      "warnings": [],
+      "warnings": [
+        "OUT typed on 2026-06-04 while already off site",
+        "shaded 2026-08-29 to 2026-09-22 with no IN/OUT typed - not counted as on site until the travel days are typed"
+      ],
       "fullName": "Eric Jacobsen",
       "flights": [
         {
@@ -471,7 +214,15 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-07-13",
+          "mark": "via ALRT"
+        },
+        {
+          "date": "2026-07-14",
           "mark": "ALRT"
+        },
+        {
+          "date": "2026-07-29",
+          "mark": "Out"
         },
         {
           "date": "2026-08-31",
@@ -482,7 +233,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "POND"
         },
         {
-          "date": "2026-08-24",
+          "date": "2026-09-04",
           "mark": "Out"
         }
       ],
@@ -492,7 +243,7 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "KUG"
           ],
-          "from": "2026-05-31",
+          "from": "2026-06-01",
           "out": "2026-06-02",
           "arrival": "marked",
           "departure": "marked",
@@ -501,14 +252,24 @@ export const CREW_SCHEDULE_DATA = {
         {
           "site": "ALRT",
           "sites": [
-            "ALRT",
+            "ALRT"
+          ],
+          "from": "2026-07-14",
+          "out": "2026-07-29",
+          "arrival": "marked",
+          "departure": "shading-ended",
+          "tentative": false
+        },
+        {
+          "site": "IQA",
+          "sites": [
             "IQA",
             "POND"
           ],
-          "from": "2026-07-13",
-          "out": "2026-08-24",
+          "from": "2026-08-31",
+          "out": "2026-09-04",
           "arrival": "marked",
-          "departure": "rotation",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
@@ -569,12 +330,13 @@ export const CREW_SCHEDULE_DATA = {
           "tentative": false
         }
       ],
-      "warnings": []
+      "warnings": [],
+      "agreementSigned": true
     },
     {
       "id": "william-matthews-manager",
       "name": "William Matthews",
-      "role": "Surveyor",
+      "role": "Manager",
       "sheetRow": 7,
       "active": true,
       "homeSites": [
@@ -586,28 +348,15 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-09-14",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-09-21",
+          "date": "2026-09-22",
           "mark": "Out"
         }
       ],
-      "stints": [
-        {
-          "site": "POND",
-          "sites": [
-            "POND"
-          ],
-          "from": "2026-09-14",
-          "out": "2026-09-21",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        }
+      "stints": [],
+      "warnings": [
+        "shaded 2026-09-13 to 2026-09-21 with no IN/OUT typed - not counted as on site until the travel days are typed"
       ],
-      "warnings": []
+      "agreementSigned": true
     },
     {
       "id": "bryan-hay-surveyor",
@@ -644,15 +393,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-10-05",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-10-20",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-12-01",
+          "date": "2026-10-07",
           "mark": "Out"
         }
       ],
@@ -685,20 +426,9 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-08-31",
-          "out": "2026-10-05",
+          "out": "2026-10-07",
           "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        },
-        {
-          "site": "IQA",
-          "sites": [
-            "IQA"
-          ],
-          "from": "2026-10-20",
-          "out": "2026-12-01",
-          "arrival": "marked",
-          "departure": "rotation",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
@@ -723,7 +453,8 @@ export const CREW_SCHEDULE_DATA = {
           "carService": "Confirmed",
           "note": null
         }
-      ]
+      ],
+      "agreementSigned": true
     },
     {
       "id": "andrew-murphy-surveyor",
@@ -741,6 +472,10 @@ export const CREW_SCHEDULE_DATA = {
       "events": [
         {
           "date": "2026-06-29",
+          "mark": "via IQA"
+        },
+        {
+          "date": "2026-06-30",
           "mark": "IQA"
         },
         {
@@ -752,7 +487,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-10-12",
+          "date": "2026-10-07",
           "mark": "Out"
         }
       ],
@@ -762,7 +497,7 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "IQA"
           ],
-          "from": "2026-06-29",
+          "from": "2026-06-30",
           "out": "2026-08-10",
           "arrival": "marked",
           "departure": "marked",
@@ -774,9 +509,9 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-08-28",
-          "out": "2026-10-12",
+          "out": "2026-10-07",
           "arrival": "marked",
-          "departure": "marked",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
@@ -795,48 +530,10 @@ export const CREW_SCHEDULE_DATA = {
       ]
     },
     {
-      "id": "william-matthews-surveyor",
-      "name": "William Matthews",
-      "role": "Surveyor",
-      "sheetRow": 11,
-      "active": true,
-      "homeSites": [
-        "IQA"
-      ],
-      "projectIds": [],
-      "inDate": null,
-      "outDate": null,
-      "rotationDays": 42,
-      "events": [
-        {
-          "date": "2026-10-13",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-10-20",
-          "mark": "Out"
-        }
-      ],
-      "stints": [
-        {
-          "site": "IQA",
-          "sites": [
-            "IQA"
-          ],
-          "from": "2026-10-13",
-          "out": "2026-10-20",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        }
-      ],
-      "warnings": []
-    },
-    {
       "id": "kirk-operator-truck-driver",
-      "name": "Kirk",
+      "name": "Clifford Kirk Anstey",
       "role": "Operator/Truck Driver",
-      "sheetRow": 13,
+      "sheetRow": 12,
       "active": true,
       "homeSites": [
         "KUG",
@@ -876,15 +573,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "POND"
         },
         {
-          "date": "2026-10-12",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-10-27",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-12-08",
+          "date": "2026-10-10",
           "mark": "Out"
         }
       ],
@@ -918,24 +607,15 @@ export const CREW_SCHEDULE_DATA = {
             "POND"
           ],
           "from": "2026-08-14",
-          "out": "2026-10-12",
+          "out": "2026-10-10",
           "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        },
-        {
-          "site": "IQA",
-          "sites": [
-            "IQA"
-          ],
-          "from": "2026-10-27",
-          "out": "2026-12-08",
-          "arrival": "marked",
-          "departure": "rotation",
+          "departure": "next-mark",
           "tentative": false
         }
       ],
-      "warnings": [],
+      "warnings": [
+        "unreadable mark 'Book' on 2026-10-10"
+      ],
       "fullName": "Clifford Kirk Anstey",
       "flights": [
         {
@@ -974,13 +654,15 @@ export const CREW_SCHEDULE_DATA = {
           "carService": null,
           "note": null
         }
-      ]
+      ],
+      "agreementSigned": true
     },
     {
       "id": "sam-m-operator-truck-driver",
-      "name": "Sam M",
+      "name": "Sam Manniapik",
       "role": "Operator/Truck Driver",
-      "sheetRow": 14,
+      "category": "Local",
+      "sheetRow": 13,
       "active": true,
       "homeSites": [
         "KUG",
@@ -1005,7 +687,7 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-05-31",
-          "mark": "IQA"
+          "mark": "via IQA"
         },
         {
           "date": "2026-06-01",
@@ -1034,22 +716,6 @@ export const CREW_SCHEDULE_DATA = {
         {
           "date": "2026-09-26",
           "mark": "Out"
-        },
-        {
-          "date": "2026-10-08",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-10-19",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-10-20",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-10-29",
-          "mark": "Out"
         }
       ],
       "stints": [
@@ -1065,13 +731,12 @@ export const CREW_SCHEDULE_DATA = {
           "tentative": false
         },
         {
-          "site": "IQA",
+          "site": "KUG",
           "sites": [
-            "IQA",
             "KUG",
             "IQA"
           ],
-          "from": "2026-05-31",
+          "from": "2026-06-02",
           "out": "2026-07-24",
           "arrival": "marked",
           "departure": "marked",
@@ -1088,31 +753,12 @@ export const CREW_SCHEDULE_DATA = {
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
-        },
-        {
-          "site": "POND",
-          "sites": [
-            "POND"
-          ],
-          "from": "2026-10-08",
-          "out": "2026-10-19",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        },
-        {
-          "site": "IQA",
-          "sites": [
-            "IQA"
-          ],
-          "from": "2026-10-20",
-          "out": "2026-10-29",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
         }
       ],
-      "warnings": [],
+      "warnings": [
+        "OUT typed on 2026-07-25 while already off site",
+        "shaded 2026-10-03 to 2026-10-31 with no IN/OUT typed - not counted as on site until the travel days are typed"
+      ],
       "fullName": "Sam Manniapik",
       "flights": [
         {
@@ -1151,13 +797,14 @@ export const CREW_SCHEDULE_DATA = {
           "carService": null,
           "note": null
         }
-      ]
+      ],
+      "agreementSigned": false
     },
     {
       "id": "elmer-gosse-operator-truck-driver",
       "name": "Elmer Gosse",
       "role": "Operator/Truck Driver",
-      "sheetRow": 15,
+      "sheetRow": 14,
       "active": true,
       "homeSites": [
         "KUG",
@@ -1199,7 +846,7 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "KUG"
           ],
-          "from": "2026-05-31",
+          "from": "2026-06-01",
           "out": "2026-07-20",
           "arrival": "marked",
           "departure": "marked",
@@ -1236,6 +883,96 @@ export const CREW_SCHEDULE_DATA = {
       "id": "stacey-turner-operator-truck-driver",
       "name": "Stacey Turner",
       "role": "Operator/Truck Driver",
+      "sheetRow": 15,
+      "active": true,
+      "homeSites": [
+        "KUG",
+        "POND"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-06-08",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-20",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-04",
+          "mark": "via KUG"
+        },
+        {
+          "date": "2026-08-05",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-17",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-08-19",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-22",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-10",
+          "mark": "Out"
+        }
+      ],
+      "stints": [
+        {
+          "site": "KUG",
+          "sites": [
+            "KUG"
+          ],
+          "from": "2026-06-08",
+          "out": "2026-07-20",
+          "arrival": "marked",
+          "departure": "marked",
+          "tentative": false
+        },
+        {
+          "site": "KUG",
+          "sites": [
+            "KUG",
+            "IQA",
+            "POND"
+          ],
+          "from": "2026-08-05",
+          "out": "2026-09-10",
+          "arrival": "marked",
+          "departure": "marked",
+          "tentative": false
+        }
+      ],
+      "warnings": [
+        "shaded 2026-09-12 to 2026-09-30 with no IN/OUT typed - not counted as on site until the travel days are typed"
+      ],
+      "fullName": "Stacey Turner",
+      "flights": [
+        {
+          "arriveIqa": "2026-06-09",
+          "arriveRef": "OPKAHU",
+          "departIqa": null,
+          "departRef": null,
+          "camp": "Confirmed",
+          "carService": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "id": "stephen-turner-operator-truck-driver",
+      "name": "Stephen Turner",
+      "role": "Operator/Truck Driver",
       "sheetRow": 16,
       "active": true,
       "homeSites": [
@@ -1257,6 +994,10 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-08-04",
+          "mark": "via KUG"
+        },
+        {
+          "date": "2026-08-05",
           "mark": "KUG"
         },
         {
@@ -1295,98 +1036,16 @@ export const CREW_SCHEDULE_DATA = {
             "IQA",
             "POND"
           ],
-          "from": "2026-08-04",
+          "from": "2026-08-05",
           "out": "2026-09-10",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
         }
       ],
-      "warnings": [],
-      "fullName": "Stacey Turner",
-      "flights": [
-        {
-          "arriveIqa": "2026-06-09",
-          "arriveRef": "OPKAHU",
-          "departIqa": null,
-          "departRef": null,
-          "camp": "Confirmed",
-          "carService": null,
-          "note": null
-        }
-      ]
-    },
-    {
-      "id": "stephen-turner-operator-truck-driver",
-      "name": "Stephen Turner",
-      "role": "Operator/Truck Driver",
-      "sheetRow": 17,
-      "active": true,
-      "homeSites": [
-        "KUG",
-        "POND"
+      "warnings": [
+        "shaded 2026-09-12 to 2026-09-30 with no IN/OUT typed - not counted as on site until the travel days are typed"
       ],
-      "projectIds": [],
-      "inDate": null,
-      "outDate": null,
-      "rotationDays": 42,
-      "events": [
-        {
-          "date": "2026-06-08",
-          "mark": "KUG"
-        },
-        {
-          "date": "2026-07-20",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-08-04",
-          "mark": "KUG"
-        },
-        {
-          "date": "2026-08-17",
-          "mark": "YK"
-        },
-        {
-          "date": "2026-08-19",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-08-22",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-09-10",
-          "mark": "Out"
-        }
-      ],
-      "stints": [
-        {
-          "site": "KUG",
-          "sites": [
-            "KUG"
-          ],
-          "from": "2026-06-08",
-          "out": "2026-07-20",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        },
-        {
-          "site": "KUG",
-          "sites": [
-            "KUG",
-            "IQA",
-            "POND"
-          ],
-          "from": "2026-08-04",
-          "out": "2026-09-10",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        }
-      ],
-      "warnings": [],
       "fullName": "Stephen Turner",
       "flights": [
         {
@@ -1404,7 +1063,7 @@ export const CREW_SCHEDULE_DATA = {
       "id": "trevor-anstey-operator-truck-driver",
       "name": "Trevor Anstey",
       "role": "Operator/Truck Driver",
-      "sheetRow": 18,
+      "sheetRow": 17,
       "active": true,
       "homeSites": [
         "KUG",
@@ -1429,6 +1088,10 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-08-04",
+          "mark": "via KUG"
+        },
+        {
+          "date": "2026-08-05",
           "mark": "KUG"
         },
         {
@@ -1446,14 +1109,6 @@ export const CREW_SCHEDULE_DATA = {
         {
           "date": "2026-09-12",
           "mark": "Out"
-        },
-        {
-          "date": "2026-09-24",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-10-17",
-          "mark": "Out"
         }
       ],
       "stints": [
@@ -1462,7 +1117,7 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "KUG"
           ],
-          "from": "2026-05-31",
+          "from": "2026-06-01",
           "out": "2026-07-20",
           "arrival": "marked",
           "departure": "marked",
@@ -1475,25 +1130,16 @@ export const CREW_SCHEDULE_DATA = {
             "IQA",
             "POND"
           ],
-          "from": "2026-08-04",
+          "from": "2026-08-05",
           "out": "2026-09-12",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        },
-        {
-          "site": "POND",
-          "sites": [
-            "POND"
-          ],
-          "from": "2026-09-24",
-          "out": "2026-10-17",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
         }
       ],
-      "warnings": [],
+      "warnings": [
+        "shaded 2026-09-24 to 2026-10-31 with no IN/OUT typed - not counted as on site until the travel days are typed"
+      ],
       "fullName": "Trevor Anstey",
       "flights": [
         {
@@ -1511,7 +1157,8 @@ export const CREW_SCHEDULE_DATA = {
       "id": "thomas-gemtec-operator-truck-driver",
       "name": "Thomas (Gemtec)",
       "role": "Operator/Truck Driver",
-      "sheetRow": 19,
+      "category": "Subcontractor",
+      "sheetRow": 18,
       "active": true,
       "homeSites": [
         "POND"
@@ -1524,36 +1171,20 @@ export const CREW_SCHEDULE_DATA = {
         {
           "date": "2026-07-14",
           "mark": "Out"
-        },
-        {
-          "date": "2026-08-28",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-09-25",
-          "mark": "Out"
         }
       ],
-      "stints": [
-        {
-          "site": "POND",
-          "sites": [
-            "POND"
-          ],
-          "from": "2026-08-28",
-          "out": "2026-09-25",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        }
-      ],
-      "warnings": []
+      "stints": [],
+      "warnings": [
+        "OUT typed on 2026-09-25 while already off site",
+        "shaded 2026-08-28 to 2026-09-24 with no IN/OUT typed - not counted as on site until the travel days are typed"
+      ]
     },
     {
       "id": "carson-gemtec-operator-truck-driver",
       "name": "Carson (Gemtec)",
       "role": "Operator/Truck Driver",
-      "sheetRow": 20,
+      "category": "Subcontractor",
+      "sheetRow": 19,
       "active": true,
       "homeSites": [
         "POND"
@@ -1562,36 +1193,17 @@ export const CREW_SCHEDULE_DATA = {
       "inDate": null,
       "outDate": null,
       "rotationDays": 42,
-      "events": [
-        {
-          "date": "2026-09-25",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-10-14",
-          "mark": "Out"
-        }
-      ],
-      "stints": [
-        {
-          "site": "POND",
-          "sites": [
-            "POND"
-          ],
-          "from": "2026-09-25",
-          "out": "2026-10-14",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        }
-      ],
-      "warnings": []
+      "events": [],
+      "stints": [],
+      "warnings": [
+        "shaded 2026-09-25 to 2026-10-31 with no IN/OUT typed - not counted as on site until the travel days are typed"
+      ]
     },
     {
       "id": "rob-operator-truck-driver",
-      "name": "Rob",
+      "name": "Robert French",
       "role": "Operator/Truck Driver",
-      "sheetRow": 21,
+      "sheetRow": 20,
       "active": true,
       "homeSites": [
         "IQA",
@@ -1619,11 +1231,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "POND"
         },
         {
-          "date": "2026-10-06",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-09-21",
+          "date": "2026-11-01",
           "mark": "Out"
         }
       ],
@@ -1643,17 +1251,18 @@ export const CREW_SCHEDULE_DATA = {
           "site": "IQA",
           "sites": [
             "IQA",
-            "POND",
-            "IQA"
+            "POND"
           ],
           "from": "2026-08-10",
-          "out": "2026-09-21",
+          "out": "2026-11-01",
           "arrival": "marked",
-          "departure": "rotation",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
-      "warnings": [],
+      "warnings": [
+        "14 unshaded days (2026-06-17) inside a stint that only ends with OUT on 2026-07-26 - check whether they went home in between"
+      ],
       "fullName": "Robert French",
       "flights": [
         {
@@ -1683,13 +1292,14 @@ export const CREW_SCHEDULE_DATA = {
           "carService": null,
           "note": null
         }
-      ]
+      ],
+      "agreementSigned": true
     },
     {
       "id": "dean-melvin-operator-truck-driver",
       "name": "Dean Melvin",
       "role": "Operator/Truck Driver",
-      "sheetRow": 22,
+      "sheetRow": 21,
       "active": true,
       "homeSites": [
         "IQA",
@@ -1725,15 +1335,11 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-10-14",
-          "mark": "Out"
+          "date": "2026-09-25",
+          "mark": "POND"
         },
         {
-          "date": "2026-10-29",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-12-10",
+          "date": "2026-10-11",
           "mark": "Out"
         }
       ],
@@ -1763,23 +1369,13 @@ export const CREW_SCHEDULE_DATA = {
         {
           "site": "IQA",
           "sites": [
-            "IQA"
+            "IQA",
+            "POND"
           ],
           "from": "2026-08-31",
-          "out": "2026-10-14",
+          "out": "2026-10-11",
           "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        },
-        {
-          "site": "IQA",
-          "sites": [
-            "IQA"
-          ],
-          "from": "2026-10-29",
-          "out": "2026-12-10",
-          "arrival": "marked",
-          "departure": "rotation",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
@@ -1813,13 +1409,14 @@ export const CREW_SCHEDULE_DATA = {
           "carService": null,
           "note": null
         }
-      ]
+      ],
+      "agreementSigned": true
     },
     {
       "id": "louis-labourer",
-      "name": "Louis",
+      "name": "Louis Coloumbe",
       "role": "Labourer",
-      "sheetRow": 24,
+      "sheetRow": 23,
       "active": true,
       "homeSites": [
         "IQA"
@@ -1876,13 +1473,14 @@ export const CREW_SCHEDULE_DATA = {
           "carService": null,
           "note": null
         }
-      ]
+      ],
+      "agreementSigned": false
     },
     {
       "id": "jf-labourer",
-      "name": "JF",
+      "name": "Jean Francois Marsolais",
       "role": "Labourer",
-      "sheetRow": 25,
+      "sheetRow": 24,
       "active": true,
       "homeSites": [
         "IQA"
@@ -1945,13 +1543,14 @@ export const CREW_SCHEDULE_DATA = {
           "carService": "Confirmed",
           "note": null
         }
-      ]
+      ],
+      "agreementSigned": false
     },
     {
       "id": "bernie-labourer",
       "name": "Bernie",
       "role": "Labourer",
-      "sheetRow": 26,
+      "sheetRow": 25,
       "active": true,
       "homeSites": [
         "ALRT",
@@ -1972,6 +1571,10 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-07-13",
+          "mark": "via ALRT"
+        },
+        {
+          "date": "2026-07-14",
           "mark": "ALRT"
         },
         {
@@ -2004,7 +1607,7 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "ALRT"
           ],
-          "from": "2026-07-13",
+          "from": "2026-07-14",
           "out": "2026-08-18",
           "arrival": "marked",
           "departure": "marked",
@@ -2018,7 +1621,7 @@ export const CREW_SCHEDULE_DATA = {
           "from": "2026-08-30",
           "out": "2026-10-11",
           "arrival": "marked",
-          "departure": "rotation",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
@@ -2034,13 +1637,14 @@ export const CREW_SCHEDULE_DATA = {
           "carService": null,
           "note": null
         }
-      ]
+      ],
+      "agreementSigned": false
     },
     {
       "id": "javi-labourer",
-      "name": "Javi",
+      "name": "Javier Humberto Castano Bedoya",
       "role": "Labourer",
-      "sheetRow": 27,
+      "sheetRow": 26,
       "active": true,
       "homeSites": [
         "ALRT",
@@ -2061,6 +1665,10 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-07-13",
+          "mark": "via ALRT"
+        },
+        {
+          "date": "2026-07-14",
           "mark": "ALRT"
         },
         {
@@ -2072,7 +1680,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-10-12",
+          "date": "2026-10-11",
           "mark": "Out"
         }
       ],
@@ -2093,7 +1701,7 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "ALRT"
           ],
-          "from": "2026-07-13",
+          "from": "2026-07-14",
           "out": "2026-08-18",
           "arrival": "marked",
           "departure": "marked",
@@ -2105,9 +1713,9 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-08-31",
-          "out": "2026-10-12",
+          "out": "2026-10-11",
           "arrival": "marked",
-          "departure": "rotation",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
@@ -2123,13 +1731,14 @@ export const CREW_SCHEDULE_DATA = {
           "carService": null,
           "note": "car not needed"
         }
-      ]
+      ],
+      "agreementSigned": true
     },
     {
       "id": "nicholas-labourer",
       "name": "Nicholas",
       "role": "Labourer",
-      "sheetRow": 28,
+      "sheetRow": 27,
       "active": true,
       "homeSites": [
         "ALRT",
@@ -2150,6 +1759,10 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-07-13",
+          "mark": "via ALRT"
+        },
+        {
+          "date": "2026-07-14",
           "mark": "ALRT"
         },
         {
@@ -2161,7 +1774,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-10-12",
+          "date": "2026-10-11",
           "mark": "Out"
         }
       ],
@@ -2182,7 +1795,7 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "ALRT"
           ],
-          "from": "2026-07-13",
+          "from": "2026-07-14",
           "out": "2026-08-21",
           "arrival": "marked",
           "departure": "marked",
@@ -2194,9 +1807,9 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-08-31",
-          "out": "2026-10-12",
+          "out": "2026-10-11",
           "arrival": "marked",
-          "departure": "rotation",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
@@ -2218,7 +1831,7 @@ export const CREW_SCHEDULE_DATA = {
       "id": "marjorie-labourer",
       "name": "Marjorie",
       "role": "Labourer",
-      "sheetRow": 29,
+      "sheetRow": 28,
       "active": true,
       "homeSites": [
         "IQA"
@@ -2235,14 +1848,6 @@ export const CREW_SCHEDULE_DATA = {
         {
           "date": "2026-08-25",
           "mark": "Out"
-        },
-        {
-          "date": "2026-09-13",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-12-03",
-          "mark": "Out"
         }
       ],
       "stints": [
@@ -2256,26 +1861,20 @@ export const CREW_SCHEDULE_DATA = {
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
-        },
-        {
-          "site": "IQA",
-          "sites": [
-            "IQA"
-          ],
-          "from": "2026-09-13",
-          "out": "2026-12-03",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
         }
       ],
-      "warnings": []
+      "warnings": [
+        "unreadable mark 'Close CAMP' on 2026-11-01",
+        "50 unshaded days (2026-06-07) inside a stint that only ends with OUT on 2026-08-25 - check whether they went home in between",
+        "shaded 2026-09-14 to 2026-10-31 with no IN/OUT typed - not counted as on site until the travel days are typed"
+      ]
     },
     {
       "id": "shakira-labourer",
       "name": "Shakira",
       "role": "Labourer",
-      "sheetRow": 30,
+      "category": "Local",
+      "sheetRow": 29,
       "active": true,
       "homeSites": [
         "KUG",
@@ -2291,19 +1890,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "POND"
         },
         {
-          "date": "2026-10-17",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-10-19",
-          "mark": "YK"
-        },
-        {
-          "date": "2026-10-20",
-          "mark": "KUG"
-        },
-        {
-          "date": "2026-10-13",
+          "date": "2026-09-02",
           "mark": "Out"
         }
       ],
@@ -2311,24 +1898,25 @@ export const CREW_SCHEDULE_DATA = {
         {
           "site": "POND",
           "sites": [
-            "POND",
-            "IQA",
-            "KUG"
+            "POND"
           ],
           "from": "2026-09-01",
-          "out": "2026-10-13",
+          "out": "2026-09-02",
           "arrival": "marked",
-          "departure": "rotation",
+          "departure": "travel-cell",
           "tentative": false
         }
       ],
-      "warnings": []
+      "warnings": [
+        "shaded 2026-08-24 to 2026-08-31 with no IN/OUT typed - not counted as on site until the travel days are typed",
+        "shaded 2026-09-03 to 2026-10-31 with no IN/OUT typed - not counted as on site until the travel days are typed"
+      ]
     },
     {
       "id": "brad-rubia-labourer",
       "name": "Brad Rubia",
       "role": "Labourer",
-      "sheetRow": 31,
+      "sheetRow": 30,
       "active": true,
       "homeSites": [
         "KUG",
@@ -2341,6 +1929,10 @@ export const CREW_SCHEDULE_DATA = {
       "events": [
         {
           "date": "2026-08-04",
+          "mark": "via KUG"
+        },
+        {
+          "date": "2026-08-05",
           "mark": "KUG"
         },
         {
@@ -2356,7 +1948,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "POND"
         },
         {
-          "date": "2026-10-17",
+          "date": "2026-11-01",
           "mark": "Out"
         }
       ],
@@ -2368,10 +1960,10 @@ export const CREW_SCHEDULE_DATA = {
             "IQA",
             "POND"
           ],
-          "from": "2026-08-04",
-          "out": "2026-10-17",
+          "from": "2026-08-05",
+          "out": "2026-11-01",
           "arrival": "marked",
-          "departure": "marked",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
@@ -2381,7 +1973,7 @@ export const CREW_SCHEDULE_DATA = {
       "id": "kevin-barrieau-labourer",
       "name": "Kevin Barrieau",
       "role": "Labourer",
-      "sheetRow": 32,
+      "sheetRow": 31,
       "active": true,
       "homeSites": [
         "IQA"
@@ -2392,11 +1984,53 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [],
       "stints": [],
-      "warnings": []
+      "warnings": [
+        "shaded 2026-08-01 to 2026-10-10 with no IN/OUT typed - not counted as on site until the travel days are typed"
+      ]
     },
     {
       "id": "natanael-lachance-labourer",
       "name": "Natanael Lachance",
+      "role": "Labourer",
+      "sheetRow": 32,
+      "active": true,
+      "homeSites": [
+        "IQA"
+      ],
+      "projectIds": [],
+      "inDate": null,
+      "outDate": null,
+      "rotationDays": 42,
+      "events": [
+        {
+          "date": "2026-10-16",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-24",
+          "mark": "Out"
+        }
+      ],
+      "stints": [
+        {
+          "site": "IQA",
+          "sites": [
+            "IQA"
+          ],
+          "from": "2026-10-16",
+          "out": "2026-10-24",
+          "arrival": "marked",
+          "departure": "marked",
+          "tentative": false
+        }
+      ],
+      "warnings": [
+        "shaded 2026-08-01 to 2026-08-26 with no IN/OUT typed - not counted as on site until the travel days are typed"
+      ]
+    },
+    {
+      "id": "marc-olivier-labourer",
+      "name": "Marc Olivier",
       "role": "Labourer",
       "sheetRow": 33,
       "active": true,
@@ -2415,14 +2049,6 @@ export const CREW_SCHEDULE_DATA = {
         {
           "date": "2026-10-24",
           "mark": "Out"
-        },
-        {
-          "date": "2026-11-06",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-11-08",
-          "mark": "Out"
         }
       ],
       "stints": [
@@ -2436,85 +2062,17 @@ export const CREW_SCHEDULE_DATA = {
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
-        },
-        {
-          "site": "IQA",
-          "sites": [
-            "IQA"
-          ],
-          "from": "2026-11-06",
-          "out": "2026-11-08",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
         }
       ],
-      "warnings": [],
-      "fullName": "Nathanael Lachance",
-      "flights": [
-        {
-          "arriveIqa": "2026-04-23",
-          "arriveRef": "JCVYDR",
-          "departIqa": "2026-04-27",
-          "departRef": "JCVYDR",
-          "camp": "Confirmed",
-          "carService": "Confirmed",
-          "note": null
-        },
-        {
-          "arriveIqa": "2026-06-22",
-          "arriveRef": "DISWDV",
-          "departIqa": "2026-06-29",
-          "departRef": "DISWDV",
-          "camp": "Confirmed",
-          "carService": "Confirmed",
-          "note": null
-        }
+      "warnings": [
+        "shaded 2026-08-01 to 2026-08-26 with no IN/OUT typed - not counted as on site until the travel days are typed"
       ]
     },
     {
-      "id": "marc-olivier-labourer",
-      "name": "Marc Olivier",
-      "role": "Labourer",
-      "sheetRow": 34,
-      "active": true,
-      "homeSites": [
-        "IQA"
-      ],
-      "projectIds": [],
-      "inDate": null,
-      "outDate": null,
-      "rotationDays": 42,
-      "events": [
-        {
-          "date": "2026-10-16",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-10-24",
-          "mark": "Out"
-        }
-      ],
-      "stints": [
-        {
-          "site": "IQA",
-          "sites": [
-            "IQA"
-          ],
-          "from": "2026-10-16",
-          "out": "2026-10-24",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        }
-      ],
-      "warnings": []
-    },
-    {
       "id": "shannon-mechanic",
-      "name": "Shannon",
+      "name": "Shannon King",
       "role": "Mechanic",
-      "sheetRow": 36,
+      "sheetRow": 35,
       "active": true,
       "homeSites": [
         "IQA"
@@ -2537,6 +2095,10 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "KUG"
         },
         {
+          "date": "2026-06-23",
+          "mark": "via KUG"
+        },
+        {
           "date": "2026-06-24",
           "mark": "IQA"
         },
@@ -2553,19 +2115,11 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "Out"
         },
         {
-          "date": "2026-09-13",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-09-15",
-          "mark": "POND"
-        },
-        {
           "date": "2026-09-22",
           "mark": "IQA"
         },
         {
-          "date": "2026-12-03",
+          "date": "2026-10-08",
           "mark": "Out"
         }
       ],
@@ -2587,18 +2141,18 @@ export const CREW_SCHEDULE_DATA = {
         {
           "site": "IQA",
           "sites": [
-            "IQA",
-            "POND",
             "IQA"
           ],
-          "from": "2026-09-13",
-          "out": "2026-12-03",
+          "from": "2026-09-22",
+          "out": "2026-10-08",
           "arrival": "marked",
-          "departure": "marked",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
-      "warnings": [],
+      "warnings": [
+        "shaded 2026-09-14 to 2026-09-21 with no IN/OUT typed - not counted as on site until the travel days are typed"
+      ],
       "fullName": "Shannon King",
       "flights": [
         {
@@ -2655,13 +2209,14 @@ export const CREW_SCHEDULE_DATA = {
           "carService": null,
           "note": null
         }
-      ]
+      ],
+      "agreementSigned": false
     },
     {
       "id": "mike-reid-mechanic",
       "name": "Mike Reid",
       "role": "Mechanic",
-      "sheetRow": 37,
+      "sheetRow": 36,
       "active": true,
       "homeSites": [
         "KUG",
@@ -2674,6 +2229,10 @@ export const CREW_SCHEDULE_DATA = {
       "events": [
         {
           "date": "2026-06-19",
+          "mark": "via KUG"
+        },
+        {
+          "date": "2026-06-20",
           "mark": "KUG"
         },
         {
@@ -2682,6 +2241,10 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-08-04",
+          "mark": "via KUG"
+        },
+        {
+          "date": "2026-08-05",
           "mark": "KUG"
         },
         {
@@ -2695,22 +2258,6 @@ export const CREW_SCHEDULE_DATA = {
         {
           "date": "2026-09-14",
           "mark": "Out"
-        },
-        {
-          "date": "2026-09-22",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-10-19",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-11-09",
-          "mark": "TBC"
-        },
-        {
-          "date": "2026-12-07",
-          "mark": "Out"
         }
       ],
       "stints": [
@@ -2719,7 +2266,7 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "KUG"
           ],
-          "from": "2026-06-19",
+          "from": "2026-06-20",
           "out": "2026-07-20",
           "arrival": "marked",
           "departure": "marked",
@@ -2731,122 +2278,88 @@ export const CREW_SCHEDULE_DATA = {
             "KUG",
             "POND"
           ],
-          "from": "2026-08-04",
+          "from": "2026-08-05",
           "out": "2026-09-14",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
-        },
-        {
-          "site": "POND",
-          "sites": [
-            "POND"
-          ],
-          "from": "2026-09-22",
-          "out": "2026-10-19",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        },
-        {
-          "site": "TBC",
-          "sites": [
-            "TBC"
-          ],
-          "from": "2026-11-09",
-          "out": "2026-12-07",
-          "arrival": "marked",
-          "departure": "rotation",
-          "tentative": true
         }
       ],
-      "warnings": []
+      "warnings": [
+        "shaded 2026-09-22 to 2026-10-31 with no IN/OUT typed - not counted as on site until the travel days are typed"
+      ]
     }
   ],
-  "housingCrew": {
-    "project": "Housing",
-    "label": "Critical project CREW",
-    "targetStart": null,
-    "crew": [
-      {
-        "slot": 1,
-        "role": "Labourer",
-        "name": "Bernie",
-        "assignment": "Side 2"
-      },
-      {
-        "slot": 2,
-        "role": "Labourer",
-        "name": "Javi",
-        "assignment": "Side 2"
-      },
-      {
-        "slot": 3,
-        "role": "Surveyor",
-        "name": "Bryan",
-        "assignment": "New Housing"
-      },
-      {
-        "slot": 4,
-        "role": "Labourer",
-        "name": "Nick",
-        "assignment": "New Housing"
-      },
-      {
-        "slot": 5,
-        "role": "Truck D",
-        "name": "Kevin",
-        "assignment": null
-      },
-      {
-        "slot": 6,
-        "role": "Operator",
-        "name": "Dean",
-        "assignment": "Side 1"
-      },
-      {
-        "slot": 7,
-        "role": "Operator",
-        "name": "Kirk",
-        "assignment": "Side 1"
-      },
-      {
-        "slot": 8,
-        "role": "Truck",
-        "name": "Rob",
-        "assignment": "Side 1"
-      }
-    ],
-    "openQuestions": [
-      "Brad - Option",
-      "Side 2 - space",
-      "Mike ?",
-      "Sam or Brad?"
-    ]
-  },
+  "housingCrew": null,
   "staffing": [],
-  "dayNotes": [],
-  "warnings": [],
+  "dayNotes": [
+    {
+      "date": "2026-08-16",
+      "text": "IQA Arrival - Lateral for Pond"
+    },
+    {
+      "date": "2026-08-18",
+      "text": "POND Arrival (South bound cargo)"
+    }
+  ],
+  "warnings": [
+    "Eric Jacobsen: OUT typed on 2026-06-04 while already off site",
+    "Eric Jacobsen: shaded 2026-08-29 to 2026-09-22 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "William Matthews: shaded 2026-09-13 to 2026-09-21 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Kirk: unreadable mark 'Book' on 2026-10-10",
+    "Sam M: OUT typed on 2026-07-25 while already off site",
+    "Sam M: shaded 2026-10-03 to 2026-10-31 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Stacey Turner: shaded 2026-09-12 to 2026-09-30 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Stephen Turner: shaded 2026-09-12 to 2026-09-30 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Trevor Anstey: shaded 2026-09-24 to 2026-10-31 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Thomas (Gemtec): OUT typed on 2026-09-25 while already off site",
+    "Thomas (Gemtec): shaded 2026-08-28 to 2026-09-24 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Carson (Gemtec): shaded 2026-09-25 to 2026-10-31 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Rob: 14 unshaded days (2026-06-17) inside a stint that only ends with OUT on 2026-07-26 - check whether they went home in between",
+    "Marjorie: unreadable mark 'Close CAMP' on 2026-11-01",
+    "Marjorie: 50 unshaded days (2026-06-07) inside a stint that only ends with OUT on 2026-08-25 - check whether they went home in between",
+    "Marjorie: shaded 2026-09-14 to 2026-10-31 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Shakira: shaded 2026-08-24 to 2026-08-31 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Shakira: shaded 2026-09-03 to 2026-10-31 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Kevin Barrieau: shaded 2026-08-01 to 2026-10-10 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Natanael Lachance: shaded 2026-08-01 to 2026-08-26 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Marc Olivier: shaded 2026-08-01 to 2026-08-26 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Shannon: shaded 2026-09-14 to 2026-09-21 with no IN/OUT typed - not counted as on site until the travel days are typed",
+    "Mike Reid: shaded 2026-09-22 to 2026-10-31 with no IN/OUT typed - not counted as on site until the travel days are typed"
+  ],
   "stats": {
-    "people": 30,
-    "activePeople": 30,
-    "projects": 23,
+    "people": 29,
+    "activePeople": 29,
+    "projects": 0,
     "datedColumns": 389,
-    "bridgedColumns": [],
+    "bridgedColumns": [
+      "2026-07-28"
+    ],
     "dateSpan": [
       "2025-12-08",
-      "2026-12-18"
+      "2026-12-31"
     ],
     "markValues": {
-      "Out": 72,
-      "IQA": 52,
-      "POND": 22,
-      "KUG": 16,
-      "YK": 9,
+      "Out": 60,
+      "IQA": 40,
+      "KUG": 15,
+      "POND": 14,
+      "YK": 8,
+      "via KUG": 7,
       "ALRT": 5,
+      "via ALRT": 4,
+      "via IQA": 2,
       "YF": 1,
-      "YEG": 1,
-      "TBC": 1
-    }
+      "YEG": 1
+    },
+    "flightNamesNotOnSchedule": [
+      "AKZIZ ABDENOUR (MEQUALTECH)",
+      "CHRISTIAN LAPOINTE",
+      "JAGAR SHABAGA",
+      "JOSEPH FINDLAY",
+      "NATHANAEL LACHANCE",
+      "STEVE TESSIER",
+      "VISHAL MAHI (GEMTEC)"
+    ]
   }
 } as const;

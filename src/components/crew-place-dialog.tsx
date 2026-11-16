@@ -11,6 +11,8 @@ export type PlaceRotationInput = {
   from: string;
   out: string;
   role: string;
+  /** Optional coordinator note on this placement (NAV-08). */
+  note?: string;
 };
 
 export function CrewPlaceDialog({
@@ -42,6 +44,7 @@ export function CrewPlaceDialog({
     siteList.some((row) => row.code === home) ? home : siteList[0]!.code,
   );
   const role = (defaultRole || "Labourer").trim();
+  const [note, setNote] = useState("");
   const [error, setError] = useState("");
 
   const dayCount = daysBetween(from, to) + 1;
@@ -61,7 +64,7 @@ export function CrewPlaceDialog({
       return;
     }
     setError("");
-    onSave({ site, from, out, role });
+    onSave({ site, from, out, role, note: note.trim() || undefined });
   }
 
   return (
@@ -103,6 +106,16 @@ export function CrewPlaceDialog({
               {role || "—"}
             </p>
           </div>
+
+          <label className="grid gap-1 text-sm">
+            <span className="text-muted-foreground">Note (optional)</span>
+            <input
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="e.g. Lingering for snow"
+              className="h-9 rounded-lg border border-input px-2"
+            />
+          </label>
 
           <div className="flex flex-wrap gap-2 text-[13px] text-muted-foreground">
             {siteList.map((row) => (

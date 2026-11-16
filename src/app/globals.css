@@ -42,11 +42,40 @@
   --input: #d7e0ec;
   --ring: #356dbd;
   --radius: 0.625rem;
+  /* Shell width: laptop-friendly, stretches on Gord-class / wall monitors. */
+  --app-shell-max: min(100%, 100rem);
+  /* Month / year boards: tall vertical pane so you scroll less up-down. */
+  --app-board-max-h: min(100dvh - 12rem, 90rem);
+}
+
+@media (min-width: 1600px) {
+  :root {
+    --app-shell-max: min(100%, 120rem);
+    --app-board-max-h: min(100dvh - 11rem, 100rem);
+  }
+}
+
+@media (min-width: 2000px) {
+  :root {
+    --app-shell-max: min(100%, 140rem);
+    --app-board-max-h: min(100dvh - 10rem, 110rem);
+  }
+}
+
+@media (min-width: 2560px) {
+  :root {
+    --app-shell-max: min(100%, 168rem);
+    --app-board-max-h: min(100dvh - 9rem, 120rem);
+  }
 }
 
 @layer base {
   * {
     @apply border-border;
+  }
+  /* Fluid type: readable on normal desks, a step larger on big displays — not a zoom circus. */
+  html {
+    font-size: clamp(15px, 0.38vw + 11.4px, 20px);
   }
   body {
     @apply bg-background text-foreground font-sans text-sm antialiased;

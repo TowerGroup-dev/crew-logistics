@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, X } from "lucide-react";
+import { useCrewUndo } from "@/components/crew-undo-provider";
 import {
   buildCrewBriefing,
   buildInstantAlert,
@@ -44,19 +45,21 @@ import {
 } from "@/lib/crew-schedule";
 import {
   addNextRotation,
-  extendStay,
   emptyRoster,
   loadRoster,
   mergePeople,
   mergeProjects,
+  removeRotationPlan,
   saveRoster,
   setEmploymentStatus,
+  setRotationPlanNote,
+  setStayOut,
   slugEmployee,
   type CrewRosterBook,
   type EmploymentStatus,
 } from "@/lib/crew-roster";
 import { CrewFlightPanel } from "@/components/crew-flight-panel";
-import { CrewMonthGrid, monthStartFromIso, shiftMonth } from "@/components/crew-month-grid";
+import { CrewMonthGrid, monthStartFromIso } from "@/components/crew-month-grid";
 import { CrewNextRotationForm } from "@/components/crew-next-rotation";
 import { CrewOverview, CrewReminders } from "@/components/crew-overview";
 import { buildSituationReminders } from "@/lib/crew-situation-reminders";
@@ -86,12 +89,20 @@ import {
   type FlightBook,
   type FlightBooking,
 } from "@/lib/crew-flights";
+import {
+  loadStopovers,
+  saveStopovers,
+  paintStopoverDays,
+  toggleStopover,
+  type CrewStopoverBook,
+} from "@/lib/crew-stopovers";
 import { addScheduleYear, loadScheduleYears } from "@/lib/crew-years";
 import {
   emptyScheduleViewPrefs,
   hidePerson,
   loadScheduleViewPrefs,
   saveScheduleViewPrefs,
+  setCalendarMode,
   showAllPeople,
   showPerson,
   type CrewScheduleViewPrefs,
@@ -103,13 +114,21 @@ import {
   type CrewRolesBook,
 } from "@/lib/crew-roles-catalog";
 import {
+  DEFAULT_SITES,
   emptySitesBook,
   loadSitesBook,
   saveSitesBook,
   siteColour,
   catalogSiteLabel,
+  type CrewSite,
   type CrewSitesBook,
 } from "@/lib/crew-sites";
+import {
+  emptyTravelHubsBook,
+  loadTravelHubs,
+  saveTravelHubs,
+  type CrewTravelHubsBook,
+} from "@/lib/crew-travel-hubs";
 import { CrewSettingsPanel } from "@/components/crew-settings-panel";
 import { formatLong, formatMedium, todayInZone } from "@/lib/dates";
 import { cn } from "@/lib/cn";
@@ -185,13 +204,16 @@ export function CrewBoard({
   const boardView = view;
   const [opsBook, setOpsBook] = useState<CrewOpsBook>({});
   const [flightBook, setFlightBook] = useState<FlightBook>(emptyFlightBook);
+  const [stopoverBook, setStopoverBook] = useState<CrewStopoverBook>({});
   const [roster, setRoster] = useState<CrewRosterBook>(emptyRoster());
   const [hydrated, setHydrated] = useState(false);
   const [role, setRole] = useState("");
   const [site, setSite] = useState("");
   const [scheduleYear, setScheduleYear] = useState<number>(CREW_SCHEDULE.year);
   const [scheduleYears, setScheduleYears] = useState<number[]>(() => [...loadScheduleYears()]);
-  const [monthCursor, setMonthCursor] = useState(() => `${CREW_SCHEDULE.year || new Date().getFullYear()}-11-01`);
+  const [monthCursor, setMonthCursor] = useState(() => `${CREW_SCHEDULE.year || new Date().getFullYear()}-01-01`);
+  /** Only set when jumping from Year tape — keeps Month free-scroll starting at January. */
+  const [monthScrollTo, setMonthScrollTo] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedRotationId, setSelectedRotationId] = useState<string | null>(null);
@@ -201,8 +223,42 @@ export function CrewBoard({
   const [notify, setNotify] = useState<CrewNotifySettings>(() => loadNotifySettings());
   const [scheduleView, setScheduleView] = useState<CrewScheduleViewPrefs>(() => emptyScheduleViewPrefs());
   const [sitesBook, setSitesBook] = useState<CrewSitesBook>(() => emptySitesBook());
+  const [travelHubsBook, setTravelHubsBook] = useState<CrewTravelHubsBook>(() => emptyTravelHubsBook());
   const [rolesBook, setRolesBook] = useState<CrewRolesBook>(() => emptyRolesBook());
-  const [newEmployee, setNewEmployee] = useState({ name: "", role: "Labourer", sites: "" });
+  const [newEmployee, setNewEmployee] = useState({ name: "", role: "Labourer" });
+  const { pushSnapshot, registerRestorer } = useCrewUndo();
+  const booksRef = useRef({
+    opsBook,
+    roster,
+    rotationBook,
+    flightBook,
+    stopoverBook,
+  });
+  const skipHistoryRef = useRef(false);
+  booksRef.current = { opsBook, roster, rotationBook, flightBook, stopoverBook };
+
+  function captureHistory() {
+    if (!hydrated || skipHistoryRef.current) return;
+    pushSnapshot(booksRef.current);
+  }
+
+  useEffect(() => {
+    registerRestorer((snapshot) => {
+      skipHistoryRef.current = true;
+      setOpsBook(snapshot.opsBook);
+      saveCrewOps(snapshot.opsBook);
+      setRoster(snapshot.roster);
+      saveRoster(snapshot.roster);
+      setRotationBook(snapshot.rotationBook);
+      saveRotations(snapshot.rotationBook);
+      setFlightBook(snapshot.flightBook);
+      saveFlights(snapshot.flightBook);
+      setStopoverBook(snapshot.stopoverBook || {});
+      saveStopovers(snapshot.stopoverBook || {});
+      skipHistoryRef.current = false;
+    });
+    return () => registerRestorer(null);
+  }, [registerRestorer]);
 
   useEffect(() => {
     const yearParam = Number(searchParams.get("year") || "");
@@ -212,7 +268,9 @@ export function CrewBoard({
     }
     const monthParam = searchParams.get("month") || searchParams.get("start");
     if (monthParam && /^\d{4}-\d{2}/.test(monthParam)) {
-      setMonthCursor(monthStartFromIso(monthParam.length === 7 ? `${monthParam}-01` : monthParam));
+      const monthIso = monthStartFromIso(monthParam.length === 7 ? `${monthParam}-01` : monthParam);
+      setMonthCursor(monthIso);
+      setMonthScrollTo(monthIso);
     }
     const personParam = searchParams.get("person");
     if (personParam) setSelectedId(personParam);
@@ -226,6 +284,7 @@ export function CrewBoard({
     setOpsBook(seededOps);
     const flights = loadFlights();
     setFlightBook(flights);
+    setStopoverBook(loadStopovers());
 
     const loadedRoster = loadRoster();
     setRoster(loadedRoster);
@@ -234,6 +293,9 @@ export function CrewBoard({
     const cleanedSites = loadSitesBook();
     setSitesBook(cleanedSites);
     saveSitesBook(cleanedSites);
+    const hubs = loadTravelHubs();
+    setTravelHubsBook(hubs);
+    saveTravelHubs(hubs);
     setRolesBook(loadRolesBook());
     setScheduleYears(loadScheduleYears());
 
@@ -285,7 +347,13 @@ export function CrewBoard({
     });
   }
 
-  function patchOps(personId: string, recipe: (current: CrewPersonOps) => CrewPersonOps) {
+  function patchOps(
+    personId: string,
+    recipe: (current: CrewPersonOps) => CrewPersonOps,
+    options?: { history?: boolean },
+  ) {
+    // Undo is only for Month calendar edits (opt in with history: true).
+    if (options?.history) captureHistory();
     setOpsBook((prev) => {
       const before = opsFor(prev, personId);
       const after = recipe(before);
@@ -328,7 +396,9 @@ export function CrewBoard({
     });
   }
 
-  function patchRoster(recipe: (current: CrewRosterBook) => CrewRosterBook) {
+  function patchRoster(recipe: (current: CrewRosterBook) => CrewRosterBook, options?: { history?: boolean }) {
+    // Undo is only for Month calendar edits (opt in with history: true).
+    if (options?.history) captureHistory();
     setRoster((prev) => {
       const next = recipe(prev);
       saveRoster(next);
@@ -497,10 +567,6 @@ export function CrewBoard({
       setShowAddEmployee(false);
       return;
     }
-    const homeSites = newEmployee.sites
-      .split(",")
-      .map((item) => item.trim().toUpperCase())
-      .filter(Boolean);
     patchRoster((current) => ({
       ...current,
       employees: [
@@ -509,7 +575,7 @@ export function CrewBoard({
           id,
           name,
           role: roleName,
-          homeSites,
+          homeSites: [],
           projectIds: [],
           rotationDays: 42,
           notes: "",
@@ -519,7 +585,7 @@ export function CrewBoard({
       ],
       employmentStatus: { ...current.employmentStatus, [id]: "active" },
     }));
-    setNewEmployee({ name: "", role: "Labourer", sites: "" });
+    setNewEmployee({ name: "", role: "Labourer" });
     setShowAddEmployee(false);
     setSelectedId(id);
   }
@@ -589,11 +655,15 @@ export function CrewBoard({
   );
 
   const hiddenPeople = useMemo(() => {
-    const byId = new Map(overview.rows.map((row) => [row.person.id, row.person.name]));
-    return scheduleView.hiddenPersonIds.map((id) => ({
-      id,
-      name: byId.get(id) || id,
-    }));
+    const byId = new Map(overview.rows.map((row) => [row.person.id, row.person]));
+    return scheduleView.hiddenPersonIds.map((id) => {
+      const person = byId.get(id);
+      return {
+        id,
+        name: person?.name || id,
+        role: person?.role || "",
+      };
+    });
   }, [overview.rows, scheduleView.hiddenPersonIds]);
 
   const selected = overview.rows.find((row) => row.person.id === selectedId) ?? null;
@@ -602,7 +672,7 @@ export function CrewBoard({
   return (
     <div className="flex flex-col gap-4">
       {showAddEmployee ? (
-        <section className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
           <label className="grid gap-1 text-sm">
             <span className="text-muted-foreground">Name</span>
             <input
@@ -625,15 +695,6 @@ export function CrewBoard({
                 <option key={item} value={item} />
               ))}
             </datalist>
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-muted-foreground">Home sites</span>
-            <input
-              value={newEmployee.sites}
-              onChange={(event) => setNewEmployee({ ...newEmployee, sites: event.target.value })}
-              className="h-9 rounded-lg border border-input bg-card px-2"
-              placeholder="IQA, POND"
-            />
           </label>
           <div className="flex items-end gap-2">
             <button type="button" onClick={addEmployee} className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">
@@ -753,7 +814,7 @@ export function CrewBoard({
         ) : null}
 
         {boardView === "year" ? (
-          <div className="max-h-[min(70vh,40rem)] overflow-auto border-t border-border p-3 sm:p-4">
+          <div className="overflow-auto border-t border-border p-3 sm:p-4" style={{ maxHeight: "var(--app-board-max-h)" }}>
             <CrewYearTape
               year={scheduleYear}
               today={today}
@@ -764,6 +825,7 @@ export function CrewBoard({
                 const month = String(monthIndex).padStart(2, "0");
                 const monthIso = `${year}-${month}-01`;
                 setMonthCursor(monthIso);
+                setMonthScrollTo(monthIso);
                 setScheduleYear(year);
                 router.push(
                   withYearQuery("/month", {
@@ -773,9 +835,19 @@ export function CrewBoard({
                   { scroll: false },
                 );
               }}
-              onAddRotation={(personId, input) =>
-                patchRoster((current) => addNextRotation(current, personId, input))
-              }
+              onAddRotation={(personId, input) => {
+                let planId = "";
+                patchRoster((current) => {
+                  const next = addNextRotation(current, personId, input);
+                  const plans = next.rotationPlans?.[personId] ?? [];
+                  planId =
+                    plans.find((plan) => plan.from === input.from && plan.out === input.out)?.id ||
+                    plans[plans.length - 1]?.id ||
+                    "";
+                  return next;
+                }, { history: true });
+                return planId;
+              }}
               onHidePerson={(personId) => patchScheduleView((current) => hidePerson(current, personId))}
               hiddenPeople={hiddenPeople}
               onShowPerson={(personId) => patchScheduleView((current) => showPerson(current, personId))}
@@ -787,23 +859,68 @@ export function CrewBoard({
         {boardView === "month" ? (
           <div className="flex flex-col gap-4 border-t border-border p-3 sm:p-4">
             <CrewMonthGrid
-              monthStart={monthCursor}
+              year={scheduleYear}
               today={today}
-              rows={scheduleRows.map((row) => ({ person: row.person }))}
+              scrollToIso={monthScrollTo}
+              rows={rows.map((row) => ({ person: row.person }))}
               opsBook={opsBook}
+              flightBook={flightBook}
+              stopoverBook={stopoverBook}
+              roster={roster}
               sites={sitesBook.sites}
+              travelHubs={travelHubsBook.hubs}
+              interactionMode={scheduleView.calendarMode === "edit" ? "edit" : "view"}
+              onInteractionModeChange={(mode) =>
+                patchScheduleView((current) => setCalendarMode(current, mode))
+              }
+              onTravelHubsChange={(book) => {
+                setTravelHubsBook(book);
+                saveTravelHubs(book);
+              }}
               onOpen={(personId) => openPersonRotation(personId, asOf)}
               onOpenDay={(personId, iso) => openPersonRotation(personId, iso)}
-              onPrev={() => setMonthCursor((current) => shiftMonth(current, -1))}
-              onNext={() => setMonthCursor((current) => shiftMonth(current, 1))}
-              onThisMonth={() => setMonthCursor(`${scheduleYear}-11-01`)}
-              onSetBookWindow={(personId, recipe) => patchOps(personId, recipe)}
-              onAddRotation={(personId, input) =>
-                patchRoster((current) => addNextRotation(current, personId, input))
+              onSetBookWindow={(personId, recipe) => patchOps(personId, recipe, { history: true })}
+              onToggleStopover={(personId, iso, hub) => {
+                captureHistory();
+                setStopoverBook((prev) => {
+                  const next = toggleStopover(prev, personId, iso, hub || "YK");
+                  saveStopovers(next);
+                  return next;
+                });
+              }}
+              onPaintStopovers={(personId, dates, hub) => {
+                captureHistory();
+                setStopoverBook((prev) => {
+                  const next = paintStopoverDays(prev, personId, dates, hub || "YK");
+                  saveStopovers(next);
+                  return next;
+                });
+              }}
+              onAddRotation={(personId, input) => {
+                let planId = "";
+                patchRoster((current) => {
+                  const next = addNextRotation(current, personId, input);
+                  const plans = next.rotationPlans?.[personId] ?? [];
+                  planId =
+                    plans.find((plan) => plan.from === input.from && plan.out === input.out)?.id ||
+                    plans[plans.length - 1]?.id ||
+                    "";
+                  return next;
+                }, { history: true });
+                return planId;
+              }}
+              onRemoveRotation={(personId, planId) =>
+                patchRoster((current) => removeRotationPlan(current, personId, planId), { history: true })
+              }
+              onSetRotationNote={(personId, planId, note) =>
+                patchRoster((current) => setRotationPlanNote(current, personId, planId, note), {
+                  history: true,
+                })
               }
               onExtendStay={(personId, stintFrom, newOut) => {
-                // Place end is Out — extending the bar moves Out everywhere.
-                patchRoster((current) => extendStay(current, personId, stintFrom, newOut));
+                // Sheet + app stays: set exclusive OUT (extend or end early).
+                captureHistory();
+                patchRoster((current) => setStayOut(current, personId, stintFrom, newOut));
                 setRotationBook((current) => {
                   const hit = current.rotations.find(
                     (row) => row.personId === personId && row.plannedIn === stintFrom,
@@ -825,12 +942,17 @@ export function CrewBoard({
         {boardView === "settings" ? (
           <CrewSettingsPanel
             sitesBook={sitesBook}
+            travelHubsBook={travelHubsBook}
             rolesBook={rolesBook}
             notify={notify}
             years={scheduleYears}
             onSitesChange={(book) => {
               setSitesBook(book);
               saveSitesBook(book);
+            }}
+            onTravelHubsChange={(book) => {
+              setTravelHubsBook(book);
+              saveTravelHubs(book);
             }}
             onRolesChange={(book) => {
               setRolesBook(book);
@@ -842,7 +964,7 @@ export function CrewBoard({
         ) : null}
 
         {boardView === "employees" ? (
-          <div className="max-h-[min(70vh,40rem)] overflow-y-auto border-t border-border">
+          <div className="overflow-y-auto border-t border-border" style={{ maxHeight: "var(--app-board-max-h)" }}>
             {rows.length === 0 ? (
               <p className="px-4 py-8 text-sm text-muted-foreground">No crew match these filters.</p>
             ) : (
@@ -896,7 +1018,10 @@ export function CrewBoard({
           </div>
         ) : null}
 
-        <div className={cn("min-w-0 max-h-[min(70vh,40rem)] overflow-auto", boardView !== "list" && "hidden")}>
+        <div
+          className={cn("min-w-0 overflow-auto", boardView !== "list" && "hidden")}
+          style={{ maxHeight: "var(--app-board-max-h)" }}
+        >
           <div className="sticky top-0 z-10 grid min-w-[56rem] grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] gap-2 border-b border-border bg-card px-4 py-2 text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
             <span>Crew</span>
             <span>Site</span>
@@ -999,6 +1124,7 @@ export function CrewBoard({
               staffName={staffName}
               year={CREW_SCHEDULE.year}
               flightBook={flightBook}
+              sites={sitesBook.sites}
               onClose={() => setSelectedId(null)}
               onChange={(recipe) => patchOps(selected.person.id, recipe)}
               onSaveFlight={saveFlightBooking}
@@ -1061,6 +1187,7 @@ function PersonProfile({
   staffName,
   year,
   flightBook,
+  sites = DEFAULT_SITES,
   onClose,
   onChange,
   onSaveFlight,
@@ -1071,6 +1198,7 @@ function PersonProfile({
   ops: CrewPersonOps;
   staffName: string;
   year: number;
+  sites?: CrewSite[];
   flightBook: FlightBook;
   onClose: () => void;
   onChange: (recipe: (current: CrewPersonOps) => CrewPersonOps) => void;
@@ -1174,7 +1302,7 @@ function PersonProfile({
       </section>
 
       <CrewNextRotationForm
-        defaultSite={snap.site || snap.person.homeSites[0] || "IQA"}
+        defaultSite={snap.site || sites[0]?.code || "IQA"}
         defaultRole={snap.person.role}
         defaultDays={rotationFor(snap.person)}
         isActive={isActive}

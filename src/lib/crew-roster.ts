@@ -50,6 +50,8 @@ export type RosterRotationPlan = {
   out: string;
   /** Role for this assignment only (can differ from the person's usual roles). */
   role?: string;
+  /** Coordinator cell note (Excel-style), e.g. "Lingering for snow". */
+  note?: string;
 };
 
 /** Standard on-site length (6 weeks). Place/forms stop here unless extending past. */
@@ -212,6 +214,7 @@ export function readRoster(value: unknown): CrewRosterBook {
             out: row.out.slice(0, 10),
           };
           if (typeof row.role === "string" && row.role.trim()) plan.role = row.role.trim();
+          if (typeof row.note === "string" && row.note.trim()) plan.note = row.note.trim();
           return plan;
         })
         .filter((item): item is RosterRotationPlan => Boolean(item));
@@ -439,7 +442,7 @@ export function setEmploymentStatus(
 export function addNextRotation(
   roster: CrewRosterBook,
   personId: string,
-  input: { site: string; from: string; out: string; role?: string },
+  input: { site: string; from: string; out: string; role?: string; note?: string },
 ): CrewRosterBook {
   const site = input.site.trim().toUpperCase();
   const from = input.from.slice(0, 10);
@@ -448,12 +451,14 @@ export function addNextRotation(
   const maxOut = addDaysLocal(from, MAX_ROTATION_DAYS);
   if (out > maxOut) out = maxOut;
   const role = input.role?.trim() || undefined;
+  const note = input.note?.trim() || undefined;
   const plan: RosterRotationPlan = {
     id: `rot-${personId}-${from}-${Date.now()}`,
     site,
     from,
     out,
     role,
+    note,
   };
   const existing = roster.rotationPlans?.[personId] ?? [];
   const withActive = setEmploymentStatus(roster, personId, "active");
@@ -462,6 +467,66 @@ export function addNextRotation(
     rotationPlans: {
       ...(withActive.rotationPlans ?? {}),
       [personId]: [...existing, plan],
+    },
+  };
+}
+
+/** App-added plan covering this calendar day, if any (NAV-07 / NAV-08). */
+export function findRotationPlanAt(
+  roster: CrewRosterBook,
+  personId: string,
+  iso: string,
+): RosterRotationPlan | null {
+  const day = iso.slice(0, 10);
+  const plans = roster.rotationPlans?.[personId] ?? [];
+  return plans.find((plan) => plan.from <= day && day < plan.out) ?? null;
+}
+
+/** Find a plan by id. */
+export function findRotationPlanById(
+  roster: CrewRosterBook,
+  personId: string,
+  planId: string,
+): RosterRotationPlan | null {
+  return (roster.rotationPlans?.[personId] ?? []).find((plan) => plan.id === planId) ?? null;
+}
+
+/** Remove an app-painted placement (NAV-07). Sheet-imported stints have no plan id. */
+export function removeRotationPlan(
+  roster: CrewRosterBook,
+  personId: string,
+  planId: string,
+): CrewRosterBook {
+  const existing = roster.rotationPlans?.[personId] ?? [];
+  if (!existing.some((plan) => plan.id === planId)) return roster;
+  const nextPlans = existing.filter((plan) => plan.id !== planId);
+  const rotationPlans = { ...(roster.rotationPlans ?? {}) };
+  if (nextPlans.length) rotationPlans[personId] = nextPlans;
+  else delete rotationPlans[personId];
+  return { ...roster, rotationPlans };
+}
+
+/** Set or clear the coordinator note on a placement (NAV-08). */
+export function setRotationPlanNote(
+  roster: CrewRosterBook,
+  personId: string,
+  planId: string,
+  note: string,
+): CrewRosterBook {
+  const existing = roster.rotationPlans?.[personId] ?? [];
+  const index = existing.findIndex((plan) => plan.id === planId);
+  if (index < 0) return roster;
+  const trimmed = note.trim();
+  const current = existing[index]!;
+  const nextNote = trimmed || undefined;
+  if ((current.note || undefined) === nextNote) return roster;
+  const nextPlans = [...existing];
+  nextPlans[index] = { ...current, note: nextNote };
+  return {
+    ...roster,
+    rotationPlans: {
+      ...(roster.rotationPlans ?? {}),
+      [personId]: nextPlans,
     },
   };
 }
@@ -516,9 +581,53 @@ function applyStintOutOverrides<T extends { from: string; out: string | null }>(
   return stints.map((stint) => {
     const override = overrides[stintOverrideKey(personId, stint.from)];
     if (!override) return stint;
-    if (stint.out && override <= stint.out) return stint;
+    // Override always wins so extracted sheet stays can be shortened as well as extended.
+    if (override <= stint.from) return stint;
     return { ...stint, out: override };
   });
+}
+
+/**
+ * Set exclusive OUT for a stay (app plan or sheet stint).
+ * Use to extend or end early — keeps extracted Excel data editable.
+ */
+export function setStayOut(
+  roster: CrewRosterBook,
+  personId: string,
+  stintFrom: string,
+  newOut: string,
+): CrewRosterBook {
+  const from = stintFrom.slice(0, 10);
+  const out = newOut.slice(0, 10);
+  if (!from || !out || out <= from) return roster;
+  const maxOut = addDaysLocal(from, MAX_ROTATION_DAYS);
+  const cappedOut = out > maxOut ? maxOut : out;
+
+  const plans = roster.rotationPlans?.[personId] ?? [];
+  const index = plans.findIndex((plan) => plan.from === from);
+  if (index >= 0) {
+    const current = plans[index]!;
+    if (current.out === cappedOut) return roster;
+    const nextPlans = [...plans];
+    nextPlans[index] = { ...current, out: cappedOut };
+    return {
+      ...roster,
+      rotationPlans: {
+        ...(roster.rotationPlans ?? {}),
+        [personId]: nextPlans,
+      },
+    };
+  }
+
+  const key = stintOverrideKey(personId, from);
+  if (roster.stintOutOverrides?.[key] === cappedOut) return roster;
+  return {
+    ...roster,
+    stintOutOverrides: {
+      ...(roster.stintOutOverrides ?? {}),
+      [key]: cappedOut,
+    },
+  };
 }
 
 function addDaysLocal(iso: string, days: number) {
@@ -532,17 +641,20 @@ function addDaysLocal(iso: string, days: number) {
 
 function plansAsStints(plans: RosterRotationPlan[] | undefined): StintLike[] {
   if (!plans?.length) return [];
-  return plans.map((plan) => ({
-    site: plan.site,
-    sites: [plan.site],
-    from: plan.from,
-    out: plan.out,
-    arrival: "app",
-    departure: "app",
-    tentative: false,
-    note: plan.role ? `Added in app · ${plan.role}` : "Added in app",
-    role: plan.role,
-  }));
+  return plans.map((plan) => {
+    const meta = plan.role ? `Added in app · ${plan.role}` : "Added in app";
+    return {
+      site: plan.site,
+      sites: [plan.site],
+      from: plan.from,
+      out: plan.out,
+      arrival: "app",
+      departure: "app",
+      tentative: false,
+      note: plan.note ? `${plan.note} · ${meta}` : meta,
+      role: plan.role,
+    };
+  });
 }
 
 /** Combine imported schedule people with manually added employees and project links. */

@@ -1,0 +1,25 @@
+import { addDays } from "@/lib/dates";
+
+/**
+ * NAV-03: return booking window from the clicked stay day through the last
+ * inclusive day of that stay (e.g. 10-day stay, click day 6 → days 6–10 yellow).
+ */
+export function returnWindowFromStayDay(input: {
+  clickIso: string;
+  stayFrom: string;
+  /** Exclusive OUT (first day off site). */
+  stayOutExclusive: string | null;
+  seasonEnd: string;
+}): { from: string; to: string } | null {
+  const click = input.clickIso.slice(0, 10);
+  const from = input.stayFrom.slice(0, 10);
+  if (click < from) return null;
+  if (input.stayOutExclusive && click >= input.stayOutExclusive.slice(0, 10)) return null;
+
+  const lastInclusive = input.stayOutExclusive
+    ? addDays(input.stayOutExclusive.slice(0, 10), -1)
+    : input.seasonEnd;
+  const cappedEnd = lastInclusive > input.seasonEnd ? input.seasonEnd : lastInclusive;
+  if (cappedEnd < click) return { from: click, to: click };
+  return { from: click, to: cappedEnd };
+}

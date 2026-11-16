@@ -2,14 +2,22 @@
 
 const STORAGE_KEY = "tower-arctic-crew-schedule-view-v1";
 
+export type CalendarInteractionMode = "view" | "edit";
+
 export type CrewScheduleViewPrefs = {
   version: 1;
   /** Person ids hidden from Month and Year calendars. */
   hiddenPersonIds: string[];
+  /**
+   * Month calendar interaction.
+   * view = scroll / tap to open only (no drag-place — avoids phone wobble).
+   * edit = paint / extend / return-window gestures.
+   */
+  calendarMode?: CalendarInteractionMode;
 };
 
 export function emptyScheduleViewPrefs(): CrewScheduleViewPrefs {
-  return { version: 1, hiddenPersonIds: [] };
+  return { version: 1, hiddenPersonIds: [], calendarMode: "view" };
 }
 
 function readPrefs(raw: unknown): CrewScheduleViewPrefs {
@@ -18,7 +26,17 @@ function readPrefs(raw: unknown): CrewScheduleViewPrefs {
   const ids = Array.isArray(data.hiddenPersonIds)
     ? data.hiddenPersonIds.filter((id): id is string => typeof id === "string" && id.length > 0)
     : [];
-  return { version: 1, hiddenPersonIds: [...new Set(ids)] };
+  const calendarMode: CalendarInteractionMode =
+    data.calendarMode === "edit" || data.calendarMode === "view" ? data.calendarMode : "view";
+  return { version: 1, hiddenPersonIds: [...new Set(ids)], calendarMode };
+}
+
+export function setCalendarMode(
+  prefs: CrewScheduleViewPrefs,
+  calendarMode: CalendarInteractionMode,
+): CrewScheduleViewPrefs {
+  if (prefs.calendarMode === calendarMode) return prefs;
+  return { ...prefs, calendarMode };
 }
 
 export function loadScheduleViewPrefs(): CrewScheduleViewPrefs {

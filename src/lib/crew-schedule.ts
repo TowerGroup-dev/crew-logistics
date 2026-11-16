@@ -11,11 +11,22 @@ const NON_SITE_MARKS = new Set([
   "YEG",
   "YF",
   "YK",
+  "YZF",
   "YFB",
   "YYZ",
   "YOW",
   "YYC",
   "YUL",
+  "YVR",
+  "CAM",
+  "YCO",
+  "YIO",
+  "YXP",
+  "YHZ",
+  "YYT",
+  "YDF",
+  "YRT",
+  "YMQ",
   "OFF",
   "HOME",
   "TRAVEL",
@@ -24,9 +35,11 @@ const NON_SITE_MARKS = new Set([
 
 function worksiteFromMarkLocal(mark: string | null | undefined): string | null {
   if (!mark) return null;
-  for (const part of mark.split(/[/|,]/)) {
+  if (/^via\s+/i.test(mark.trim())) return null;
+  for (const part of mark.split(/[/|,→>\-]+/)) {
     const code = part.trim().toUpperCase();
-    if (code.length >= 2 && !NON_SITE_MARKS.has(code)) return code;
+    if (!code || code.startsWith("VIA ") || NON_SITE_MARKS.has(code)) continue;
+    if (code.length >= 2) return code;
   }
   return null;
 }
@@ -105,12 +118,56 @@ export type CrewPerson = {
   warnings?: string[];
   /** Extra sheet row ids folded into this person (multi-role merge). */
   aliases?: string[];
+  /** Hire type override (Local / Subcontractor). When omitted, inferred from name. */
+  category?: CrewCategory;
 };
 
 export function roleLabel(person: Pick<CrewPerson, "role" | "roles">) {
   const roles = person.roles?.length ? person.roles : [person.role];
   return roles.join(" / ");
 }
+
+/**
+ * Hire type on the Month Type column.
+ * Regular = Tower crew · Local = local hires · Subcontractor = Gemtec etc.
+ */
+export type CrewCategory = "Regular" | "Local" | "Subcontractor";
+
+/** Explicit local hires (name match, case-insensitive). */
+const LOCAL_CREW_NAMES = new Set([
+  "shakira",
+  "sam m",
+  "sam manniapik",
+]);
+
+export function crewCategoryFor(
+  person: Pick<CrewPerson, "name"> & { category?: CrewCategory | null },
+): CrewCategory {
+  if (person.category === "Regular" || person.category === "Local" || person.category === "Subcontractor") {
+    return person.category;
+  }
+  // Subcontractor firm rows (Gemtec, …).
+  if (/\bgemtec\b/i.test(person.name)) return "Subcontractor";
+  const key = person.name.trim().toLowerCase();
+  if (LOCAL_CREW_NAMES.has(key)) return "Local";
+  // Nickname / short form: "Sam M" already covered; also "Sam" alone when it's Manniapik in data.
+  if (key === "sam" || (/^sam\b/.test(key) && /manniapik/.test(key))) return "Local";
+  return "Regular";
+}
+
+/** Compact Type column label (full name stays in the tooltip). */
+export function crewCategoryLabel(category: CrewCategory) {
+  switch (category) {
+    case "Local":
+      return "Local";
+    case "Subcontractor":
+      return "Sub";
+    default:
+      return "Regular";
+  }
+}
+
+export const CREW_CATEGORY_ORDER: CrewCategory[] = ["Regular", "Local", "Subcontractor"];
 
 function roleRank(value: string) {
   const index = (CREW_ROLE_ORDER as readonly string[]).indexOf(value);
@@ -162,6 +219,10 @@ export function mergePeopleByName(people: CrewPerson[]): CrewPerson[] {
     const flights = sorted.flatMap((person) => person.flights ?? []);
     const warnings = [...new Set(sorted.flatMap((person) => person.warnings ?? []))];
     const aliases = sorted.slice(1).map((person) => person.id);
+    const category =
+      sorted.find((person) => person.category === "Subcontractor")?.category ||
+      sorted.find((person) => person.category === "Local")?.category ||
+      sorted.find((person) => person.category)?.category;
 
     const latestIn = sorted
       .map((person) => person.inDate)
@@ -188,6 +249,7 @@ export function mergePeopleByName(people: CrewPerson[]): CrewPerson[] {
       flights: flights.length ? flights : undefined,
       warnings: warnings.length ? warnings : undefined,
       aliases: aliases.length ? aliases : undefined,
+      category,
       active: sorted.some((person) => person.active !== false),
       agreementSigned: sorted.some((person) => person.agreementSigned),
     };
@@ -303,6 +365,24 @@ export const CREW_ROLE_ORDER = [
   "Mechanic",
 ] as const;
 
+/** Excel-style section titles above each trade group on the calendar. */
+export function roleSectionTitle(role: string) {
+  switch (normalizeRole(role)) {
+    case "Manager":
+      return "Managers";
+    case "Surveyor":
+      return "Surveyors";
+    case "Operator/Truck Driver":
+      return "Operators / Truck Drivers";
+    case "Labourer":
+      return "Labourers";
+    case "Mechanic":
+      return "Mechanics";
+    default:
+      return role;
+  }
+}
+
 export const CREW_SCHEDULE: CrewScheduleData = {
   year: CREW_SCHEDULE_DATA.year,
   source: CREW_SCHEDULE_DATA.source,
@@ -373,6 +453,11 @@ export const CREW_SCHEDULE: CrewScheduleData = {
           flights: "flights" in person ? person.flights.map((flight) => ({ ...flight })) : undefined,
           agreementSigned: "agreementSigned" in person ? Boolean(person.agreementSigned) : undefined,
           warnings: "warnings" in person ? [...person.warnings] : undefined,
+          category: (() => {
+            if (!("category" in person) || typeof person.category !== "string") return undefined;
+            const value = person.category as CrewCategory;
+            return value === "Local" || value === "Subcontractor" || value === "Regular" ? value : undefined;
+          })(),
         };
       }),
   ),
@@ -680,7 +765,18 @@ function dutyFromMark(mark: string | null, hasUpcoming: boolean): CrewDutyStatus
   if (!mark) return hasUpcoming ? "upcoming" : "unassigned";
   if (isOffRotation(mark)) return hasUpcoming ? "upcoming" : "off_rotation";
   const key = mark.toLowerCase();
-  if (key.includes("transfer") || key === "in" || key.includes("yf") || key.includes("yeg") || key.includes("yk")) {
+  if (
+    key.includes("transfer") ||
+    key.startsWith("via ") ||
+    key === "in" ||
+    key.includes("yf") ||
+    key.includes("yeg") ||
+    key.includes("yk") ||
+    key.includes("yow") ||
+    key.includes("yyz") ||
+    key.includes("→") ||
+    key.includes("->")
+  ) {
     return "in_transit";
   }
   return "on_site";
@@ -690,7 +786,16 @@ function dutyFromMark(mark: string | null, hasUpcoming: boolean): CrewDutyStatus
 function primarySite(mark: string | null) {
   if (!mark || isOffRotation(mark)) return null;
   const key = mark.toLowerCase();
-  if (key.includes("transfer") || key === "in" || key.includes("yf") || key.includes("yeg") || key.includes("yk")) {
+  if (
+    key.includes("transfer") ||
+    key.startsWith("via ") ||
+    key === "in" ||
+    key.includes("yf") ||
+    key.includes("yeg") ||
+    key.includes("yk") ||
+    key.includes("→") ||
+    key.includes("->")
+  ) {
     return null;
   }
   return mark.split(" / ")[0]?.trim() || mark;
@@ -858,7 +963,7 @@ export function dutyLabel(duty: CrewDutyStatus) {
     case "off_rotation":
       return "Off rotation";
     case "in_transit":
-      return "In transit";
+      return "On site";
     case "upcoming":
       return "Upcoming";
     case "unassigned":

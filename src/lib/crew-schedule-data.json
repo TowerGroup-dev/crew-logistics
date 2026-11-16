@@ -7,9 +7,6 @@
     "POND": "Pond Inlet",
     "ALRT": "Alert",
     "KUG": "Kugluktuk",
-    "YK": "Yellowknife",
-    "YEG": "Edmonton",
-    "YF": "Airport / transfer",
     "Out": "Off rotation",
     "In": "Arriving",
     "Transfer": "In transit"
@@ -93,7 +90,7 @@
     },
     {
       "id": "javi-labourers",
-      "name": "Javi",
+      "name": "Javier Humberto Castano Bedoya",
       "role": "Labourer",
       "homeSites": [
         "ALRT",
@@ -131,7 +128,7 @@
     },
     {
       "id": "jf-labourers",
-      "name": "JF",
+      "name": "Jean Francois Marsolais",
       "role": "Labourer",
       "homeSites": [
         "IQA"
@@ -172,7 +169,7 @@
     },
     {
       "id": "louis-labourers",
-      "name": "Louis",
+      "name": "Louis Coloumbe",
       "role": "Labourer",
       "homeSites": [
         "IQA"
@@ -544,7 +541,7 @@
     },
     {
       "id": "shannon-mechanics",
-      "name": "Shannon",
+      "name": "Shannon King",
       "role": "Mechanic",
       "homeSites": [
         "IQA"
@@ -710,7 +707,7 @@
     },
     {
       "id": "kirk-operators-truck-drivers",
-      "name": "Kirk",
+      "name": "Clifford Kirk Anstey",
       "role": "Operator/Truck Driver",
       "homeSites": [
         "KUG",
@@ -760,7 +757,7 @@
     },
     {
       "id": "rob-operators-truck-drivers",
-      "name": "Rob",
+      "name": "Robert French",
       "role": "Operator/Truck Driver",
       "homeSites": [
         "IQA",
@@ -794,7 +791,7 @@
     },
     {
       "id": "sam-m-operators-truck-drivers",
-      "name": "Sam M",
+      "name": "Sam Manniapik",
       "role": "Operator/Truck Driver",
       "homeSites": [
         "KUG",

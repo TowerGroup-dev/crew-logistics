@@ -88,7 +88,7 @@ export function CrewYearTape({
   onOpen: (personId: string) => void;
   /** monthIndex is 1–12. personId set when clicking a crew row month cell. */
   onMonthClick?: (year: number, monthIndex: number, personId?: string) => void;
-  onAddRotation?: (personId: string, input: PlaceRotationInput) => void;
+  onAddRotation?: (personId: string, input: PlaceRotationInput) => string | void;
   onHidePerson?: (personId: string) => void;
   hiddenPeople?: { id: string; name: string }[];
   onShowPerson?: (personId: string) => void;
@@ -164,7 +164,7 @@ export function CrewYearTape({
 
       <div className="overflow-x-auto">
         <div className="min-w-[72rem]">
-          <div className="sticky top-0 z-20 grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)] border-b border-border bg-card shadow-sm">
+          <div className="sticky top-0 z-20 grid grid-cols-[minmax(0,13rem)_minmax(0,1fr)] border-b border-border bg-card shadow-sm">
             <div className="flex items-end overflow-hidden px-3 py-3 pl-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               <span className="truncate">List · {year}</span>
             </div>
@@ -205,7 +205,7 @@ export function CrewYearTape({
                     {group.people.map((person) => {
                       const bars = yearOnSiteBars(person, year);
                       return (
-                        <li key={person.id} className="grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)] hover:bg-muted/40">
+                        <li key={person.id} className="grid grid-cols-[minmax(0,13rem)_minmax(0,1fr)] hover:bg-muted/40">
                           <div className="flex min-w-0 items-center gap-0.5 py-2 pr-1 pl-4">
                             <button
                               type="button"
@@ -283,7 +283,7 @@ export function CrewYearTape({
       {placePrompt && onAddRotation ? (
         <CrewPlaceDialog
           personName={placePrompt.person.name}
-          defaultSite={placePrompt.person.homeSites[0] || siteList[0]?.code || "IQA"}
+          defaultSite={siteList[0]?.code || "IQA"}
           defaultRole={placePrompt.person.role}
           from={placePrompt.from}
           to={placePrompt.to}

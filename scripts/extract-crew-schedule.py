@@ -33,16 +33,24 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "lib" / "crew-schedule-data.ts"
 DEFAULT_XLSM_CANDIDATES = [
+    Path(r"C:\Users\OyeyimikaAdeoye\Downloads\2026_ Crew Schedules (Master) 2(AutoRecovered).xlsx"),
     ROOT / "data" / "2026_ Crew Schedules (Master).xlsm",
     Path(r"C:\Users\OyeyimikaAdeoye\Downloads\2026_ Crew Schedules (Master).xlsm"),
+    Path(r"C:\Users\OyeyimikaAdeoye\Downloads\2026_ Crew Schedules (Master) 2.xlsx"),
 ]
 
 YEAR = 2026
-SCHEDULE_SHEET = "Crew - Schedule - 2026"
+# Preferred sheet titles (first match wins). Layout (name column / first day) is auto-detected.
+SCHEDULE_SHEET_CANDIDATES = (
+    "Crew - Schedule - 2026 (2)",
+    "Crew - Schedule - 2026",
+    "2026_ Crew Schedules (Master) 2",
+)
 STAFF_SHEET = "Required Staff "
 FLIGHTS_SHEET = "Crew - Flights - 2026"
 AGREEMENT_SHEET = "Agreement"
 
+# Defaults for classic layout (overridden by detect_layout).
 NAME_COL = 4  # D
 LOC_COLS = (1, 2)  # A, B
 IN_COL, OUT_COL, DAYS_COL = 5, 6, 7  # E, F, G
@@ -50,6 +58,7 @@ FIRST_DAY_COL = 8  # H
 FIRST_PERSON_ROW, LAST_PERSON_ROW = 3, 52
 PROJECT_HEADER_ROW = 55
 PROJECT_LAST_ROW = 90
+SCHEDULE_SHEET = SCHEDULE_SHEET_CANDIDATES[0]
 
 DEFAULT_ROTATION_DAYS = 42  # sheet: "Rotation set: =6*7"
 MECHANIC_ROTATION_DAYS = 28  # sheet: "Mechanic =7*4"
@@ -77,20 +86,48 @@ SECTIONS = {
 }
 
 SITE_ALIASES = {
-    "IQA": "IQA", "IQ": "IQA", "IQALUIT": "IQA",
-    "POND": "POND", "PND": "POND", "PD": "POND", "PN": "POND",
-    "ALRT": "ALRT", "ALERT": "ALRT",
-    "KUG": "KUG", "KU": "KUG", "KUGLUKTUK": "KUG",
+    "IQA": "IQA",
+    "IQ": "IQA",
+    "IQALUIT": "IQA",
+    "POND": "POND",
+    "PND": "POND",
+    "PD": "POND",
+    "PN": "POND",
+    "ALRT": "ALRT",
+    "ALERT": "ALRT",
+    "KUG": "KUG",
+    "KU": "KUG",
+    "KUGLUKTUK": "KUG",
 }
-TRANSIT_ALIASES = {"YK": "YK", "YZF": "YK", "YEG": "YEG", "YF": "YF"}
+# Camp codes that end a multi-leg trip (IQA → YF → KU).
+CAMP_SITES = {"IQA", "POND", "ALRT", "KUG"}
+TRANSIT_ALIASES = {
+    "YK": "YK",
+    "YZF": "YK",
+    "YXY": "YK",
+    "YF": "YF",  # Yellowknife leg on the sheet
+    "YEG": "YEG",
+    "YOW": "YOW",
+    "YYZ": "YYZ",
+    "YUL": "YUL",
+    "YVR": "YVR",
+    "YYC": "YYC",
+    "YHZ": "YHZ",
+    "CAM": "CAM",
+    "YCO": "YCO",
+    "YFB": "YFB",
+    "YIO": "YIO",
+    "YXP": "YXP",
+    "YYT": "YYT",
+    "YDF": "YDF",
+    "TRANSFER": "Transfer",
+}
+# Worksite legend only — pass-through hubs live in the app travel-hubs list, not here.
 SITE_NAMES = {
     "IQA": "Iqaluit",
     "POND": "Pond Inlet",
     "ALRT": "Alert",
     "KUG": "Kugluktuk",
-    "YK": "Yellowknife",
-    "YEG": "Edmonton",
-    "YF": "Airport / transfer",
     "TBC": "Site to be confirmed",
     "Out": "Off rotation",
     "In": "Arriving",
@@ -112,26 +149,59 @@ FLIGHT_NAMES = {
     "Eric Jacobsen": "ERIC JACOBSEN",
     "Andrew Murphy": "ANDREW MURPHY",
     "Javi": "JAVIER CASTANO",
+    "Javier Humberto Castano Bedoya": "JAVIER CASTANO",
     "JF": "JEAN FRANCOIS MARSOLAIS",
+    "Jean Francois Marsolais": "JEAN FRANCOIS MARSOLAIS",
     "Kirk": "CLIFFORD KIRK ANSTEY",
+    "Clifford Kirk Anstey": "CLIFFORD KIRK ANSTEY",
     "Louis": "LOUIS COLOUMBE",
-    "Natanael Lachance": "NATHANAEL LACHANCE",
+    "Louis Coloumbe": "LOUIS COLOUMBE",
+    "Natanael Lachance": "NATANAEL LACHANCE",
     "Nicholas": "NICHOLAS ARVANIS",
     "Rob": "ROBERT FRENCH",
+    "Robert French": "ROBERT FRENCH",
     "Sam M": "SAM MANNIAPIK",
+    "Sam Manniapik": "SAM MANNIAPIK",
     "Shannon": "SHANNON KING",
+    "Shannon King": "SHANNON KING",
     "Stacey Turner": "STACEY TURNER",
     "Stephen Turner": "STEPHEN TURNER",
     "Trevor Anstey": "TREVOR ANSTEY",
 }
 
+# Sheet nicknames -> full display name on the schedule (only where a full name is known).
+DISPLAY_NAMES = {
+    "Kirk": "Clifford Kirk Anstey",
+    "Sam M": "Sam Manniapik",
+    "Rob": "Robert French",
+    "Louis": "Louis Coloumbe",
+    "JF": "Jean Francois Marsolais",
+    "Javi": "Javier Humberto Castano Bedoya",
+    "Shannon": "Shannon King",
+}
+
 # Short names used in the side table / Agreement sheet -> schedule name.
 NICKNAMES = {
-    "bernie": "Bernie", "javi": "Javi", "bryan": "Bryan Hay", "bryan hay": "Bryan Hay",
-    "nick": "Nicholas", "nicholas": "Nicholas", "kevin": "Kevin Barrieau", "dean": "Dean Melvin",
-    "dean melvin": "Dean Melvin", "dean melvin - house": "Dean Melvin", "kirk": "Kirk", "rob": "Rob",
-    "louis": "Louis", "jf": "JF", "sam": "Sam M", "shannon": "Shannon", "maegan": "Maegan Ellison",
-    "william": "William Matthews", "brad": "Brad Rubia", "mike": "Mike Reid",
+    "bernie": "Bernie",
+    "javi": "Javier Humberto Castano Bedoya",
+    "bryan": "Bryan Hay",
+    "bryan hay": "Bryan Hay",
+    "nick": "Nicholas",
+    "nicholas": "Nicholas",
+    "kevin": "Kevin Barrieau",
+    "dean": "Dean Melvin",
+    "dean melvin": "Dean Melvin",
+    "dean melvin - house": "Dean Melvin",
+    "kirk": "Clifford Kirk Anstey",
+    "rob": "Robert French",
+    "louis": "Louis Coloumbe",
+    "jf": "Jean Francois Marsolais",
+    "sam": "Sam Manniapik",
+    "shannon": "Shannon King",
+    "maegan": "Maegan Ellison",
+    "william": "William Matthews",
+    "brad": "Brad Rubia",
+    "mike": "Mike Reid",
 }
 
 
@@ -152,13 +222,20 @@ def fill_key(cell) -> str | None:
     if not fill or not fill.fill_type:
         return None
     colour = fill.fgColor
-    if colour.type == "rgb":
-        key = colour.rgb
-    elif colour.type == "theme":
-        key = f"t{colour.theme}{'%+.2f' % colour.tint if colour.tint else ''}"
+    try:
+        ctype = colour.type
+    except Exception:
+        return None
+    if ctype == "rgb":
+        key = str(colour.rgb) if colour.rgb is not None else None
+    elif ctype == "theme":
+        tint = colour.tint or 0.0
+        key = f"t{colour.theme}{'%+.2f' % tint if tint else ''}"
     else:
-        key = f"{colour.type}{colour.value}"
-    return None if key in WHITE else key
+        key = f"{ctype}{colour.value}"
+    if not key or key in WHITE or key.startswith("Values must"):
+        return None
+    return key
 
 
 def is_travel_fill(key: str | None) -> bool:
@@ -175,26 +252,65 @@ def normalize_site(raw: object) -> str | None:
     return SITE_ALIASES.get(text) if text else None
 
 
-def parse_mark(raw: object) -> tuple[str, str] | None:
-    """Return (kind, code). kind: site | out | transit | arrive | unknown."""
-    text = clean(raw)
-    if not text:
+def _token_mark(token: str) -> tuple[str, str] | None:
+    upper = token.upper().strip()
+    if not upper:
         return None
-    upper = text.upper()
     if upper == "OUT":
         return ("out", "Out")
     if upper == "IN":
         return ("arrive", "TBC")
+    if upper in SITE_ALIASES:
+        return ("site", SITE_ALIASES[upper])
+    if upper in TRANSIT_ALIASES:
+        return ("transit", TRANSIT_ALIASES[upper])
+    return None
+
+
+def parse_mark(raw: object) -> tuple[str, str] | None:
+    """Return (kind, code). kind: site | out | transit | arrive | unknown.
+
+    Multi-leg cells like ``IQA YF KU`` or ``KU --> PD`` mean a journey: the last camp
+    is the arrival site; earlier tokens are transit hubs (IQA → Yellowknife → Kugluktuk).
+    """
+    text = clean(raw)
+    if not text:
+        return None
+    # Day-count scribbles ("1") are not travel marks.
+    if re.fullmatch(r"\d+", text):
+        return None
+    upper = text.upper()
     if "-->" in upper or "→" in text or "->" in upper:
         dest = re.split(r"-+>|→", upper)[-1].strip()
         site = SITE_ALIASES.get(dest)
         return ("site", site) if site else ("transit", "Transfer")
+
+    parts = [p for p in re.split(r"[\s,/|]+", upper) if p]
+    tokens = [t for t in (_token_mark(p) for p in parts) if t]
+    if len(tokens) >= 2:
+        # One cell with IQA YF KU → store full path; timeline treats last camp as arrival.
+        path = " → ".join(code for _, code in tokens)
+        if any(kind == "site" and code in CAMP_SITES for kind, code in tokens):
+            return ("site", path)
+        return ("transit", path)
+
     compact = upper.replace(" ", "")
-    if compact in SITE_ALIASES:
-        return ("site", SITE_ALIASES[compact])
-    if compact in TRANSIT_ALIASES:
-        return ("transit", TRANSIT_ALIASES[compact])
+    hit = _token_mark(compact)
+    if hit:
+        return hit
     return ("unknown", text)
+
+
+def mark_site_code(code: str) -> str:
+    """Last camp code from a plain mark or an IQA → YF → KUG path."""
+    parts = [p.strip() for p in code.replace("→", "→").split("→")]
+    parts = [p for p in parts if p]
+    for part in reversed(parts):
+        if part in CAMP_SITES:
+            return part
+        if part in SITE_ALIASES:
+            return SITE_ALIASES[part]
+    return parts[-1] if parts else code
 
 
 def as_date(value: object) -> date | None:
@@ -205,16 +321,69 @@ def as_date(value: object) -> date | None:
     return None
 
 
+def pick_schedule_sheet(wb) -> str:
+    names = list(wb.sheetnames)
+    for wanted in SCHEDULE_SHEET_CANDIDATES:
+        if wanted in names:
+            return wanted
+    for name in names:
+        low = name.lower()
+        if "crew" in low and "schedule" in low and "flight" not in low:
+            return name
+    raise SystemExit(f"No crew schedule sheet found. Sheets: {names}")
+
+
+def detect_layout(ws) -> dict[str, int]:
+    """Auto-detect Employee / In / Out / first day columns from the header rows."""
+    name_col = NAME_COL
+    in_col, out_col, days_col = IN_COL, OUT_COL, DAYS_COL
+    first_day = FIRST_DAY_COL
+    for col in range(1, min(20, (ws.max_column or 20) + 1)):
+        header = clean(ws.cell(2, col).value).lower()
+        if header.startswith("employee") or header == "name":
+            name_col = col
+        elif header.startswith("in"):
+            in_col = col
+        elif header.startswith("out"):
+            out_col = col
+        elif header.startswith("day"):
+            days_col = col
+    # Some workbooks put headers on row 2 and day numbers start after Days.
+    for col in range(1, min(20, (ws.max_column or 20) + 1)):
+        top = clean(ws.cell(1, col).value).lower()
+        if top.startswith("employee"):
+            name_col = col
+    # First day column: first column from ~G onward with a numeric day on row 2.
+    for col in range(5, min(40, (ws.max_column or 40) + 1)):
+        day = ws.cell(2, col).value
+        if isinstance(day, (int, float)) and float(day).is_integer() and 1 <= int(day) <= 31:
+            first_day = col
+            break
+    # Prefer the column that actually holds people names (Managers / Eric …).
+    for col in (name_col, 3, 4, 2):
+        samples = [clean(ws.cell(r, col).value).lower() for r in range(3, 12)]
+        if any(s in SECTIONS or s == "eric jacobsen" or s == "bryan hay" for s in samples):
+            name_col = col
+            break
+    return {
+        "name_col": name_col,
+        "in_col": in_col,
+        "out_col": out_col,
+        "days_col": days_col,
+        "first_day_col": first_day,
+    }
+
+
 # --------------------------------------------------------------------------- calendar
 
 
-def build_calendar(ws) -> tuple[dict[int, date], int]:
+def build_calendar(ws, first_day_col: int) -> tuple[dict[int, date], int]:
     """Column -> date. Columns before the first month header are December of the previous year."""
     dates: dict[int, date] = {}
     month = None
     year = YEAR - 1
-    last_col = FIRST_DAY_COL
-    for col in range(FIRST_DAY_COL, ws.max_column + 1):
+    last_col = first_day_col
+    for col in range(first_day_col, ws.max_column + 1):
         header = re.sub(r"[^a-z]", "", clean(ws.cell(1, col).value).lower())
         if header in MONTH_MAP:
             month = MONTH_MAP[header]
@@ -258,17 +427,47 @@ def classify_days(ws, row: int, cols: list[int], dates: dict[int, date], bridged
             # Copy the previous day's state across a formatting gap.
             days.append({**previous, "date": dates[col], "text": "", "mark": None, "bridged": True})
             continue
+        mark = parse_mark(text) if text else None
         day = {
             "date": dates[col],
             "text": text,
-            "mark": parse_mark(text) if text else None,
-            "travel": bool(text) or is_travel_fill(key),
+            "mark": mark,
+            "travel": bool(mark) or is_travel_fill(key),
             "shaded": key is not None,
             "fill": key,
         }
         days.append(day)
         previous = day
+    refine_travel_runs(days)
     return days
+
+
+def refine_travel_runs(days: list[dict]) -> None:
+    """Consecutive typed travel days like IQA | YF | KU are one journey.
+
+    Only the last camp opens the on-site stint; earlier site codes are transit legs
+    (Iqaluit → Yellowknife → Kugluktuk).
+    """
+    i = 0
+    n = len(days)
+    while i < n:
+        if not days[i]["mark"] or days[i]["mark"][0] not in {"site", "transit", "arrive"}:
+            i += 1
+            continue
+        j = i + 1
+        while j < n and days[j]["mark"] and days[j]["mark"][0] in {"site", "transit", "arrive"}:
+            # Keep the run only while days stay adjacent travel/site marks (no long white gap).
+            if not days[j]["travel"] and not days[j - 1]["travel"]:
+                break
+            j += 1
+        if j - i >= 2:
+            for day in days[i : j - 1]:
+                kind, code = day["mark"]
+                if kind == "site":
+                    # Keep the place code (IQA / KU) but treat as a connecting day.
+                    day["mark"] = ("transit", code)
+                    day["travel"] = True
+        i = j
 
 
 def build_timeline(days: list[dict], home_sites: list[str], warnings: list[str], who: str):
@@ -321,6 +520,13 @@ def build_timeline(days: list[dict], home_sites: list[str], warnings: list[str],
         elif not events or events[-1]["mark"] != mark:
             events.append({"date": day_iso, "mark": mark})
 
+    def transit_mark(code: str) -> str:
+        """Camp codes used as connecting days stay visible but count as in-transit."""
+        base = mark_site_code(code)
+        if base in CAMP_SITES and "→" not in code:
+            return f"via {base}"
+        return code
+
     def pond_hint(current: dict, upto: int) -> None:
         for j in range(current["_last"] + 1, upto):
             if days[j]["fill"] == POND_FILL and not days[j]["mark"]:
@@ -346,7 +552,12 @@ def build_timeline(days: list[dict], home_sites: list[str], warnings: list[str],
                 emit(d_iso, "Out")
                 k += 1
                 continue
-            site = None if kind == "transit" else code
+            if kind == "transit":
+                # Connecting day only (YF / YK / IQA on the way) — wait for the camp arrival.
+                emit(d_iso, transit_mark(code))
+                k += 1
+                continue
+            site = mark_site_code(code) if kind == "site" else None
             tentative = kind == "arrive"
             if tentative:
                 site = "TBC"
@@ -380,10 +591,15 @@ def build_timeline(days: list[dict], home_sites: list[str], warnings: list[str],
             continue  # re-process this mark as a fresh arrival
 
         if kind in ("site", "arrive"):
-            target = code if kind == "site" else stint["site"] or "TBC"
+            target = mark_site_code(code) if kind == "site" else stint["site"] or "TBC"
             if not stint["sites"] or stint["sites"][-1] != target:
                 stint["sites"].append(target)
             stint["site"] = stint["site"] or target
+        elif kind == "transit":
+            emit(d_iso, transit_mark(code))
+            stint["_last"] = i
+            k += 1
+            continue
         emit(d_iso, code if kind != "arrive" else (stint["site"] or "TBC"))
         stint["_last"] = i
         k += 1
@@ -642,22 +858,41 @@ def read_day_notes(path: Path, dates: dict[int, date]) -> list[dict]:
 def extract(path: Path) -> dict:
     import openpyxl
 
+    global SCHEDULE_SHEET
     wb = openpyxl.load_workbook(path, data_only=True)
-    if SCHEDULE_SHEET not in wb.sheetnames:
-        raise SystemExit(f"Missing sheet {SCHEDULE_SHEET!r}. Found: {wb.sheetnames}")
+    SCHEDULE_SHEET = pick_schedule_sheet(wb)
     ws = wb[SCHEDULE_SHEET]
-    dates, last_col = build_calendar(ws)
-    cols = sorted(dates)
+    layout = detect_layout(ws)
+    name_col = layout["name_col"]
+    in_col = layout["in_col"]
+    out_col = layout["out_col"]
+    first_day_col = layout["first_day_col"]
+    print(f"Sheet {SCHEDULE_SHEET!r} layout: name=col{name_col} in=col{in_col} out=col{out_col} daysFrom=col{first_day_col}")
 
-    section_rows = [r for r in range(FIRST_PERSON_ROW, LAST_PERSON_ROW)
-                    if clean(ws.cell(r, NAME_COL).value).lower().rstrip(":") in SECTIONS]
+    dates, last_col = build_calendar(ws, first_day_col)
+    cols = sorted(dates)
+    if not cols:
+        raise SystemExit("No dated columns found — check month/day header rows.")
+
+    last_person = LAST_PERSON_ROW
+    # Walk further if more crew rows exist before the project block.
+    for row in range(FIRST_PERSON_ROW, min(80, ws.max_row or 80) + 1):
+        label = clean(ws.cell(row, name_col).value).lower()
+        if label.startswith("project") or label in {"rotation set: =6*7", "mechanic =7*4"}:
+            last_person = max(LAST_PERSON_ROW, row - 1)
+            break
+        if label:
+            last_person = max(last_person, row)
+
+    section_rows = [r for r in range(FIRST_PERSON_ROW, last_person + 1)
+                    if clean(ws.cell(r, name_col).value).lower().rstrip(":") in SECTIONS]
     bridged = bridge_columns(ws, dates, section_rows)
 
     warnings: list[str] = []
     people = []
     role = "Crew"
-    for row in range(FIRST_PERSON_ROW, LAST_PERSON_ROW + 1):
-        name = clean(ws.cell(row, NAME_COL).value)
+    for row in range(FIRST_PERSON_ROW, last_person + 1):
+        name = clean(ws.cell(row, name_col).value)
         low = name.lower().rstrip(":").strip()
         if not name:
             continue
@@ -665,6 +900,9 @@ def extract(path: Path) -> dict:
             role = SECTIONS[low]
             continue
         if low.startswith("rotation set") or low in {"mechanic", "crew"}:
+            continue
+        # Skip date-only / formula junk accidentally in the name column.
+        if as_date(ws.cell(row, name_col).value):
             continue
         home_sites = []
         for col in LOC_COLS:
@@ -678,8 +916,8 @@ def extract(path: Path) -> dict:
         person_warnings: list[str] = []
         events, stints = build_timeline(days, home_sites, person_warnings, name)
         warnings.extend(person_warnings)
-        in_date = iso(as_date(ws.cell(row, IN_COL).value))
-        out_date = iso(as_date(ws.cell(row, OUT_COL).value))
+        in_date = iso(as_date(ws.cell(row, in_col).value))
+        out_date = iso(as_date(ws.cell(row, out_col).value))
         people.append({
             "id": slug(f"{name}-{role}"),
             "name": name,
@@ -712,15 +950,21 @@ def extract(path: Path) -> dict:
         projects.setdefault(project["id"], project)
 
     # Required Staff sheet is a separate planning list — keep schedule projects only.
+    staffing: list = []
 
     flights = read_flights(wb)
     used_flight_names = set()
     for person in people:
-        full = FLIGHT_NAMES.get(person["name"])
+        sheet_name = person["name"]
+        full = FLIGHT_NAMES.get(sheet_name)
         if full and full in flights:
             person["fullName"] = full.title()
             person["flights"] = flights[full]
             used_flight_names.add(full)
+        if sheet_name in DISPLAY_NAMES:
+            person["name"] = DISPLAY_NAMES[sheet_name]
+            if "fullName" not in person:
+                person["fullName"] = DISPLAY_NAMES[sheet_name]
     agreements = read_agreements(wb)
     for name, signed in agreements.items():
         schedule_name = NICKNAMES.get(name, name)

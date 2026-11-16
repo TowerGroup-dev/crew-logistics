@@ -16,6 +16,7 @@ import {
 } from "@/lib/crew-flights";
 import { formatMedium } from "@/lib/dates";
 import { siteLabel } from "@/lib/crew-schedule";
+import { formatJourneyPath, TRAVEL_HUBS } from "@/lib/crew-travel-hubs";
 import { cn } from "@/lib/cn";
 
 const STATUSES: FlightRecordStatus[] = [
@@ -348,34 +349,61 @@ function FlightConfirmationForm({
       </div>
 
       <div className="mt-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold">Flight segments</p>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">Flight segments</p>
+            <p className="text-xs text-muted-foreground">
+              Excel-simple legs — e.g. YHZ → YOW → YK → IQA
+            </p>
+          </div>
           <button
             type="button"
             onClick={() => setSegments((current) => [...current, emptySegment()])}
-            className="inline-flex h-8 items-center gap-1 rounded-lg border border-input px-2 text-xs font-medium hover:bg-muted"
+            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-input px-2 text-xs font-medium hover:bg-muted"
           >
             <Plus className="size-3.5" /> Segment
           </button>
         </div>
+        {(() => {
+          const airports = segments.flatMap((row) => [row.fromAirport, row.toAirport]).filter(Boolean);
+          const path = formatJourneyPath(airports);
+          return path ? (
+            <p className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-medium text-stone-900">
+              Journey: {path}
+            </p>
+          ) : null;
+        })()}
+        <datalist id="travel-hub-airports">
+          {TRAVEL_HUBS.map((hub) => (
+            <option key={hub.code} value={hub.code}>
+              {hub.name}
+            </option>
+          ))}
+          <option value="IQA">IQA (worksite)</option>
+          <option value="KUG">KUG (worksite)</option>
+          <option value="POND">POND (worksite)</option>
+          <option value="ALRT">ALRT (worksite)</option>
+        </datalist>
         {segments.map((segment, index) => (
           <div key={index} className="grid gap-2 rounded-xl border border-border p-3 sm:grid-cols-3">
             <label className="grid gap-1 text-sm">
               <span className="text-muted-foreground">From</span>
               <input
                 value={segment.fromAirport}
-                onChange={(event) => patchSegment(index, { fromAirport: event.target.value })}
+                onChange={(event) => patchSegment(index, { fromAirport: event.target.value.toUpperCase() })}
                 className="h-9 rounded-lg border border-input px-2"
-                placeholder="YEG"
+                placeholder="YHZ"
+                list="travel-hub-airports"
               />
             </label>
             <label className="grid gap-1 text-sm">
               <span className="text-muted-foreground">To</span>
               <input
                 value={segment.toAirport}
-                onChange={(event) => patchSegment(index, { toAirport: event.target.value })}
+                onChange={(event) => patchSegment(index, { toAirport: event.target.value.toUpperCase() })}
                 className="h-9 rounded-lg border border-input px-2"
-                placeholder="YFB"
+                placeholder="YK"
+                list="travel-hub-airports"
               />
             </label>
             <label className="grid gap-1 text-sm">

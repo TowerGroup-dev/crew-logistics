@@ -18,11 +18,6 @@ function isAvailable(row: CrewSnapshot) {
   );
 }
 
-function siteOverlap(a: string[] | undefined, b: string | null) {
-  if (!b || !a?.length) return false;
-  return a.some((site) => site.toUpperCase() === b.toUpperCase());
-}
-
 export function CrewRotationFill({
   monthStart,
   today,
@@ -64,14 +59,9 @@ export function CrewRotationFill({
           return leaving || (alreadyOut && row.plannedOut >= addDays(monthStart, -14));
         })
         .map((row) => {
-          const sameRole = available.filter(
+          const options = available.filter(
             (opt) => opt.person.id !== row.person.id && opt.person.role === row.person.role,
           );
-          const siteFit = sameRole.filter((opt) => siteOverlap(opt.person.homeSites, row.site));
-          const options = [
-            ...siteFit,
-            ...sameRole.filter((opt) => !siteFit.some((s) => s.person.id === opt.person.id)),
-          ];
           return { row, options };
         })
         .sort(
@@ -129,9 +119,6 @@ export function CrewRotationFill({
                             <span className="block truncate text-sm">{opt.person.name}</span>
                             <span className="block text-[13px] text-muted-foreground">
                               {dutyLabel(opt.duty)}
-                              {opt.person.homeSites?.length
-                                ? ` · ${opt.person.homeSites.join(", ")}`
-                                : ""}
                             </span>
                           </span>
                           <span
@@ -178,10 +165,7 @@ export function CrewRotationFill({
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold">{row.person.name}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {row.person.role}
-                      {row.person.homeSites?.length ? ` · ${row.person.homeSites.join(", ")}` : ""}
-                    </span>
+                    <span className="block text-xs text-muted-foreground">{row.person.role}</span>
                   </span>
                   <span
                     className={cn(

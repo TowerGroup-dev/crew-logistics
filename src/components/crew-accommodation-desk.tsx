@@ -41,7 +41,7 @@ export function CrewAccommodationDesk({
     <div className="space-y-5">
       <div>
         <h2 className="text-lg font-semibold tracking-tight">Accommodation</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Only people on site, in transit, or arriving within 2 weeks.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Only people on site or arriving within 2 weeks.</p>
       </div>
 
       <Queue
