@@ -48,7 +48,7 @@ export function CrewWorkspace() {
   }, [pathname, router]);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-5 overflow-x-hidden">
       <Suspense fallback={null}>
         <CrewNav onOpenReminders={() => setRemindersOpen(true)} reminderCount={reminderCount} />
       </Suspense>

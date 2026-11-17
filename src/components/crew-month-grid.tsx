@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Eye, EyeOff, Pencil, Plus } from "lucide-react";
 import type { CalendarInteractionMode } from "@/lib/crew-schedule-view";
 import {
@@ -27,13 +27,16 @@ import { CrewScheduleHiddenBar } from "@/components/crew-schedule-hidden-bar";
 import { opsFor, type CrewOpsBook, type CrewPersonOps } from "@/lib/crew-ops";
 import {
   MAX_ROTATION_DAYS,
+  MAX_STAY_NOTE_CHARS,
   STANDARD_ROTATION_DAYS,
   findRotationPlanAt,
+  getStayNote,
   type CrewRosterBook,
   type RosterRotationPlan,
 } from "@/lib/crew-roster";
 import {
   DEFAULT_SITES,
+  normalizeCampCode,
   siteColour,
   sortSitesForDisplay,
   worksiteFromMark,
@@ -67,13 +70,14 @@ import { CrewUndoButton } from "@/components/crew-undo-provider";
 
 type StaySelection = {
   personId: string;
+  /** App plan id when the stay was painted in-app; empty for sheet-imported stays. */
   planId: string;
   from: string;
   out: string;
   note: string;
 };
 
-/** Legend paint brush — click a site (or Travel) on top, then drag In→Out on the grid. */
+/** Legend paint brush — click a camp site on top, then drag In→Out on the grid. */
 type PaintBrush =
   | { kind: "site"; code: string }
   | { kind: "travel"; hub: string };
@@ -109,13 +113,31 @@ type RowMenu =
       hiddenPeople: { id: string; name: string }[];
     };
 
+/** Map any sheet/app site mark onto the four camp colours (IQA / POND / ALRT / KUG). */
 function siteTone(site: string, sites: CrewSite[]) {
+  const camp =
+    normalizeCampCode(site) ||
+    worksiteFromMark(site) ||
+    (["IQA", "POND", "ALRT", "KUG"] as const).find(
+      (code) => site.toUpperCase() === code || site.toUpperCase().includes(code),
+    );
+  const code = camp && ["IQA", "POND", "ALRT", "KUG"].includes(camp) ? camp : null;
+  if (code) {
+    const hit = sites.find((row) => row.code === code) || DEFAULT_SITES.find((row) => row.code === code);
+    if (hit) return siteColour(hit).solid;
+  }
   const key = site.toUpperCase();
   const hit = sites.find((row) => key === row.code || key.includes(row.code));
   if (hit) return siteColour(hit).solid;
-  const camp = sites.find((row) => row.camp);
-  if (isCampSite(site) && camp) return siteColour(camp).solid;
+  const fallback = sites.find((row) => row.camp) || DEFAULT_SITES[0];
+  if (fallback && (isCampSite(site) || !hit)) return siteColour(fallback).solid;
   return siteColour(site).solid;
+}
+
+/** Yellow return paint stays until leave tickets are confirmed — then back to site colour. */
+function showReturnWindow(ops: CrewPersonOps, iso: string) {
+  if (ops.returnFlight === "confirmed") return false;
+  return inBookWindow(iso, ops.returnBookFrom, ops.returnBookTo);
 }
 
 function siteOnDay(person: CrewPerson, iso: string) {
@@ -316,6 +338,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onExtendStay,
   onRemoveRotation,
   onSetRotationNote,
+  onSetStayNote,
   onHidePerson,
   hiddenPeople,
   onShowPerson,
@@ -363,8 +386,10 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onExtendStay?: (personId: string, stintFrom: string, newOut: string) => void;
   /** Delete an app-painted placement (NAV-07). */
   onRemoveRotation?: (personId: string, planId: string) => void;
-  /** Update stay note (NAV-08). */
+  /** Update stay note on an app plan (NAV-08). */
   onSetRotationNote?: (personId: string, planId: string, note: string) => void;
+  /** Update stay note on sheet or app stays by date range (NAV-08). */
+  onSetStayNote?: (personId: string, from: string, out: string, note: string) => void;
   /** Hide this person under the given section role (defaults to home role). */
   onHidePerson?: (personId: string, sectionRole?: string) => void;
   hiddenPeople?: { id: string; name: string; role?: string }[];
@@ -381,7 +406,12 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onAddUnderRole?: (sectionRole: string) => void;
 }) {
   const canEdit = interactionMode === "edit";
-  const siteList = sortSitesForDisplay(sites.length ? sites : DEFAULT_SITES);
+  // Legend stays the four camps — sheet off-colours still map onto these.
+  const siteList = sortSitesForDisplay(
+    (sites.length ? sites : DEFAULT_SITES).filter((row) =>
+      DEFAULT_SITES.some((camp) => camp.code === row.code),
+    ),
+  );
   const [tryOpen, setTryOpen] = useState(false);
   const [tryDraft, setTryDraft] = useState({ name: "", role: "Labourer" });
 
@@ -476,6 +506,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   const topScrollRef = useRef<HTMLDivElement>(null);
   const leftScrollRef = useRef<HTMLDivElement>(null);
   const syncingVertical = useRef(false);
+  const syncingHorizontal = useRef(false);
   const menuHubs = useMemo(() => stopoverMenuHubs(travelHubs), [travelHubs]);
 
   function showFlash(message: string) {
@@ -492,7 +523,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const didScrollToToday = useRef(false);
   /** Only mount day cells in the viewport (+ buffer). Full-year DOM was freezing tab switches. */
-  const DAY_WINDOW_BUFFER = 21;
+  const DAY_WINDOW_BUFFER = 42;
   const [dayWindow, setDayWindow] = useState({ start: 0, end: 90 });
   const dayWindowRef = useRef(dayWindow);
   dayWindowRef.current = dayWindow;
@@ -512,7 +543,6 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   const listColRem = typeColRem + nameColRem;
   const dayColRem = 2.85;
   const daysTrackWidth = `${days.length * dayColRem}rem`;
-  const dayColumns = `repeat(${days.length}, ${dayColRem}rem)`;
 
   const dayColPx = useMemo(() => {
     if (typeof window === "undefined") return dayColRem * 16;
@@ -555,52 +585,56 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   }, [dayColRem, dayWindow.end, dayWindow.start, days.length, visibleDayMeta.length]);
 
   const monthBands = useMemo(() => {
-    const bands: { key: string; label: string; count: number }[] = [];
-    for (const iso of days) {
+    const bands: { key: string; label: string; count: number; startIndex: number }[] = [];
+    days.forEach((iso, index) => {
       const key = iso.slice(0, 7);
       const last = bands[bands.length - 1];
       if (last?.key === key) {
         last.count += 1;
-        continue;
+        return;
       }
       const label = new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, 1).toLocaleDateString(
         "en-US",
         { month: "long" },
       );
-      bands.push({ key, label, count: 1 });
-    }
+      bands.push({ key, label, count: 1, startIndex: index });
+    });
     return bands;
   }, [days]);
 
-  const dayWindowRaf = useRef<number | null>(null);
   function refreshDayWindow() {
-    if (dayWindowRaf.current != null) return;
-    dayWindowRaf.current = requestAnimationFrame(() => {
-      dayWindowRaf.current = null;
-      const main = mainScrollRef.current;
-      if (!main || days.length === 0) return;
-      const col = dayColPx || 1;
-      const start = Math.max(0, Math.floor(main.scrollLeft / col) - DAY_WINDOW_BUFFER);
-      const end = Math.min(
-        days.length,
-        Math.ceil((main.scrollLeft + main.clientWidth) / col) + DAY_WINDOW_BUFFER,
-      );
-      const prev = dayWindowRef.current;
-      if (prev.start === start && prev.end === end) return;
-      setDayWindow({ start, end });
-    });
+    const main = mainScrollRef.current;
+    if (!main || days.length === 0) return;
+    const col = dayColPx || 1;
+    const left = main.scrollLeft;
+    const start = Math.max(0, Math.floor(left / col) - DAY_WINDOW_BUFFER);
+    const end = Math.min(
+      days.length,
+      Math.ceil((left + main.clientWidth) / col) + DAY_WINDOW_BUFFER,
+    );
+    const prev = dayWindowRef.current;
+    if (prev.start === start && prev.end === end) return;
+    dayWindowRef.current = { start, end };
+    setDayWindow({ start, end });
   }
 
-  /** Days pane scrolls horizontally from January 1; Type/Name stay outside that scroll. */
+  /** Top scrubber ↔ day boxes — same scrollLeft in the same turn. */
   function syncDaysScroll(from: "top" | "main") {
     const top = topScrollRef.current;
     const main = mainScrollRef.current;
-    if (!top || !main) return;
-    if (from === "main" && top.scrollLeft !== main.scrollLeft) top.scrollLeft = main.scrollLeft;
-    if (from === "top" && main.scrollLeft !== top.scrollLeft) main.scrollLeft = top.scrollLeft;
+    if (!top || !main || syncingHorizontal.current) return;
+    syncingHorizontal.current = true;
+    const left = from === "top" ? top.scrollLeft : main.scrollLeft;
+    if (main.scrollLeft !== left) main.scrollLeft = left;
+    if (top.scrollLeft !== left) top.scrollLeft = left;
     refreshDayWindow();
+    // Keep both panes on the same offset after virtualized rows re-layout.
+    if (main.scrollLeft !== left) main.scrollLeft = left;
+    if (top.scrollLeft !== left) top.scrollLeft = left;
+    syncingHorizontal.current = false;
   }
 
+  /** Names on the left stay locked to the day rows while scrolling vertically. */
   function syncVerticalScroll(from: "left" | "main") {
     const left = leftScrollRef.current;
     const main = mainScrollRef.current;
@@ -612,6 +646,25 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       syncingVertical.current = false;
     });
   }
+
+  function setDaysScrollLeft(left: number) {
+    const main = mainScrollRef.current;
+    const top = topScrollRef.current;
+    const next = Math.max(0, left);
+    if (main) main.scrollLeft = next;
+    if (top) top.scrollLeft = next;
+    refreshDayWindow();
+  }
+
+  // After row virtualization re-layouts, put both panes back on the scrubber offset.
+  useLayoutEffect(() => {
+    const top = topScrollRef.current;
+    const main = mainScrollRef.current;
+    if (!top || !main) return;
+    const left = top.scrollLeft || main.scrollLeft;
+    if (main.scrollLeft !== left) main.scrollLeft = left;
+    if (top.scrollLeft !== left) top.scrollLeft = left;
+  }, [dayWindow.start, dayWindow.end]);
 
   const listHeader = (
     <div
@@ -639,20 +692,27 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     </div>
   );
 
+  // Full-year header (not virtualized) so the top scrubber always has real scroll range.
   const daysHeader = (
     <div className="flex min-w-max flex-col bg-card" style={{ width: daysTrackWidth }}>
-      {/* Same day grid as body rows so the month rule lines up with day 1. */}
+      {/*
+        Month labels are absolutely placed by day index (rem), not CSS grid spans —
+        spanned tracks drift from per-day columns and throw the blue month rule off.
+      */}
       <div
-        className="grid h-8 border-b border-border"
-        style={{ gridTemplateColumns: dayColumns, width: daysTrackWidth, minWidth: daysTrackWidth }}
+        className="relative h-8 border-b border-border bg-muted/40"
+        style={{ width: daysTrackWidth, minWidth: daysTrackWidth }}
       >
         {monthBands.map((band) => (
           <div
             key={band.key}
             title={`${band.label}: 1–${band.count}`}
-            style={{ gridColumn: `span ${band.count}` }}
+            style={{
+              left: `${band.startIndex * dayColRem}rem`,
+              width: `${band.count * dayColRem}rem`,
+            }}
             className={cn(
-              "flex items-center justify-center overflow-hidden border-l-2 border-l-primary bg-muted/40 px-1 text-center text-xs font-semibold tracking-wide text-foreground",
+              "absolute inset-y-0 flex items-center justify-center overflow-hidden border-l-2 border-l-primary px-1 text-center text-xs font-semibold tracking-wide text-foreground",
               Number(band.key.slice(5, 7)) % 2 === 0 && "bg-sky-50/80",
             )}
           >
@@ -662,10 +722,13 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       </div>
       <div
         className="grid min-h-10"
-        style={{ gridTemplateColumns: visibleDayColumns, width: daysTrackWidth, minWidth: daysTrackWidth }}
+        style={{
+          gridTemplateColumns: `repeat(${days.length}, ${dayColRem}rem)`,
+          width: daysTrackWidth,
+          minWidth: daysTrackWidth,
+        }}
       >
-        {dayWindow.start > 0 ? <div aria-hidden /> : null}
-        {visibleDayMeta.map((day) => (
+        {dayMeta.map((day) => (
           <div
             key={day.iso}
             title={formatMedium(day.iso)}
@@ -681,7 +744,6 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             <div className="truncate text-muted-foreground">{day.weekday}</div>
           </div>
         ))}
-        {dayWindow.end < days.length ? <div aria-hidden /> : null}
       </div>
     </div>
   );
@@ -705,8 +767,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       : days[0]!;
     const idx = days.indexOf(preferred);
     if (idx < 0) return;
-    main.scrollLeft = Math.max(0, idx * dayColPx);
-    syncDaysScroll("main");
+    setDaysScrollLeft(Math.max(0, idx * dayColPx));
     didScrollToToday.current = true;
   }, [days, scrollToIso, dayColPx]);
 
@@ -730,12 +791,11 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     const cellRight = cellLeft + dayColPx;
     const viewLeft = main.scrollLeft;
     const viewRight = viewLeft + main.clientWidth;
+    const maxLeft = Math.max(0, days.length * dayColPx - main.clientWidth);
     if (cellRight > viewRight - 48) {
-      main.scrollLeft = Math.min(main.scrollWidth, cellRight - main.clientWidth + 80);
-      syncDaysScroll("main");
+      setDaysScrollLeft(Math.min(maxLeft, cellRight - main.clientWidth + 80));
     } else if (cellLeft < viewLeft + 48) {
-      main.scrollLeft = Math.max(0, cellLeft - 80);
-      syncDaysScroll("main");
+      setDaysScrollLeft(Math.max(0, cellLeft - 80));
     }
   }
 
@@ -774,14 +834,21 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   }
 
   function selectPlan(plan: RosterRotationPlan, personId: string) {
+    const note = getStayNote(roster, personId, plan.from, plan.out) || plan.note || "";
     setStaySelection({
       personId,
       planId: plan.id,
       from: plan.from,
       out: plan.out,
-      note: plan.note || "",
+      note,
     });
-    setNoteDraft(plan.note || "");
+    setNoteDraft(note);
+  }
+
+  function selectStay(personId: string, from: string, out: string, planId = "") {
+    const note = getStayNote(roster, personId, from, out);
+    setStaySelection({ personId, planId, from, out, note });
+    setNoteDraft(note);
   }
 
   function planOnDay(personId: string, iso: string) {
@@ -790,7 +857,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   }
 
   function clearSelectedPlacement() {
-    if (!staySelection || !onRemoveRotation) return;
+    if (!staySelection || !onRemoveRotation || !staySelection.planId) return;
     const ops = opsFor(opsBook, staySelection.personId);
     if (placementHasBookedFlights(ops)) {
       const ok = window.confirm(
@@ -805,11 +872,20 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   }
 
   function saveSelectedNote() {
-    if (!staySelection || !onSetRotationNote) return;
-    onSetRotationNote(staySelection.personId, staySelection.planId, noteDraft);
-    setStaySelection({ ...staySelection, note: noteDraft.trim() });
+    if (!staySelection) return;
+    const next = noteDraft.slice(0, MAX_STAY_NOTE_CHARS);
+    if (onSetStayNote) {
+      onSetStayNote(staySelection.personId, staySelection.from, staySelection.out, next);
+    } else if (staySelection.planId && onSetRotationNote) {
+      onSetRotationNote(staySelection.personId, staySelection.planId, next);
+    } else {
+      return;
+    }
+    const trimmed = next.trim();
+    setStaySelection({ ...staySelection, note: trimmed });
+    setNoteDraft(trimmed);
     setCellMenu((menu) => (menu ? { ...menu, noteOpen: false } : null));
-    showFlash(noteDraft.trim() ? `Note saved · ${noteDraft.trim()}` : "Note cleared");
+    showFlash(trimmed ? `Note saved · ${trimmed}` : "Note cleared");
   }
 
   // Resolve real plan id / note after roster catches up from place or note save.
@@ -984,8 +1060,10 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     if (!person) return;
     const hasSite = Boolean(siteOnDay(person, iso));
     const plan = hasSite ? planOnDay(personId, iso) : null;
+    const stint = hasSite ? stintCovering(person, iso) : null;
     if (plan) selectPlan(plan, personId);
-    setNoteDraft(plan?.note || "");
+    else if (stint) selectStay(personId, stint.from, stint.out || scheduleYearOutExclusive(year));
+    else setNoteDraft("");
     setCellMenu({
       personId,
       iso,
@@ -1107,10 +1185,10 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
 
   const menuOps = cellMenu ? opsFor(opsBook, cellMenu.personId) : null;
   const menuHasReturn =
-    Boolean(cellMenu && menuOps && inBookWindow(cellMenu.iso, menuOps.returnBookFrom, menuOps.returnBookTo));
+    Boolean(cellMenu && menuOps && showReturnWindow(menuOps, cellMenu.iso));
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card">
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
       {hiddenPeople?.length && onShowPerson && onShowAllHidden ? (
         <div className="border-b border-border px-4 py-2">
           <CrewScheduleHiddenBar
@@ -1156,18 +1234,17 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             <button
               type="button"
               disabled={!canEdit}
-              title="Travel / in transit: drag days, then switch hubs for city → city"
+              title="Travel: drag pass-through days (hubs / airports)"
               onClick={() =>
-                setPaintBrush((current) =>
-                  current.kind === "travel"
-                    ? defaultSiteBrush()
-                    : { kind: "travel", hub: menuHubs[0]?.code || "YK" },
-                )
+                setPaintBrush({
+                  kind: "travel",
+                  hub: travelHubs[0]?.code || DEFAULT_TRAVEL_HUBS[0]?.code || "YK",
+                })
               }
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold transition-colors",
                 paintBrush.kind === "travel"
-                  ? "border-transparent bg-stone-100 text-stone-800 ring-2 ring-inset ring-black/10"
+                  ? "border-transparent bg-stone-500 text-white ring-2 ring-inset ring-black/10"
                   : "border-border bg-card text-muted-foreground hover:bg-muted",
               )}
             >
@@ -1199,7 +1276,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               </button>
               <button
                 type="button"
-                title="Drag to place stays, travel, and return windows"
+                title="Drag to place stays and return windows"
                 onClick={() => onInteractionModeChange?.("edit")}
                 className={cn(
                   "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors",
@@ -1275,41 +1352,11 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             </button>
           </div>
         ) : null}
-        {canEdit && paintBrush.kind === "travel" ? (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Via
-            </span>
-            {menuHubs.map((hub) => {
-              const active = paintBrush.hub === hub.code;
-              return (
-                <button
-                  key={hub.code}
-                  type="button"
-                  title={`${hub.name} (${hub.code}) · pass-through`}
-                  onClick={() => setPaintBrush({ kind: "travel", hub: hub.code })}
-                  className={cn(
-                    "rounded-md border px-2 py-1 text-xs font-semibold",
-                    active
-                      ? "border-transparent bg-stone-100 text-stone-800 ring-1 ring-inset ring-black/10"
-                      : "border-border bg-card hover:bg-muted",
-                  )}
-                >
-                  {hub.name}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
         {canEdit && draftDays != null ? (
           <div className="mt-3 max-w-md rounded-xl border border-border bg-muted/40 px-3 py-2.5">
             <div className="flex items-baseline justify-between gap-3">
               <p className="text-sm font-semibold text-foreground">
-                {draft?.mode === "extend"
-                  ? "Extend stay"
-                  : paintBrush.kind === "travel"
-                    ? `Travel · ${travelHubName(paintBrush.hub, travelHubs)}`
-                    : paintBrush.code}
+                {draft?.mode === "extend" ? "Extend stay" : paintBrush.kind === "site" ? paintBrush.code : "Stay"}
               </p>
               <p className="text-sm font-semibold tabular-nums text-muted-foreground">
                 {draft?.mode === "place"
@@ -1332,13 +1379,13 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
         ) : null}
       </div>
 
-      {/* Type/Name fixed left; day columns scroll from January 1. */}
+      {/* Type/Name fixed left; top scrubber + day boxes stay locked together. */}
       <div className="flex flex-col overflow-hidden" style={{ maxHeight: "var(--app-board-max-h)" }}>
         <div className="flex shrink-0 border-b border-border bg-card">
           {listHeader}
           <div
             ref={topScrollRef}
-            className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden"
+            className="crew-days-top-scroll min-w-0 flex-1 overflow-x-scroll overflow-y-hidden"
             onScroll={() => syncDaysScroll("top")}
           >
             {daysHeader}
@@ -1364,13 +1411,13 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                 );
                 return (
                   <div key={`list-${group.role}`}>
-                    <div className="sticky top-0 z-20">
+                    <div className="sticky top-0 z-20 h-10">
                       <CrewRoleHeader
                         role={roleSectionTitle(group.role)}
                         count={visiblePeople.length}
                         spaced={false}
                         className={cn(
-                          "border-y border-slate-300 bg-slate-200 px-3 py-2 shadow-sm",
+                          "h-10 border-y border-slate-300 bg-slate-200 px-3 py-0 shadow-sm",
                           groupIndex > 0 && "border-t-2",
                         )}
                         onContextMenu={
@@ -1630,10 +1677,20 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
 
           <div
             ref={mainScrollRef}
-            className="min-w-0 flex-1 overflow-auto"
+            className="crew-days-h-scroll min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
             onScroll={() => {
-              syncDaysScroll("main");
               syncVerticalScroll("main");
+            }}
+            onWheel={(event) => {
+              // Sideways → top scrubber drives both panes (no bottom bar).
+              if (Math.abs(event.deltaX) <= Math.abs(event.deltaY) && !event.shiftKey) return;
+              event.preventDefault();
+              const top = topScrollRef.current;
+              const main = mainScrollRef.current;
+              if (!top || !main) return;
+              const delta = event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX;
+              const maxLeft = Math.max(0, days.length * dayColPx - top.clientWidth);
+              setDaysScrollLeft(Math.min(maxLeft, Math.max(0, top.scrollLeft + delta)));
             }}
             onPointerUp={commitDrag}
             onPointerCancel={commitDrag}
@@ -1647,10 +1704,10 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               <div key={`days-${group.role}`}>
                 <div
                   className={cn(
-                    "sticky top-0 z-20 border-y border-slate-300 bg-slate-200 py-2",
+                    "sticky top-0 z-20 h-10 border-y border-slate-300 bg-slate-200",
                     groupIndex > 0 && "border-t-2",
                   )}
-                  style={{ width: daysTrackWidth, minWidth: daysTrackWidth, minHeight: "2.5rem" }}
+                  style={{ width: daysTrackWidth, minWidth: daysTrackWidth }}
                   aria-hidden
                 />
                 {visiblePeople.map((person) => {
@@ -1662,7 +1719,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                   return (
                     <div
                       key={`${person.id}::${group.role}`}
-                      className="grid border-b border-border"
+                      className="grid h-11 border-b border-border"
                       style={{
                         gridTemplateColumns: visibleDayColumns,
                         width: daysTrackWidth,
@@ -1702,26 +1759,50 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                         const weekend = day.weekend;
                         const monthIndex = day.monthIndex;
                         const monthStartDay = day.monthStartDay;
-                        const stintStart = Boolean(site && !siteOnDay(person, addDays(iso, -1)));
-                        // Last day of the place = OUT (place end).
-                        const stintEnd = Boolean(site && !siteOnDay(person, addDays(iso, 1)));
+                        const dayPlan = site ? planOnDay(person.id, iso) : null;
+                        const covering = site ? stintCovering(person, iso) : null;
+                        // One IN (first day of stay) and one OUT (last day) — never mid-stay doubles.
+                        const stayLastDay =
+                          covering?.out && covering.out.length >= 10
+                            ? addDays(covering.out, -1)
+                            : null;
+                        const stintStart = Boolean(covering && iso === covering.from);
+                        const stintEnd = Boolean(stayLastDay && iso === stayLastDay);
                         const work = site ? workLabelForAssignment(person, site, iso, iso) : "";
                         const inDraft =
                           Boolean(draftRange && iso >= draftRange.from && iso <= draftRange.to);
-                        const returnWindow = inBookWindow(iso, ops.returnBookFrom, ops.returnBookTo);
+                        const returnWindow = showReturnWindow(ops, iso);
                         const placePreview = inDraft && draftMode === "place";
                         const extendPreview = inDraft && draftMode === "extend";
                         const paintPreview = placePreview || extendPreview;
-                        const dayPlan = site ? planOnDay(person.id, iso) : null;
-                        const staySelected =
-                          Boolean(
-                            staySelection &&
-                              dayPlan &&
-                              staySelection.planId === dayPlan.id &&
-                              staySelection.personId === person.id,
-                          );
-                        const stayNote = dayPlan?.note || "";
-                        const covering = site ? stintCovering(person, iso) : null;
+                        const staySelected = Boolean(
+                          staySelection &&
+                            staySelection.personId === person.id &&
+                            covering &&
+                            staySelection.from === covering.from &&
+                            staySelection.out === (covering.out || staySelection.out),
+                        );
+                        const stayFrom = covering?.from || dayPlan?.from || "";
+                        const stayOut = covering?.out || dayPlan?.out || "";
+                        const stayNote =
+                          (stayFrom && stayOut
+                            ? getStayNote(roster, person.id, stayFrom, stayOut)
+                            : "") ||
+                          dayPlan?.note ||
+                          "";
+                        // Excel-style: paint the note once, centered on the middle visible day of the stay.
+                        const showStayNoteLabel = Boolean(
+                          stayNote &&
+                            stayFrom &&
+                            stayOut &&
+                            (() => {
+                              const visibleStay = visibleDayMeta
+                                .map((d) => d.iso)
+                                .filter((d) => d >= stayFrom && d < stayOut);
+                              if (!visibleStay.length) return false;
+                              return iso === visibleStay[Math.floor(visibleStay.length / 2)];
+                            })(),
+                        );
                         const stayTravel =
                           covering && stopoverBook
                             ? travelPlanForStay(
@@ -1829,29 +1910,37 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                                 !weekend &&
                                 monthIndex % 2 === 1 &&
                                 "bg-sky-50/40",
-                              site && !flight && !returnWindow && !paintPreview && siteTone(site, siteList),
-                              hub &&
+                              // Camp stays always use the legend IQA/POND/ALRT/KUG colours.
+                              site && !returnWindow && !paintPreview && siteTone(site, siteList),
+                              // Travel / hub / flight legs — one grey (not teal/indigo “off” colours).
+                              (hub || flight) &&
                                 !site &&
-                                !flight &&
                                 !returnWindow &&
                                 !paintPreview &&
                                 "bg-stone-500 text-white",
-                              flight === "in" && !returnWindow && !paintPreview && "bg-teal-600 text-white",
-                              flight === "out" && !returnWindow && !paintPreview && "bg-indigo-600 text-white",
                               returnWindow && "bg-[#FFD600] text-stone-900",
-                              placePreview &&
-                                paintBrush.kind === "travel" &&
-                                "bg-stone-500/55 text-white ring-1 ring-inset ring-stone-700/50",
                               placePreview &&
                                 paintBrush.kind === "site" &&
                                 cn(siteTone(paintBrush.code, siteList), "opacity-80 ring-1 ring-inset ring-stone-900/40"),
+                              placePreview &&
+                                paintBrush.kind === "travel" &&
+                                "bg-stone-500/55 text-white ring-1 ring-inset ring-stone-700/50",
                               extendPreview && "bg-emerald-500/40 text-emerald-950 ring-1 ring-inset ring-emerald-600/40",
                               staySelected && "ring-2 ring-inset ring-stone-900/70",
                             )}
                           >
-                            {stayNote ? (
+                            {showStayNoteLabel ? (
                               <span
-                                className="absolute top-0.5 right-0.5 z-[2] size-1.5 rounded-full bg-stone-900"
+                                className="pointer-events-none absolute inset-y-0 left-1/2 z-[3] flex max-w-[min(18rem,70vw)] -translate-x-1/2 items-center justify-center px-1"
+                                title={stayNote}
+                              >
+                                <span className="truncate text-[10px] font-semibold leading-tight text-stone-950 drop-shadow-[0_0_2px_rgba(255,255,255,0.9)]">
+                                  {stayNote}
+                                </span>
+                              </span>
+                            ) : stayNote ? (
+                              <span
+                                className="absolute top-0.5 right-0.5 z-[2] size-1.5 rounded-full bg-stone-900/70"
                                 title={stayNote}
                                 aria-hidden
                               />
@@ -1876,44 +1965,28 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                                 ? (() => {
                                     const dayNum = daysBetween(draftRange!.from, iso) + 1;
                                     const last = iso === draftRange!.to;
-                                    // Never IN/OUT in one cell — start = IN, later end = OUT.
-                                    if (paintBrush.kind === "travel") {
-                                      if (dayNum === 1) return "IN";
-                                      if (last) return "OUT";
-                                      return "→";
-                                    }
                                     if (dayNum === 1) return "IN";
                                     if (last) return "OUT";
                                     return dayNum % 7 === 0 ? String(dayNum) : "";
                                   })()
                                 : stintStart
                                   ? "IN"
-                                  : flight === "out" || stintEnd
-                                  ? "OUT"
-                                  : returnWindow
-                                    ? ""
-                                    : flight === "in"
-                                      ? "IN"
-                                      : hub
-                                        ? hubTransition
-                                          ? `→${travelHubName(hub, travelHubs)}→`
-                                          : !prevHub && (nextHub || nextSite)
-                                            ? `IN`
-                                            : !prevHub && !nextHub && !nextSite
-                                              ? `IN`
-                                              : prevHub && !nextHub && !nextSite
-                                                ? `OUT`
-                                                : prevHub && nextSite
-                                                  ? `→${travelHubName(hub, travelHubs)}`
-                                                  : transitCellMark(
-                                                      hub,
-                                                      {
-                                                        fromTravel: prevHub,
-                                                        toTravel: nextHub || nextSite,
-                                                      },
-                                                      travelHubs,
-                                                    )
-                                        : ""}
+                                  : stintEnd
+                                    ? "OUT"
+                                    : hub && !site
+                                      ? hubTransition
+                                        ? `→${travelHubName(hub, travelHubs)}→`
+                                        : prevHub && nextSite
+                                          ? `→${travelHubName(hub, travelHubs)}`
+                                          : transitCellMark(
+                                              hub,
+                                              {
+                                                fromTravel: prevHub,
+                                                toTravel: nextHub || nextSite,
+                                              },
+                                              travelHubs,
+                                            )
+                                      : ""}
                             </span>
                           </div>
                         );
@@ -2122,23 +2195,38 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               </button>
             ) : null}
 
-            {cellMenu.plan && onSetRotationNote ? (
+            {cellMenu.hasSite && (onSetStayNote || onSetRotationNote) ? (
               cellMenu.noteOpen ? (
                 <div className="mt-1 grid gap-2 border-t border-border px-2 pt-2">
-                  <input
-                    value={noteDraft}
-                    onChange={(event) => setNoteDraft(event.target.value)}
-                    placeholder="e.g. Lingering for snow"
-                    className="h-9 rounded-lg border border-input px-2 text-sm"
-                    autoFocus
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        saveSelectedNote();
-                        setCellMenu(null);
+                  <label className="grid gap-1">
+                    <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                      Stay note
+                    </span>
+                    <input
+                      value={noteDraft}
+                      onChange={(event) =>
+                        setNoteDraft(event.target.value.slice(0, MAX_STAY_NOTE_CHARS))
                       }
-                    }}
-                  />
+                      placeholder="e.g. Linger for snow"
+                      maxLength={MAX_STAY_NOTE_CHARS}
+                      spellCheck
+                      autoCorrect="on"
+                      autoCapitalize="sentences"
+                      lang="en"
+                      className="h-9 rounded-lg border border-input px-2 text-sm"
+                      autoFocus
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          saveSelectedNote();
+                          setCellMenu(null);
+                        }
+                      }}
+                    />
+                    <span className="text-right text-[11px] tabular-nums text-muted-foreground">
+                      {noteDraft.length}/{MAX_STAY_NOTE_CHARS}
+                    </span>
+                  </label>
                   <button
                     type="button"
                     className="h-8 rounded-lg bg-stone-900 text-sm font-medium text-white"
@@ -2157,7 +2245,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                   className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-muted"
                   onClick={() => setCellMenu({ ...cellMenu, noteOpen: true })}
                 >
-                  {cellMenu.plan.note ? "Edit note" : "Add note"}
+                  {staySelection?.note || cellMenu.plan?.note ? "Edit note" : "Add note"}
                 </button>
               )
             ) : null}

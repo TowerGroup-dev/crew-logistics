@@ -13,6 +13,7 @@ import {
   CREW_BOOKING_STATUSES,
   bookingLabel,
   clearOpsForPerson,
+  clearReturnWindowIfConfirmed,
   loadCrewOps,
   opsFor,
   saveCrewOps,
@@ -58,6 +59,7 @@ import {
   saveRoster,
   setEmploymentStatus,
   setRotationPlanNote,
+  setStayNote,
   setStayOut,
   slugEmployee,
   upsertEmployeeProfile,
@@ -390,7 +392,7 @@ export function CrewBoard({
     if (options?.history) captureHistory();
     setOpsBook((prev) => {
       const before = opsFor(prev, personId);
-      const after = recipe(before);
+      const after = clearReturnWindowIfConfirmed(recipe(before));
       const next = { ...prev, [personId]: after };
       saveCrewOps(next);
       const delta = describeOpsChange(before, after);
@@ -1002,7 +1004,7 @@ export function CrewBoard({
         {seenViews.month ? (
           <div
             className={cn(
-              "flex flex-col gap-4 border-t border-border p-3 sm:p-4",
+              "flex min-w-0 flex-col gap-4 overflow-x-hidden border-t border-border p-3 sm:p-4",
               boardView !== "month" && "hidden",
             )}
           >
@@ -1070,6 +1072,11 @@ export function CrewBoard({
               }
               onSetRotationNote={(personId, planId, note) =>
                 patchRoster((current) => setRotationPlanNote(current, personId, planId, note), {
+                  history: true,
+                })
+              }
+              onSetStayNote={(personId, from, out, note) =>
+                patchRoster((current) => setStayNote(current, personId, from, out, note), {
                   history: true,
                 })
               }

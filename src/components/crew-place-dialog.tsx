@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MAX_ROTATION_DAYS, STANDARD_ROTATION_DAYS } from "@/lib/crew-roster";
+import { MAX_ROTATION_DAYS, MAX_STAY_NOTE_CHARS, STANDARD_ROTATION_DAYS } from "@/lib/crew-roster";
 import { DEFAULT_SITES, siteColour, type CrewSite } from "@/lib/crew-sites";
 import { addDays, daysBetween, formatMedium } from "@/lib/dates";
 import { cn } from "@/lib/cn";
@@ -118,11 +118,16 @@ export function CrewPlaceDialog({
           </label>
 
           <label className="grid gap-1 text-sm">
-            <span className="text-muted-foreground">Note (optional)</span>
+            <span className="text-muted-foreground">Note (optional · {MAX_STAY_NOTE_CHARS} chars)</span>
             <input
               value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="e.g. Lingering for snow"
+              onChange={(event) => setNote(event.target.value.slice(0, MAX_STAY_NOTE_CHARS))}
+              placeholder="e.g. Linger for snow"
+              maxLength={MAX_STAY_NOTE_CHARS}
+              spellCheck
+              autoCorrect="on"
+              autoCapitalize="sentences"
+              lang="en"
               className="h-9 rounded-lg border border-input px-2"
             />
           </label>

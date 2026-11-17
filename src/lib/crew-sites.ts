@@ -93,6 +93,28 @@ const NOT_WORKSITES = new Set([
   "TRANSIT",
 ]);
 
+/** Sheet aliases → the four camp legend codes (off-colour fills still map here). */
+const CAMP_ALIASES: Record<string, string> = {
+  IQA: "IQA",
+  IQ: "IQA",
+  IQALUIT: "IQA",
+  POND: "POND",
+  PND: "POND",
+  PD: "POND",
+  PN: "POND",
+  ALRT: "ALRT",
+  ALERT: "ALRT",
+  KUG: "KUG",
+  KU: "KUG",
+  KUGLUKTUK: "KUG",
+};
+
+export function normalizeCampCode(code: string | null | undefined): string | null {
+  if (!code) return null;
+  const key = code.trim().toUpperCase();
+  return CAMP_ALIASES[key] || null;
+}
+
 export function isWorksiteCode(code: string) {
   const key = code.trim().toUpperCase();
   if (!key || NOT_WORKSITES.has(key)) return false;
@@ -110,6 +132,8 @@ export function worksiteFromMark(mark: string | null | undefined): string | null
   for (const part of mark.split(/[/|,→>\-]+/)) {
     const code = part.trim().toUpperCase();
     if (code.startsWith("VIA ")) continue;
+    const camp = normalizeCampCode(code);
+    if (camp) return camp;
     if (isWorksiteCode(code)) return code;
   }
   return null;
@@ -167,8 +191,10 @@ export function ensureDefaultSites(book: CrewSitesBook): CrewSitesBook {
   const byCode = new Map(
     book.sites.filter((row) => isWorksiteCode(row.code)).map((row) => [row.code, row]),
   );
+  // Sheet fills vary (light/dark greens, planned blues) — camp codes always use the legend colours.
   for (const site of DEFAULT_SITES) {
-    if (!byCode.has(site.code)) byCode.set(site.code, site);
+    const existing = byCode.get(site.code);
+    byCode.set(site.code, existing ? { ...existing, colourId: site.colourId, camp: site.camp } : site);
   }
   return {
     version: 1,
@@ -203,8 +229,12 @@ export function saveSitesBook(book: CrewSitesBook) {
 export function siteColour(site: CrewSite | string | null | undefined): SiteColour {
   if (!site) return colourOrFallback("stone");
   if (typeof site === "string") {
+    const camp = normalizeCampCode(site) || site.toUpperCase();
     const book = typeof window !== "undefined" ? loadSitesBook() : emptySitesBook();
-    const hit = book.sites.find((row) => row.code === site.toUpperCase() || site.toUpperCase().includes(row.code));
+    const hit =
+      book.sites.find((row) => row.code === camp) ||
+      DEFAULT_SITES.find((row) => row.code === camp) ||
+      book.sites.find((row) => camp.includes(row.code));
     return colourOrFallback(hit?.colourId || "stone");
   }
   return colourOrFallback(site.colourId);

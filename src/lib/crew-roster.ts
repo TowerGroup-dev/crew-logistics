@@ -63,6 +63,8 @@ export const DEFAULT_ROTATION_DAYS = 42;
 export const STANDARD_ROTATION_DAYS = 42;
 /** Absolute ceiling when Katrina extends past 6 weeks. */
 export const MAX_ROTATION_DAYS = 120;
+/** Excel-style stay note on the bar (e.g. "Linger for snow"). */
+export const MAX_STAY_NOTE_CHARS = 80;
 
 export type CrewRosterBook = {
   projects: CrewProject[];
@@ -80,6 +82,11 @@ export type CrewRosterBook = {
    * Key: `${personId}:${stintFrom}` → exclusive out date.
    */
   stintOutOverrides: Record<string, string>;
+  /**
+   * Coordinator notes on any stay (sheet or app), keyed by {@link stayNoteKey}.
+   * App plans also keep a copy on `RosterRotationPlan.note`.
+   */
+  stayNotes: Record<string, string>;
   employees: ManualCrewPerson[];
 };
 
@@ -92,12 +99,37 @@ export function emptyRoster(): CrewRosterBook {
     employmentStatus: {},
     rotationPlans: {},
     stintOutOverrides: {},
+    stayNotes: {},
     employees: [],
   };
 }
 
 export function stintOverrideKey(personId: string, stintFrom: string) {
   return `${personId}:${stintFrom.slice(0, 10)}`;
+}
+
+export function stayNoteKey(personId: string, from: string, out: string) {
+  return `${personId}:${from.slice(0, 10)}:${out.slice(0, 10)}`;
+}
+
+export function clampStayNote(note: string): string {
+  return note.replace(/\s+/g, " ").trim().slice(0, MAX_STAY_NOTE_CHARS);
+}
+
+export function getStayNote(
+  roster: CrewRosterBook | null | undefined,
+  personId: string,
+  from: string,
+  out: string,
+): string {
+  if (!roster) return "";
+  const key = stayNoteKey(personId, from, out);
+  const fromMap = roster.stayNotes?.[key];
+  if (fromMap) return fromMap;
+  const plan = (roster.rotationPlans?.[personId] ?? []).find(
+    (row) => row.from === from.slice(0, 10) && row.out === out.slice(0, 10),
+  );
+  return plan?.note || "";
 }
 
 export function slugProject(name: string) {
@@ -325,6 +357,22 @@ export function readRoster(value: unknown): CrewRosterBook {
       if (typeof out === "string" && out.length >= 10) stintOutOverrides[key] = out.slice(0, 10);
     }
   }
+  const stayNotes: Record<string, string> = {};
+  if (raw.stayNotes && typeof raw.stayNotes === "object") {
+    for (const [key, note] of Object.entries(raw.stayNotes)) {
+      if (typeof note !== "string") continue;
+      const clamped = clampStayNote(note);
+      if (clamped) stayNotes[key] = clamped;
+    }
+  }
+  // Backfill plan notes into the shared map so sheet + app stays share one lookup.
+  for (const [personId, plans] of Object.entries(rotationPlans)) {
+    for (const plan of plans) {
+      if (!plan.note) continue;
+      const key = stayNoteKey(personId, plan.from, plan.out);
+      if (!stayNotes[key]) stayNotes[key] = clampStayNote(plan.note);
+    }
+  }
   return {
     projects: Array.isArray(raw.projects)
       ? raw.projects.map(readProject).filter((item): item is CrewProject => Boolean(item))
@@ -333,6 +381,7 @@ export function readRoster(value: unknown): CrewRosterBook {
     employmentStatus,
     rotationPlans,
     stintOutOverrides,
+    stayNotes,
     employees,
   };
 }
@@ -552,7 +601,7 @@ export function addNextRotation(
   const maxOut = addDaysLocal(from, MAX_ROTATION_DAYS);
   if (out > maxOut) out = maxOut;
   const role = input.role?.trim() || undefined;
-  const note = input.note?.trim() || undefined;
+  const note = clampStayNote(input.note || "") || undefined;
   const plan: RosterRotationPlan = {
     id: `rot-${personId}-${from}-${Date.now()}`,
     site,
@@ -563,8 +612,11 @@ export function addNextRotation(
   };
   const existing = roster.rotationPlans?.[personId] ?? [];
   const withActive = setEmploymentStatus(roster, personId, "active");
+  const stayNotes = { ...(withActive.stayNotes ?? {}) };
+  if (note) stayNotes[stayNoteKey(personId, from, out)] = note;
   return {
     ...withActive,
+    stayNotes,
     rotationPlans: {
       ...(withActive.rotationPlans ?? {}),
       [personId]: [...existing, plan],
@@ -617,19 +669,61 @@ export function setRotationPlanNote(
   const existing = roster.rotationPlans?.[personId] ?? [];
   const index = existing.findIndex((plan) => plan.id === planId);
   if (index < 0) return roster;
-  const trimmed = note.trim();
   const current = existing[index]!;
-  const nextNote = trimmed || undefined;
+  const nextNote = clampStayNote(note) || undefined;
   if ((current.note || undefined) === nextNote) return roster;
   const nextPlans = [...existing];
   nextPlans[index] = { ...current, note: nextNote };
+  const stayNotes = { ...(roster.stayNotes ?? {}) };
+  const key = stayNoteKey(personId, current.from, current.out);
+  if (nextNote) stayNotes[key] = nextNote;
+  else delete stayNotes[key];
   return {
     ...roster,
+    stayNotes,
     rotationPlans: {
       ...(roster.rotationPlans ?? {}),
       [personId]: nextPlans,
     },
   };
+}
+
+/**
+ * Set or clear a stay note for sheet or app stays (NAV-08).
+ * When a matching app plan exists, its `note` is kept in sync.
+ */
+export function setStayNote(
+  roster: CrewRosterBook,
+  personId: string,
+  from: string,
+  out: string,
+  note: string,
+): CrewRosterBook {
+  const fromIso = from.slice(0, 10);
+  const outIso = out.slice(0, 10);
+  const key = stayNoteKey(personId, fromIso, outIso);
+  const nextNote = clampStayNote(note);
+  const stayNotes = { ...(roster.stayNotes ?? {}) };
+  const prev = stayNotes[key] || "";
+  if (prev === nextNote) {
+    // Still sync plan copy if needed.
+  } else if (nextNote) stayNotes[key] = nextNote;
+  else delete stayNotes[key];
+
+  const existing = roster.rotationPlans?.[personId] ?? [];
+  const index = existing.findIndex((plan) => plan.from === fromIso && plan.out === outIso);
+  let rotationPlans = roster.rotationPlans ?? {};
+  if (index >= 0) {
+    const current = existing[index]!;
+    if ((current.note || "") !== nextNote) {
+      const nextPlans = [...existing];
+      nextPlans[index] = { ...current, note: nextNote || undefined };
+      rotationPlans = { ...rotationPlans, [personId]: nextPlans };
+    }
+  }
+
+  if (prev === nextNote && rotationPlans === roster.rotationPlans) return roster;
+  return { ...roster, stayNotes, rotationPlans };
 }
 
 /** Set assignment role on an app-painted placement. */

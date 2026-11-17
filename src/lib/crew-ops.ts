@@ -81,6 +81,18 @@ export function emptyCrewOps(personId: string): CrewPersonOps {
   };
 }
 
+/** After leave tickets are confirmed, drop yellow return paint so the stay colour shows again. */
+export function clearReturnWindowIfConfirmed(ops: CrewPersonOps): CrewPersonOps {
+  if (ops.returnFlight !== "confirmed") return ops;
+  if (!ops.returnBookFrom && !ops.returnBookTo && !ops.returnWindowPainted) return ops;
+  return {
+    ...ops,
+    returnBookFrom: null,
+    returnBookTo: null,
+    returnWindowPainted: false,
+  };
+}
+
 function isStatus(value: unknown): value is CrewBookingStatus {
   return (
     value === "not_started" ||
@@ -106,7 +118,7 @@ export function readCrewOps(value: unknown): CrewOpsBook {
     if (!raw || typeof raw !== "object") continue;
     const row = raw as Partial<CrewPersonOps>;
     const base = emptyCrewOps(personId);
-    book[personId] = {
+    book[personId] = clearReturnWindowIfConfirmed({
       ...base,
       actualIn: typeof row.actualIn === "string" ? row.actualIn.slice(0, 10) : null,
       actualOut: typeof row.actualOut === "string" ? row.actualOut.slice(0, 10) : null,
@@ -130,7 +142,7 @@ export function readCrewOps(value: unknown): CrewOpsBook {
       incomingReplacementId: typeof row.incomingReplacementId === "string" ? row.incomingReplacementId : null,
       handoverFrom: typeof row.handoverFrom === "string" ? row.handoverFrom.slice(0, 10) : null,
       handoverTo: typeof row.handoverTo === "string" ? row.handoverTo.slice(0, 10) : null,
-    };
+    });
   }
   return book;
 }

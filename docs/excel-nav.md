@@ -13,7 +13,7 @@ The Month grid is the Excel sheet. Every common sheet move has a stable ID (`NAV
 | **NAV-05** | Clear return window | Click yellow cells, or right-click → Clear return window | Clears painted return window (not the stay) | Ctrl+Z |
 | **NAV-06** | Stopover | Right-click → pick hub short code (YOW, YYZ, YK, …) | Paints travel stopover on that day | Ctrl+Z |
 | **NAV-07** | Delete placement | Select app stay → Delete / Clear placement | Removes app-added rotation plan; confirm if flights booked/confirmed | Ctrl+Z |
-| **NAV-08** | Stay note | Place dialog note, or right-click → Add/Edit note | Free-text on the plan (e.g. “Lingering for snow”); cell shows a mark | Ctrl+Z |
+| **NAV-08** | Stay note | Right-click stay → Add/Edit note (80 chars, spellcheck) | Free-text on sheet or app stay (e.g. “Linger for snow”); shows on the bar | Ctrl+Z |
 | **NAV-09** | Undo | Ctrl+Z or Undo button | Restores last Month calendar snapshot | — |
 
 ## Right-click menu
@@ -23,7 +23,7 @@ One menu (Excel-like) instead of competing single-purpose right-clicks:
 - **Return window (this day → OUT)** — stay cells only
 - **Clear return window** — when yellow covers the day
 - **Clear placement** — app-painted stays
-- **Add / Edit note** — app-painted stays (not in the page header)
+- **Add / Edit note** — any stay (sheet or app); 80 characters; browser spellcheck (ignore suggestions like Word/Excel)
 - **Stopover boxes** — pass-through hubs only (not IQA/KUG/POND/ALRT worksites): YOW Ottawa, YYZ Toronto, YUL Dorval, YVR Vancouver, YEG Edmonton, CAM Campbell, YK Yellowknife, YXP Pangnirtung, YHZ Halifax, YYT St Johns, YDF Deer Lake, YYC Calgary, YRT Rankin Inlet
 
 ## Selection rules

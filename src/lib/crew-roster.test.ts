@@ -12,6 +12,8 @@ import {
   removeManualEmployee,
   removeRotationPlan,
   setRotationPlanNote,
+  setStayNote,
+  MAX_STAY_NOTE_CHARS,
   setStayOut,
   stintOverrideKey,
 } from "@/lib/crew-roster";
@@ -61,9 +63,21 @@ describe("crew-roster rotation plans", () => {
     const withNote = setRotationPlanNote(placed, "p1", planId, "  Lingering for snow  ");
     expect(withNote.rotationPlans.p1![0]!.note).toBe("Lingering for snow");
     expect(findRotationPlanAt(withNote, "p1", "2026-08-10")?.note).toBe("Lingering for snow");
+    expect(withNote.stayNotes["p1:2026-08-01:2026-09-12"]).toBe("Lingering for snow");
 
     const cleared = setRotationPlanNote(withNote, "p1", planId, "   ");
     expect(cleared.rotationPlans.p1![0]!.note).toBeUndefined();
+    expect(cleared.stayNotes["p1:2026-08-01:2026-09-12"]).toBeUndefined();
+  });
+
+  it("NAV-08 setStayNote works on sheet stays and clamps to 80 chars", () => {
+    const long = `${"x".repeat(90)} linger`;
+    const noted = setStayNote(emptyRoster(), "dean", "2026-08-31", "2026-12-29", `  Linger for snow  ${long}`);
+    expect(noted.stayNotes["dean:2026-08-31:2026-12-29"]!.length).toBe(MAX_STAY_NOTE_CHARS);
+    expect(noted.stayNotes["dean:2026-08-31:2026-12-29"]).toMatch(/^Linger for snow/);
+
+    const cleared = setStayNote(noted, "dean", "2026-08-31", "2026-12-29", "   ");
+    expect(cleared.stayNotes["dean:2026-08-31:2026-12-29"]).toBeUndefined();
   });
 
   it("removeRotationPlan is a no-op for unknown plan ids", () => {

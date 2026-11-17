@@ -33,17 +33,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "lib" / "crew-schedule-data.ts"
 DEFAULT_XLSM_CANDIDATES = [
-    Path(r"C:\Users\OyeyimikaAdeoye\Downloads\2026_ Crew Schedules (Master) 2(AutoRecovered).xlsx"),
+    # Prefer the repo copy — AutoRecovered / "(2)" sheets are often stale snapshots.
     ROOT / "data" / "2026_ Crew Schedules (Master).xlsm",
     Path(r"C:\Users\OyeyimikaAdeoye\Downloads\2026_ Crew Schedules (Master).xlsm"),
     Path(r"C:\Users\OyeyimikaAdeoye\Downloads\2026_ Crew Schedules (Master) 2.xlsx"),
+    Path(r"C:\Users\OyeyimikaAdeoye\Downloads\2026_ Crew Schedules (Master) 2(AutoRecovered).xlsx"),
 ]
 
 YEAR = 2026
-# Preferred sheet titles (first match wins). Layout (name column / first day) is auto-detected.
+# Preferred sheet titles. The plain "Crew - Schedule - 2026" grid is the working copy;
+# "(2)" / renamed copies are often older and miss later typed IN/OUT (Mike Nov, Eric Sep).
 SCHEDULE_SHEET_CANDIDATES = (
-    "Crew - Schedule - 2026 (2)",
     "Crew - Schedule - 2026",
+    "Crew - Schedule - 2026 (2)",
     "2026_ Crew Schedules (Master) 2",
 )
 STAFF_SHEET = "Required Staff "
@@ -64,6 +66,11 @@ DEFAULT_ROTATION_DAYS = 42  # sheet: "Rotation set: =6*7"
 MECHANIC_ROTATION_DAYS = 28  # sheet: "Mechanic =7*4"
 # A presence that ended only because the shading stopped may resume after a short break without a new mark.
 MAX_SHADING_BREAK_DAYS = 21
+# Typed OUT then same-camp return within this many days = short hop home, one continuous stay
+# (Dean Melvin Oct 14 OUT → Oct 29 IQA inside an Aug–Dec IQA block).
+MAX_SOFT_HOME_BREAK_DAYS = 21
+# When a long late-year stay never gets a hard OUT (shading stops at Nov 30), plan through Dec 29.
+SEASON_OUT_ISO = f"{YEAR}-12-29"
 
 MONTH_MAP = {
     "january": 1, "jan": 1, "february": 2, "febraury": 2, "feb": 2, "march": 3, "april": 4,
@@ -138,6 +145,10 @@ SITE_NAMES = {
 TRAVEL_RGB = {"FF92D050", "FF00B050", "FFFFFF00"}
 TRAVEL_THEME = {9}  # accent6 blue, any tint
 POND_FILL = "t4+0.40"  # lavender: only ever used for Pond stints
+# Light theme fill used for late-year / planned on-site blocks (Marjorie Sep–Nov, Mike Nov, …).
+PLANNED_SITE_FILL = "t6+0.60"
+# After planned-fill shading stops with no OUT, absorb this many white days as homeward travel.
+HOMEWARD_WHITE_DAYS = 2
 WHITE = {None, "FFFFFFFF", "00000000", "t0"}
 
 # Schedule nickname -> name used on the flights sheet. Confirmed by matching travel dates.
@@ -321,16 +332,49 @@ def as_date(value: object) -> date | None:
     return None
 
 
+def _sheet_mark_score(ws) -> tuple[int, int]:
+    """(dated_columns, typed_travel_marks) — higher is the livelier schedule copy."""
+    layout = detect_layout(ws)
+    dates, _ = build_calendar(ws, layout["first_day_col"])
+    if not dates:
+        return (0, 0)
+    cols = sorted(dates)
+    # Sample mid-year columns across a few known crew rows for typed marks.
+    sample_cols = cols[len(cols) // 4 : 3 * len(cols) // 4 : 3]
+    marks = 0
+    for row in range(3, min(45, (ws.max_row or 45) + 1)):
+        name = clean(ws.cell(row, layout["name_col"]).value)
+        if not name or name.lower().rstrip(":") in SECTIONS:
+            continue
+        for col in sample_cols:
+            if parse_mark(ws.cell(row, col).value):
+                marks += 1
+    return (len(dates), marks)
+
+
 def pick_schedule_sheet(wb) -> str:
     names = list(wb.sheetnames)
+    candidates: list[str] = []
     for wanted in SCHEDULE_SHEET_CANDIDATES:
         if wanted in names:
-            return wanted
+            candidates.append(wanted)
     for name in names:
         low = name.lower()
+        if name in candidates:
+            continue
         if "crew" in low and "schedule" in low and "flight" not in low:
-            return name
-    raise SystemExit(f"No crew schedule sheet found. Sheets: {names}")
+            candidates.append(name)
+    if not candidates:
+        raise SystemExit(f"No crew schedule sheet found. Sheets: {names}")
+    if len(candidates) == 1:
+        return candidates[0]
+    # When both the working sheet and a "(2)" copy exist, keep the one with more typed marks.
+    scored = [( _sheet_mark_score(wb[name]), -i, name) for i, name in enumerate(candidates)]
+    scored.sort(reverse=True)
+    best_score, _, best = scored[0]
+    detail = ", ".join(f"{name}={score}" for score, _, name in scored)
+    print(f"Picked schedule sheet {best!r} (days/marks: {detail})")
+    return best
 
 
 def detect_layout(ws) -> dict[str, int]:
@@ -377,24 +421,42 @@ def detect_layout(ws) -> dict[str, int]:
 # --------------------------------------------------------------------------- calendar
 
 
+def _day_header_number(value: object, previous_day: int | None) -> int | None:
+    """Row-2 day headers are often literals early in a month, then ``=AF2+1`` formulas."""
+    if isinstance(value, (int, float)) and float(value).is_integer():
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if text.isdigit():
+            return int(text)
+        # Uncached formula chain after a known day — step forward one.
+        if previous_day is not None and text.startswith("=") and re.search(r"\+1\s*$", text):
+            return previous_day + 1
+    return None
+
+
 def build_calendar(ws, first_day_col: int) -> tuple[dict[int, date], int]:
     """Column -> date. Columns before the first month header are December of the previous year."""
     dates: dict[int, date] = {}
     month = None
     year = YEAR - 1
     last_col = first_day_col
-    for col in range(first_day_col, ws.max_column + 1):
+    previous_day: int | None = None
+    for col in range(first_day_col, (ws.max_column or first_day_col) + 1):
         header = re.sub(r"[^a-z]", "", clean(ws.cell(1, col).value).lower())
         if header in MONTH_MAP:
             month = MONTH_MAP[header]
             year = YEAR
-        day = ws.cell(2, col).value
-        if not isinstance(day, (int, float)) or not float(day).is_integer():
+            previous_day = None  # month start should be a literal 1 (or Dec seed)
+        day = _day_header_number(ws.cell(2, col).value, previous_day)
+        if day is None:
             continue
         try:
-            dates[col] = date(year, month or 12, int(day))  # invalid days (April 31) raise and are skipped
+            dates[col] = date(year, month or 12, day)  # invalid days (April 31) raise and are skipped
         except ValueError:
+            previous_day = None
             continue
+        previous_day = day
         last_col = col
     return dates, last_col
 
@@ -470,7 +532,13 @@ def refine_travel_runs(days: list[dict]) -> None:
         i = j
 
 
-def build_timeline(days: list[dict], home_sites: list[str], warnings: list[str], who: str):
+def build_timeline(
+    days: list[dict],
+    home_sites: list[str],
+    warnings: list[str],
+    who: str,
+    planned_block_days: int = DEFAULT_ROTATION_DAYS,
+):
     """Turn one person's day cells into (events, stints).
 
     Typed marks are the backbone: an arrival mark (site / hub / "In") opens a stint while off site,
@@ -495,14 +563,33 @@ def build_timeline(days: list[dict], home_sites: list[str], warnings: list[str],
         return day["shaded"] or bool(day["mark"])
 
     def shading_end(from_index: int) -> tuple[int | None, str]:
-        """First index after from_index where presence stops, tolerating <=2 white days inside shading."""
+        """First index after from_index where presence stops, tolerating <=2 white days inside shading.
+
+        Textless green/blue travel mid-block is Nunavut-internal hopping when more on-site
+        shading follows (William-style PND ↔ travel ↔ PND). Only treat travel as departure
+        when the next stretch is white / off rotation.
+        """
         i = from_index + 1
         while i < n:
             day = days[i]
             if day["mark"]:
                 return i, "next-mark"
             if day["travel"] and day["shaded"]:
-                return i, "travel-cell"
+                j = i + 1
+                while j < n and j - i <= 3:
+                    nxt = days[j]
+                    if nxt["mark"]:
+                        break
+                    if nxt["shaded"] and not nxt["travel"]:
+                        # Internal hop — keep the stint open through the green days.
+                        i = j
+                        break
+                    if not nxt["shaded"]:
+                        return i, "travel-cell"
+                    j += 1
+                else:
+                    return i, "travel-cell"
+                continue
             if not day["shaded"]:
                 j = i
                 while j < n and not days[j]["shaded"] and not days[j]["mark"] and j - i < 3:
@@ -527,13 +614,30 @@ def build_timeline(days: list[dict], home_sites: list[str], warnings: list[str],
             return f"via {base}"
         return code
 
-    def pond_hint(current: dict, upto: int) -> None:
-        for j in range(current["_last"] + 1, upto):
-            if days[j]["fill"] == POND_FILL and not days[j]["mark"]:
-                if not current["sites"] or current["sites"][-1] != "POND":
-                    current["sites"].append("POND")
-                    emit(days[j]["date"].isoformat(), "POND")
-                return
+    def same_camp_return_after(out_index: int, camp: str | None) -> int | None:
+        """Index of the next typed arrival at the same camp within the soft-home window."""
+        if not camp or camp not in CAMP_SITES:
+            return None
+        out_day = days[out_index]["date"]
+        for j in range(out_index + 1, n):
+            mark = days[j]["mark"]
+            if not mark:
+                continue
+            kind, code = mark
+            delta = (days[j]["date"] - out_day).days
+            if delta > MAX_SOFT_HOME_BREAK_DAYS:
+                return None
+            if kind == "out":
+                continue
+            if kind in ("site", "arrive"):
+                target = mark_site_code(code) if kind == "site" else camp
+                if target == camp:
+                    return j
+                return None
+            if kind == "transit":
+                continue
+            return None
+        return None
 
     fallback = home_sites[0] if len(home_sites) == 1 else "TBC"
     stint = None
@@ -560,18 +664,50 @@ def build_timeline(days: list[dict], home_sites: list[str], warnings: list[str],
             site = mark_site_code(code) if kind == "site" else None
             tentative = kind == "arrive"
             if tentative:
-                site = "TBC"
-            stint = {"site": site, "sites": [site] if site else [], "from": d_iso, "out": None,
-                     "arrival": "marked", "departure": None, "tentative": tentative, "_last": i}
-            if tentative:
+                # "In" with no site code — keep last camp when we know it (e.g. Mike Reid Nov).
+                site = last_site or "TBC"
+            stint = {
+                "site": site,
+                "sites": [site] if site else [],
+                "from": d_iso,
+                "out": None,
+                "arrival": "marked",
+                "departure": None,
+                "tentative": tentative,
+                "_last": i,
+                "_soft_home": False,
+            }
+            if tentative and site == "TBC":
                 stint["note"] = "Typed 'In' - site not set yet" + (f" (last stint: {last_site})" if last_site else "")
-            emit(d_iso, code)
+            elif tentative:
+                stint["note"] = f"Typed 'In' - using last site {site}"
+            emit(d_iso, site if tentative else code)
             k += 1
             continue
 
-        # Already on a stint: lavender shading since the last mark means they moved to Pond.
-        pond_hint(stint, i)
+        # Site moves only from typed marks (IQA / PND / KU …). Lavender fill alone is often
+        # day-count formatting on an IQA row — do not flip the stay to Pond from colour.
         if kind == "out":
+            camp = stint["sites"][-1] if stint["sites"] else stint.get("site")
+            ret = same_camp_return_after(i, camp)
+            # Only soft-merge inside a late-season block (e.g. Dean Aug→Dec). A normal
+            # 6-week rotation with ~2 weeks home (Jun OUT → late Jun/Aug return) stays split.
+            from_d = date.fromisoformat(stint["from"])
+            soft_ok = (
+                ret is not None
+                and from_d.month >= 8
+                and days[i]["date"].month >= 10
+            )
+            if soft_ok:
+                warnings.append(
+                    f"{who}: OUT typed on {d_iso} with {camp} return "
+                    f"{days[ret]['date']} — kept as one stay (short home break)"
+                )
+                emit(d_iso, "Out")
+                stint["_last"] = i
+                stint["_soft_home"] = True
+                k += 1
+                continue
             gap = longest_white_gap(days, stint["_last"], i)
             if gap and gap[1] >= 7:
                 warnings.append(f"{who}: {gap[1]} unshaded days ({gap[0]}) inside a stint that only ends with "
@@ -584,11 +720,21 @@ def build_timeline(days: list[dict], home_sites: list[str], warnings: list[str],
 
         gap = longest_white_gap(days, stint["_last"], i)
         if gap and gap[1] >= 7:
-            # Long white gap then a new arrival with no OUT typed: treat the gap start as departure.
-            close(stint, gap[0], "shading-ended", stints, emit)
-            last_site = stint["sites"][-1] if stint["sites"] else last_site
-            stint = None
-            continue  # re-process this mark as a fresh arrival
+            camp = stint["sites"][-1] if stint["sites"] else stint.get("site")
+            target = mark_site_code(code) if kind == "site" else (camp if kind == "arrive" else None)
+            soft_return = (
+                stint.get("_soft_home")
+                and kind in ("site", "arrive")
+                and camp
+                and target == camp
+                and gap[1] <= MAX_SOFT_HOME_BREAK_DAYS
+            )
+            if not soft_return:
+                # Long white gap then a new arrival with no OUT typed: treat the gap start as departure.
+                close(stint, gap[0], "shading-ended", stints, emit)
+                last_site = stint["sites"][-1] if stint["sites"] else last_site
+                stint = None
+                continue  # re-process this mark as a fresh arrival
 
         if kind in ("site", "arrive"):
             target = mark_site_code(code) if kind == "site" else stint["site"] or "TBC"
@@ -605,31 +751,130 @@ def build_timeline(days: list[dict], home_sites: list[str], warnings: list[str],
         k += 1
 
     if stint is not None:
-        # No OUT typed after the last arrival: use the shading.
+        # No hard OUT after the last arrival: use the shading (and season end when needed).
         end_index, how = shading_end(stint["_last"])
-        pond_hint(stint, end_index if end_index is not None else n)
         if end_index is None:
             stint["departure"] = "open"
             stints.append(stint)
         else:
-            close(stint, days[end_index]["date"].isoformat(), how, stints, emit)
+            out_iso = days[end_index]["date"].isoformat()
+            last_fill = None
+            for j in range(end_index - 1, stint["_last"] - 1, -1):
+                if days[j]["shaded"] and not days[j]["travel"]:
+                    last_fill = days[j]["fill"]
+                    break
+            # Planned-fill blocks often stop a couple days before the real homeward OUT
+            # (Marjorie IQA shaded through Nov 30, out Dec 3).
+            if how == "shading-ended" and last_fill == PLANNED_SITE_FILL:
+                j = end_index
+                absorbed = 0
+                while (
+                    j < n
+                    and absorbed < HOMEWARD_WHITE_DAYS
+                    and not days[j]["shaded"]
+                    and not days[j]["mark"]
+                ):
+                    j += 1
+                    absorbed += 1
+                if absorbed:
+                    out_iso = (
+                        days[j]["date"].isoformat()
+                        if j < n
+                        else (days[end_index]["date"] + timedelta(days=absorbed)).isoformat()
+                    )
+                    how = "homeward"
+                    warnings.append(
+                        f"{who}: planned shading ended {days[end_index]['date']} "
+                        f"— counted homeward OUT on {out_iso}"
+                    )
+            # Typed "In" with no OUT is often only partly shaded (Mike Reid Nov→Dec).
+            # Stretch to the standard rotation block when shading stops early.
+            if stint.get("tentative") and planned_block_days > 0:
+                from_d = date.fromisoformat(stint["from"])
+                planned_out = from_d + timedelta(days=planned_block_days)
+                if date.fromisoformat(out_iso) < planned_out:
+                    warnings.append(
+                        f"{who}: typed In on {stint['from']} with shading only to "
+                        f"{(date.fromisoformat(out_iso) - timedelta(days=1)).isoformat()} "
+                        f"— extended to {planned_out.isoformat()} ({planned_block_days}-day block)"
+                    )
+                    out_iso = planned_out.isoformat()
+                    how = "rotation"
+            # Long Aug+ stays that only soft-OUTed mid-way and then shade to Nov often run
+            # through late December on the real board (Dean Melvin → 29 Dec).
+            if (
+                stint.get("_soft_home")
+                and how in {"homeward", "shading-ended", "rotation"}
+                and date.fromisoformat(stint["from"]) <= date(YEAR, 9, 15)
+                and date.fromisoformat(out_iso) < date.fromisoformat(SEASON_OUT_ISO)
+            ):
+                warnings.append(
+                    f"{who}: late-year stay from {stint['from']} had no hard OUT "
+                    f"— extended through {SEASON_OUT_ISO}"
+                )
+                out_iso = SEASON_OUT_ISO
+                how = "season"
+            close(stint, out_iso, how, stints, emit)
 
-    # Shading with no typed marks around it (e.g. a whole block coloured but no IN/OUT): flag recent ones.
+    # Long shaded runs with no typed IN/OUT used to be warnings only — that skipped real stays
+    # (e.g. Mike Reid Nov–Dec, Eric POND early Sep). Promote them to stints when we can infer site.
     covered = set()
     for item in stints:
         for j, day in enumerate(days):
             if item["from"] <= day["date"].isoformat() < (item["out"] or "9999"):
                 covered.add(j)
-    run = []
-    recent = (date.today() - timedelta(days=90)).isoformat()
+    run: list[int] = []
+
+    def site_for_shaded_run(indexes: list[int]) -> str:
+        for j in indexes:
+            if days[j]["fill"] == POND_FILL:
+                return "POND"
+        if last_site:
+            return last_site
+        if len(home_sites) == 1:
+            return home_sites[0]
+        if home_sites:
+            return home_sites[0]
+        return fallback
+
+    def flush_shaded_run(indexes: list[int]) -> None:
+        nonlocal last_site
+        if len(indexes) < 7:
+            return
+        site = site_for_shaded_run(indexes)
+        start = days[indexes[0]]["date"].isoformat()
+        # Exclusive OUT = day after last shaded day (sheet OUT = last day on site).
+        last_idx = indexes[-1]
+        if last_idx + 1 < n:
+            out_iso = days[last_idx + 1]["date"].isoformat()
+        else:
+            out_iso = (days[last_idx]["date"] + timedelta(days=1)).isoformat()
+        stints.append({
+            "site": site,
+            "sites": [site],
+            "from": start,
+            "out": out_iso,
+            "arrival": "shading",
+            "departure": "shading-ended",
+            "tentative": False,
+        })
+        emit(start, site)
+        emit(out_iso, "Out")
+        last_site = site
+        warnings.append(
+            f"{who}: shaded {days[indexes[0]]['date']} to {days[indexes[-1]]['date']} "
+            f"had no typed IN/OUT — counted as on site at {site} from shading"
+        )
+
     for j, day in enumerate(days + [{"shaded": False, "mark": None, "date": None, "travel": False}]):
         if day["shaded"] and not day["travel"] and j not in covered:
             run.append(j)
             continue
-        if len(run) >= 7 and days[run[-1]]["date"].isoformat() >= recent:
-            warnings.append(f"{who}: shaded {days[run[0]]['date']} to {days[run[-1]]['date']} with no IN/OUT typed - "
-                            "not counted as on site until the travel days are typed")
+        flush_shaded_run(run)
         run = []
+
+    # Keep chronological order after inserting shading-only stints.
+    stints.sort(key=lambda item: item["from"])
 
     for item in stints:
         if not item["site"] and item["sites"]:
@@ -638,6 +883,7 @@ def build_timeline(days: list[dict], home_sites: list[str], warnings: list[str],
             item["site"] = fallback
             item["sites"] = [fallback]
         item.pop("_last", None)
+        item.pop("_soft_home", None)
     return events, stints
 
 
@@ -656,6 +902,148 @@ def longest_white_gap(days: list[dict], after: int, before: int):
                 best = (days[run_start]["date"].isoformat(), length)
             run_start = None
     return best
+
+
+def merge_duplicate_people(people: list[dict]) -> list[dict]:
+    """Same person can appear on a hidden Managers row and again under Surveyors (William).
+
+    Keep one record: union home sites / events / stints, prefer a visible row's role, and
+    mark active if any copy is visible.
+    """
+    order: list[str] = []
+    by_key: dict[str, dict] = {}
+    for person in people:
+        key = clean(person["name"]).lower()
+        if key not in by_key:
+            by_key[key] = person
+            order.append(key)
+            continue
+        keep = by_key[key]
+        other = person
+
+        def _row_score(p: dict) -> tuple:
+            marked = sum(
+                1 for s in (p.get("stints") or [])
+                if s.get("arrival") == "marked" or s.get("departure") == "marked"
+            )
+            manager = 1 if p.get("role") == "Manager" else 0
+            visible = 1 if p.get("active") else 0
+            # Prefer typed trips, then Manager section, then visible, then earlier sheet row.
+            return (marked, manager, visible, -p["sheetRow"])
+
+        if _row_score(other) > _row_score(keep):
+            keep, other = other, keep
+            by_key[key] = keep
+        for site in other.get("homeSites") or []:
+            if site not in keep["homeSites"]:
+                keep["homeSites"].append(site)
+        keep["active"] = bool(keep.get("active") or other.get("active"))
+        # Merge timelines by date.
+        events = {(e["date"], e["mark"]): e for e in (keep.get("events") or [])}
+        for e in other.get("events") or []:
+            events[(e["date"], e["mark"])] = e
+        keep["events"] = sorted(events.values(), key=lambda e: e["date"])
+        stints = list(keep.get("stints") or [])
+        seen = {(s["from"], s.get("out"), tuple(s.get("sites") or [])) for s in stints}
+        for s in other.get("stints") or []:
+            sig = (s["from"], s.get("out"), tuple(s.get("sites") or []))
+            if sig not in seen:
+                stints.append(s)
+                seen.add(sig)
+        stints.sort(key=lambda s: s["from"])
+        keep["stints"] = _drop_shaded_overlaps(stints)
+        keep["events"] = _events_for_stints(keep["events"], keep["stints"])
+        warn = list(keep.get("warnings") or [])
+        for w in other.get("warnings") or []:
+            if w not in warn:
+                warn.append(w)
+        # Drop "shaded …" warnings that describe stints we discarded as overlaps.
+        keep["warnings"] = [
+            w for w in warn
+            if not (w.startswith("shaded ") and "counted as on site" in w and _warning_stint_dropped(w, keep["stints"]))
+        ]
+        if not keep.get("inDate"):
+            keep["inDate"] = other.get("inDate")
+        if not keep.get("outDate"):
+            keep["outDate"] = other.get("outDate")
+        # Prefer Manager over a duplicate Surveyors copy when both exist.
+        if keep["role"] != other["role"] and "manager" in {keep["role"].lower(), other["role"].lower()}:
+            keep["role"] = "Manager" if keep["role"] == "Manager" or other["role"] == "Manager" else keep["role"]
+        keep["id"] = slug(f"{keep['name']}-{keep['role']}")
+        keep["note"] = (
+            f"Merged sheet rows {sorted({keep['sheetRow'], other['sheetRow']})}"
+        )
+    return [by_key[k] for k in order]
+
+
+def _stint_overlap(a: dict, b: dict) -> bool:
+    a_end = a.get("out") or "9999"
+    b_end = b.get("out") or "9999"
+    return a["from"] < b_end and b["from"] < a_end
+
+
+def _drop_shaded_overlaps(stints: list[dict]) -> list[dict]:
+    """Prefer typed trips when a shading-only stint overlaps them (duplicate William rows)."""
+    marked = [
+        s for s in stints
+        if s.get("arrival") == "marked" or s.get("departure") == "marked"
+    ]
+    marked_outs = {s.get("out") for s in marked if s.get("out")}
+    kept: list[dict] = []
+    for s in stints:
+        if s.get("arrival") == "shading":
+            if any(_stint_overlap(s, m) for m in marked):
+                continue
+            # Ghost continuation from the other duplicate row starting on the typed OUT day.
+            if s["from"] in marked_outs:
+                continue
+        kept.append(s)
+    return kept
+
+
+def _events_for_stints(events: list[dict], stints: list[dict]) -> list[dict]:
+    """Keep travel events that fall on retained stints (out date is exclusive)."""
+    if not stints:
+        return events
+    out_dates = {s.get("out") for s in stints if s.get("out")}
+    kept: list[dict] = []
+    seen: set[tuple] = set()
+    for e in events:
+        d = e["date"]
+        mark = e.get("mark")
+        key = (d, mark)
+        if key in seen:
+            continue
+        if mark == "Out":
+            if d not in out_dates:
+                continue
+        else:
+            on_stint = any(
+                s["from"] <= d < (s.get("out") or "9999") for s in stints
+            )
+            if not on_stint:
+                continue
+        seen.add(key)
+        kept.append(e)
+    return kept
+
+
+def _warning_stint_dropped(warning: str, stints: list[dict]) -> bool:
+    """True when a shaded-run warning no longer matches any kept stint."""
+    # "shaded 2026-09-21 to 2026-09-27 had no typed IN/OUT — counted as on site at POND …"
+    m = re.search(r"shaded (\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})", warning)
+    if not m:
+        return False
+    start, last = m.group(1), m.group(2)
+    for s in stints:
+        if s.get("arrival") != "shading":
+            continue
+        if s["from"] == start:
+            return False
+        # Exclusive out is day after last shaded day
+        if s.get("out") and s["from"] <= start < s["out"]:
+            return False
+    return True
 
 
 def close(stint: dict, out_iso: str, how: str, stints: list[dict], emit) -> None:
@@ -909,12 +1297,20 @@ def extract(path: Path) -> dict:
             site = normalize_site(ws.cell(row, col).value)
             if site and site not in home_sites:
                 home_sites.append(site)
-        # Hidden rows are finished / off this roster — do not import them.
-        if ws.row_dimensions[row].hidden:
-            continue
+        hidden = bool(ws.row_dimensions[row].hidden)
         days = classify_days(ws, row, cols, dates, bridged)
+        typed_marks = sum(1 for d in days if d["mark"] and d["mark"][0] != "unknown")
+        shaded_days = sum(1 for d in days if d["shaded"] and not d["travel"])
+        # Hidden rows are often "finished" — still import when they have real schedule ink
+        # (William Matthews PND→OUT sits on a hidden Managers row).
+        if hidden and typed_marks == 0 and shaded_days < 7:
+            continue
         person_warnings: list[str] = []
-        events, stints = build_timeline(days, home_sites, person_warnings, name)
+        events, stints = build_timeline(
+            days, home_sites, person_warnings, name, planned_block_days=DEFAULT_ROTATION_DAYS
+        )
+        if hidden and not stints and not events:
+            continue
         warnings.extend(person_warnings)
         in_date = iso(as_date(ws.cell(row, in_col).value))
         out_date = iso(as_date(ws.cell(row, out_col).value))
@@ -923,7 +1319,9 @@ def extract(path: Path) -> dict:
             "name": name,
             "role": role,
             "sheetRow": row,
-            "active": True,
+            # Excel often hides rows that still have future trips — keep them on the board
+            # whenever we extracted stints/events.
+            "active": (not hidden) or bool(stints or events),
             "homeSites": home_sites,
             "projectIds": [],
             "inDate": in_date,
@@ -933,6 +1331,14 @@ def extract(path: Path) -> dict:
             "stints": stints,
             "warnings": [w.split(": ", 1)[1] for w in person_warnings],
         })
+
+    people = merge_duplicate_people(people)
+    # Rebuild top-level warnings from merged people (drops ghost shaded-run notes).
+    warnings = [
+        f"{person['name']}: {w}"
+        for person in people
+        for w in (person.get("warnings") or [])
+    ]
 
     # Housing / critical project crew table.
     housing = read_housing_table(ws, last_col)

@@ -88,6 +88,47 @@
   body {
     @apply bg-background text-foreground font-sans text-sm antialiased;
   }
+  /* Month board: grab-able top scrubber; hide the twin horizontal bar on the day boxes. */
+  .crew-days-top-scroll {
+    scrollbar-gutter: stable;
+    scrollbar-width: auto;
+    scrollbar-color: rgb(0 0 0 / 0.35) rgb(0 0 0 / 0.06);
+  }
+  .crew-days-top-scroll::-webkit-scrollbar {
+    height: 0.75rem;
+  }
+  .crew-days-top-scroll::-webkit-scrollbar-track {
+    background: rgb(0 0 0 / 0.06);
+  }
+  .crew-days-top-scroll::-webkit-scrollbar-thumb {
+    background: rgb(0 0 0 / 0.35);
+    border-radius: 999px;
+  }
+  .crew-days-top-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgb(0 0 0 / 0.5);
+  }
+  /* Day boxes: vertical only — horizontal is owned by the top scrubber. */
+  .crew-days-h-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(0 0 0 / 0.22) transparent;
+    overflow-x: hidden !important;
+  }
+  .crew-days-h-scroll::-webkit-scrollbar {
+    width: 0.5rem;
+    height: 0 !important;
+  }
+  .crew-days-h-scroll::-webkit-scrollbar:horizontal {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  .crew-days-h-scroll::-webkit-scrollbar-thumb {
+    background: rgb(0 0 0 / 0.18);
+    border-radius: 999px;
+  }
+  .crew-days-h-scroll::-webkit-scrollbar-corner {
+    background: transparent;
+  }
   /* Type scale: body = sm, labels = xs, titles = base/semibold, brand uses display. */
   h1,
   h2,
