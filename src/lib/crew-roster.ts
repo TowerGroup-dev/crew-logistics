@@ -42,6 +42,8 @@ export type ManualCrewPerson = {
   employmentStatus?: EmploymentStatus;
   /** What-if hire — place on Calendar, then Save or Discard. */
   provisional?: boolean;
+  /** Hire type overlay (REG / LOC / SUB). */
+  category?: "Regular" | "Local" | "Subcontractor";
 };
 
 /** Next on-site stretch added in the app (painted onto the schedule). */
@@ -173,6 +175,10 @@ function readEmployee(value: unknown): ManualCrewPerson | null {
           ? "active"
           : undefined,
     provisional: row.provisional === true,
+    category:
+      row.category === "Regular" || row.category === "Local" || row.category === "Subcontractor"
+        ? row.category
+        : undefined,
   };
 }
 
@@ -514,6 +520,7 @@ type ImportedPerson = {
   provisional?: boolean;
   active?: boolean;
   aliases?: string[];
+  category?: "Regular" | "Local" | "Subcontractor";
 };
 
 export function employmentStatusFor(roster: CrewRosterBook, personId: string): EmploymentStatus {
@@ -622,6 +629,82 @@ export function setRotationPlanNote(
       ...(roster.rotationPlans ?? {}),
       [personId]: nextPlans,
     },
+  };
+}
+
+/** Set assignment role on an app-painted placement. */
+export function setRotationPlanRole(
+  roster: CrewRosterBook,
+  personId: string,
+  planId: string,
+  role: string,
+): CrewRosterBook {
+  const existing = roster.rotationPlans?.[personId] ?? [];
+  const index = existing.findIndex((plan) => plan.id === planId);
+  if (index < 0) return roster;
+  const nextRole = role.trim() || undefined;
+  const current = existing[index]!;
+  if ((current.role || undefined) === nextRole) return roster;
+  const nextPlans = [...existing];
+  nextPlans[index] = { ...current, role: nextRole };
+  return {
+    ...roster,
+    rotationPlans: {
+      ...(roster.rotationPlans ?? {}),
+      [personId]: nextPlans,
+    },
+  };
+}
+
+/**
+ * Create or update a roster profile overlay (manual hire or imported person edits).
+ * Fixes typos / home role without rewriting the Excel extract.
+ */
+export function upsertEmployeeProfile(
+  roster: CrewRosterBook,
+  personId: string,
+  patch: {
+    name?: string;
+    role?: string;
+    notes?: string;
+    category?: "Regular" | "Local" | "Subcontractor";
+  },
+  seed?: { name: string; role: string },
+): CrewRosterBook {
+  const index = roster.employees.findIndex((row) => row.id === personId);
+  if (index >= 0) {
+    const current = roster.employees[index]!;
+    const next: ManualCrewPerson = {
+      ...current,
+      name: patch.name?.trim() || current.name,
+      role: patch.role?.trim() || current.role,
+      notes: patch.notes !== undefined ? patch.notes : current.notes,
+      category: patch.category ?? current.category,
+    };
+    const employees = [...roster.employees];
+    employees[index] = next;
+    return { ...roster, employees };
+  }
+  const name = (patch.name || seed?.name || "").trim();
+  const role = (patch.role || seed?.role || "Labourer").trim() || "Labourer";
+  if (!name) return roster;
+  const employee: ManualCrewPerson = {
+    id: personId,
+    name,
+    role,
+    homeSites: [],
+    projectIds: [],
+    rotationDays: 42,
+    notes: patch.notes ?? "",
+    createdAt: new Date().toISOString(),
+    employmentStatus: "active",
+    provisional: false,
+    category: patch.category,
+  };
+  return {
+    ...roster,
+    employees: [...roster.employees, employee],
+    employmentStatus: { ...roster.employmentStatus, [personId]: "active" },
   };
 }
 
@@ -776,10 +859,17 @@ export function mergePeople(imported: ImportedPerson[], roster: CrewRosterBook):
     if (importedIds.has(employee.id)) {
       const index = merged.findIndex((person) => person.id === employee.id);
       if (index >= 0) {
+        const base = merged[index]!;
         merged[index] = {
-          ...merged[index],
-          projectIds: projectsForPerson(employee.id, merged[index].projectIds, roster),
+          ...base,
+          name: employee.name || base.name,
+          role: employee.role || base.role,
+          roles: employee.role ? [employee.role] : base.roles,
+          projectIds: projectsForPerson(employee.id, base.projectIds, roster),
           active: employmentStatusFor(roster, employee.id) === "active",
+          category: employee.category ?? base.category,
+          provisional: employee.provisional === true ? true : base.provisional,
+          manual: true,
         };
       }
       continue;
@@ -802,6 +892,7 @@ export function mergePeople(imported: ImportedPerson[], roster: CrewRosterBook):
       ),
       manual: true,
       provisional: employee.provisional === true,
+      category: employee.category,
       active: employmentStatusFor(roster, employee.id) === "active",
     });
   }

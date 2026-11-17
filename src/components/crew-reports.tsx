@@ -1,8 +1,29 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+import { buildMonthlyReport } from "@/lib/crew-monthly-report";
+import type { CrewActivityLog } from "@/lib/crew-activity-log";
+import type { FlightBook } from "@/lib/crew-flights";
 import { opsFor, type CrewOpsBook } from "@/lib/crew-ops";
-import { siteLabel, type CrewSnapshot } from "@/lib/crew-schedule";
+import { siteLabel, type CrewPerson, type CrewSnapshot } from "@/lib/crew-schedule";
+import type { CrewStopoverBook } from "@/lib/crew-stopovers";
+import type { TravelHub } from "@/lib/crew-travel-hubs";
 import { formatMedium } from "@/lib/dates";
+
+const MONTH_OPTIONS = [
+  { value: 1, label: "January" },
+  { value: 2, label: "February" },
+  { value: 3, label: "March" },
+  { value: 4, label: "April" },
+  { value: 5, label: "May" },
+  { value: 6, label: "June" },
+  { value: 7, label: "July" },
+  { value: 8, label: "August" },
+  { value: 9, label: "September" },
+  { value: 10, label: "October" },
+  { value: 11, label: "November" },
+  { value: 12, label: "December" },
+] as const;
 
 export function CrewReports({
   rows,
@@ -100,10 +121,109 @@ export function CrewReports({
   );
 }
 
+/** Full monthly who/what/where report — pick any month in the schedule year. */
+export function CrewMonthlyReportPanel({
+  year,
+  month,
+  people,
+  opsBook,
+  flightBook,
+  stopoverBook,
+  activityLog,
+  travelHubs,
+  onOpen,
+}: {
+  year: number;
+  month: number;
+  people: CrewPerson[];
+  opsBook: CrewOpsBook;
+  flightBook: FlightBook;
+  stopoverBook: CrewStopoverBook;
+  activityLog: CrewActivityLog;
+  travelHubs?: TravelHub[];
+  onOpen?: (personId: string) => void;
+}) {
+  const [selectedMonth, setSelectedMonth] = useState(() => Math.min(12, Math.max(1, month)));
+
+  useEffect(() => {
+    setSelectedMonth(Math.min(12, Math.max(1, month)));
+  }, [month, year]);
+
+  const report = useMemo(
+    () =>
+      buildMonthlyReport({
+        year,
+        month: selectedMonth,
+        people,
+        opsBook,
+        flightBook,
+        stopoverBook,
+        activityLog,
+        travelHubs,
+      }),
+    [activityLog, flightBook, opsBook, people, selectedMonth, stopoverBook, travelHubs, year],
+  );
+
+  return (
+    <div className="space-y-4 p-4 sm:p-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Monthly report</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Who / what / where for {year} · stays, flights, journeys, planning log
+          </p>
+        </div>
+        <label className="grid gap-1 text-sm">
+          <span className="text-muted-foreground">Month</span>
+          <select
+            value={selectedMonth}
+            onChange={(event) => setSelectedMonth(Number(event.target.value))}
+            className="h-9 min-w-[11rem] rounded-lg border border-input bg-card px-2 text-sm font-medium"
+          >
+            {MONTH_OPTIONS.map((entry) => (
+              <option key={entry.value} value={entry.value}>
+                {entry.label} {year}
+              </option>
+            ))}
+          </select>
+        </label>
+      </header>
+
+      <section className="overflow-hidden rounded-xl border border-border">
+        <div className="border-b border-border bg-muted/30 px-4 py-2.5">
+          <h3 className="text-sm font-semibold tracking-tight">{report.label}</h3>
+          <p className="text-xs text-muted-foreground">{report.lines.length} line(s)</p>
+        </div>
+        {report.lines.length === 0 ? (
+          <p className="px-4 py-8 text-sm text-muted-foreground">Nothing recorded for this month yet.</p>
+        ) : (
+          <ul className="max-h-[min(70dvh,40rem)] divide-y divide-border overflow-y-auto">
+            {report.lines.map((line) => (
+              <li key={line.id}>
+                {line.personId && onOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpen(line.personId!)}
+                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-muted/50"
+                  >
+                    {line.text}
+                  </button>
+                ) : (
+                  <p className="px-4 py-2.5 text-sm">{line.text}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function ReportStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl border border-border bg-muted/40 px-3 py-2">
-      <dt className="text-[13px] font-semibold tracking-wide text-muted-foreground uppercase">{label}</dt>
+      <dt className="text-[0.8125rem] font-semibold tracking-wide text-muted-foreground uppercase">{label}</dt>
       <dd className="mt-1 text-xl font-semibold tracking-tight tabular-nums">{value}</dd>
     </div>
   );

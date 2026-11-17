@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Eye, EyeOff, Pencil } from "lucide-react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Eye, EyeOff, Pencil, Plus } from "lucide-react";
 import type { CalendarInteractionMode } from "@/lib/crew-schedule-view";
 import {
   CREW_CATEGORY_ORDER,
@@ -94,6 +94,7 @@ type RowMenu =
       kind: "person";
       personId: string;
       personName: string;
+      sectionRole: string;
       x: number;
       y: number;
     }
@@ -294,7 +295,7 @@ function placementHasBookedFlights(ops: CrewPersonOps) {
   );
 }
 
-export function CrewMonthGrid({
+export const CrewMonthGrid = memo(function CrewMonthGrid({
   year,
   today,
   scrollToIso,
@@ -320,17 +321,22 @@ export function CrewMonthGrid({
   onShowPerson,
   onShowAllHidden,
   interactionMode = "view",
+  active = true,
   onInteractionModeChange,
   onTryPerson,
   onCommitProvisional,
   onDiscardProvisional,
+  onAddUnderRole,
 }: {
   /** Selected schedule year — grid scrolls freely Jan 1 → Dec 31. */
   year: number;
   today: string;
   /** Optional day/month to land on when opening Month (e.g. from Year tape). */
   scrollToIso?: string | null;
-  rows: { person: CrewPerson }[];
+  /** False while another tab is showing — skip viewport work until Month is visible again. */
+  active?: boolean;
+  /** displayRole = calendar section this row sits under (may differ from home role). */
+  rows: { person: CrewPerson; displayRole?: string }[];
   opsBook: CrewOpsBook;
   flightBook?: FlightBook;
   stopoverBook?: CrewStopoverBook;
@@ -359,9 +365,10 @@ export function CrewMonthGrid({
   onRemoveRotation?: (personId: string, planId: string) => void;
   /** Update stay note (NAV-08). */
   onSetRotationNote?: (personId: string, planId: string, note: string) => void;
-  onHidePerson?: (personId: string) => void;
+  /** Hide this person under the given section role (defaults to home role). */
+  onHidePerson?: (personId: string, sectionRole?: string) => void;
   hiddenPeople?: { id: string; name: string; role?: string }[];
-  onShowPerson?: (personId: string) => void;
+  onShowPerson?: (personId: string, sectionRole?: string) => void;
   onShowAllHidden?: () => void;
   /** view = browse/scroll only; edit = drag-place gestures. */
   interactionMode?: CalendarInteractionMode;
@@ -370,6 +377,8 @@ export function CrewMonthGrid({
   onTryPerson?: (input: { name: string; role: string }) => string | void;
   onCommitProvisional?: (personId: string, name?: string) => void;
   onDiscardProvisional?: (personId: string) => void;
+  /** Plus on role header — add someone under this section. */
+  onAddUnderRole?: (sectionRole: string) => void;
 }) {
   const canEdit = interactionMode === "edit";
   const siteList = sortSitesForDisplay(sites.length ? sites : DEFAULT_SITES);
@@ -384,6 +393,13 @@ export function CrewMonthGrid({
     setCellMenu(null);
   }, [canEdit]);
   const peopleById = useMemo(() => new Map(rows.map((row) => [row.person.id, row.person])), [rows]);
+  const displayRoleByPersonId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of rows) {
+      map.set(row.person.id, normalizeRole(row.displayRole || row.person.role));
+    }
+    return map;
+  }, [rows]);
   const hiddenIdSet = useMemo(
     () => new Set((hiddenPeople || []).map((row) => row.id)),
     [hiddenPeople],
@@ -443,7 +459,7 @@ export function CrewMonthGrid({
         site: siteCode,
         from,
         out,
-        role: person.role,
+        role: displayRoleByPersonId.get(personId) || person.role,
       }) || "";
     setStaySelection({ personId, planId, from, out, note: "" });
     setNoteDraft("");
@@ -475,6 +491,11 @@ export function CrewMonthGrid({
   }, []);
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const didScrollToToday = useRef(false);
+  /** Only mount day cells in the viewport (+ buffer). Full-year DOM was freezing tab switches. */
+  const DAY_WINDOW_BUFFER = 21;
+  const [dayWindow, setDayWindow] = useState({ start: 0, end: 90 });
+  const dayWindowRef = useRef(dayWindow);
+  dayWindowRef.current = dayWindow;
 
   /** Free-run year strip: every day from January through December. */
   const days = useMemo(() => {
@@ -492,6 +513,46 @@ export function CrewMonthGrid({
   const dayColRem = 2.85;
   const daysTrackWidth = `${days.length * dayColRem}rem`;
   const dayColumns = `repeat(${days.length}, ${dayColRem}rem)`;
+
+  const dayColPx = useMemo(() => {
+    if (typeof window === "undefined") return dayColRem * 16;
+    const root = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    return dayColRem * root;
+  }, [dayColRem]);
+
+  const dayMeta = useMemo(
+    () =>
+      days.map((iso) => {
+        const d = Number(iso.slice(8, 10));
+        const monthIndex = Number(iso.slice(5, 7)) - 1;
+        const date = new Date(Number(iso.slice(0, 4)), monthIndex, d);
+        return {
+          iso,
+          d,
+          monthIndex,
+          weekend: date.getDay() === 0 || date.getDay() === 6,
+          monthStartDay: d === 1,
+          isToday: iso === today,
+          weekday: date.toLocaleDateString("en-US", { weekday: "narrow" }),
+        };
+      }),
+    [days, today],
+  );
+
+  const visibleDayMeta = useMemo(
+    () => dayMeta.slice(dayWindow.start, dayWindow.end),
+    [dayMeta, dayWindow.end, dayWindow.start],
+  );
+
+  const visibleDayColumns = useMemo(() => {
+    const leftPad = dayWindow.start * dayColRem;
+    const rightPad = Math.max(0, days.length - dayWindow.end) * dayColRem;
+    const parts: string[] = [];
+    if (leftPad > 0) parts.push(`${leftPad}rem`);
+    parts.push(`repeat(${Math.max(1, visibleDayMeta.length)}, ${dayColRem}rem)`);
+    if (rightPad > 0) parts.push(`${rightPad}rem`);
+    return parts.join(" ");
+  }, [dayColRem, dayWindow.end, dayWindow.start, days.length, visibleDayMeta.length]);
 
   const monthBands = useMemo(() => {
     const bands: { key: string; label: string; count: number }[] = [];
@@ -511,6 +572,25 @@ export function CrewMonthGrid({
     return bands;
   }, [days]);
 
+  const dayWindowRaf = useRef<number | null>(null);
+  function refreshDayWindow() {
+    if (dayWindowRaf.current != null) return;
+    dayWindowRaf.current = requestAnimationFrame(() => {
+      dayWindowRaf.current = null;
+      const main = mainScrollRef.current;
+      if (!main || days.length === 0) return;
+      const col = dayColPx || 1;
+      const start = Math.max(0, Math.floor(main.scrollLeft / col) - DAY_WINDOW_BUFFER);
+      const end = Math.min(
+        days.length,
+        Math.ceil((main.scrollLeft + main.clientWidth) / col) + DAY_WINDOW_BUFFER,
+      );
+      const prev = dayWindowRef.current;
+      if (prev.start === start && prev.end === end) return;
+      setDayWindow({ start, end });
+    });
+  }
+
   /** Days pane scrolls horizontally from January 1; Type/Name stay outside that scroll. */
   function syncDaysScroll(from: "top" | "main") {
     const top = topScrollRef.current;
@@ -518,6 +598,7 @@ export function CrewMonthGrid({
     if (!top || !main) return;
     if (from === "main" && top.scrollLeft !== main.scrollLeft) top.scrollLeft = main.scrollLeft;
     if (from === "top" && main.scrollLeft !== top.scrollLeft) main.scrollLeft = top.scrollLeft;
+    refreshDayWindow();
   }
 
   function syncVerticalScroll(from: "left" | "main") {
@@ -571,7 +652,7 @@ export function CrewMonthGrid({
             title={`${band.label}: 1–${band.count}`}
             style={{ gridColumn: `span ${band.count}` }}
             className={cn(
-              "flex items-center justify-center overflow-hidden border-l-2 border-l-primary bg-muted/40 px-1 text-center text-[12px] font-semibold tracking-wide text-foreground",
+              "flex items-center justify-center overflow-hidden border-l-2 border-l-primary bg-muted/40 px-1 text-center text-xs font-semibold tracking-wide text-foreground",
               Number(band.key.slice(5, 7)) % 2 === 0 && "bg-sky-50/80",
             )}
           >
@@ -581,34 +662,26 @@ export function CrewMonthGrid({
       </div>
       <div
         className="grid min-h-10"
-        style={{ gridTemplateColumns: dayColumns, width: daysTrackWidth, minWidth: daysTrackWidth }}
+        style={{ gridTemplateColumns: visibleDayColumns, width: daysTrackWidth, minWidth: daysTrackWidth }}
       >
-        {days.map((iso) => {
-          const d = Number(iso.slice(8, 10));
-          const date = new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, d);
-          const weekend = date.getDay() === 0 || date.getDay() === 6;
-          const isToday = iso === today;
-          const monthStartDay = d === 1;
-          const monthIndex = Number(iso.slice(5, 7)) - 1;
-          return (
-            <div
-              key={iso}
-              title={formatMedium(iso)}
-              className={cn(
-                "flex min-w-0 flex-col justify-center overflow-hidden border-l border-border px-0.5 py-1 text-center text-[12px] leading-tight tabular-nums",
-                weekend && "bg-muted/60",
-                monthIndex % 2 === 1 && !weekend && "bg-sky-50/50",
-                monthStartDay && "border-l-2 border-l-primary",
-                isToday && "bg-rose-50 font-bold text-rose-700",
-              )}
-            >
-              <div className="truncate">{d}</div>
-              <div className="truncate text-muted-foreground">
-                {date.toLocaleDateString("en-US", { weekday: "narrow" })}
-              </div>
-            </div>
-          );
-        })}
+        {dayWindow.start > 0 ? <div aria-hidden /> : null}
+        {visibleDayMeta.map((day) => (
+          <div
+            key={day.iso}
+            title={formatMedium(day.iso)}
+            className={cn(
+              "flex min-w-0 flex-col justify-center overflow-hidden border-l border-border px-0.5 py-1 text-center text-xs leading-tight tabular-nums",
+              day.weekend && "bg-muted/60",
+              day.monthIndex % 2 === 1 && !day.weekend && "bg-sky-50/50",
+              day.monthStartDay && "border-l-2 border-l-primary",
+              day.isToday && "bg-rose-50 font-bold text-rose-700",
+            )}
+          >
+            <div className="truncate">{day.d}</div>
+            <div className="truncate text-muted-foreground">{day.weekday}</div>
+          </div>
+        ))}
+        {dayWindow.end < days.length ? <div aria-hidden /> : null}
       </div>
     </div>
   );
@@ -632,18 +705,29 @@ export function CrewMonthGrid({
       : days[0]!;
     const idx = days.indexOf(preferred);
     if (idx < 0) return;
-    main.scrollLeft = Math.max(0, idx * dayColRem * 16);
+    main.scrollLeft = Math.max(0, idx * dayColPx);
     syncDaysScroll("main");
     didScrollToToday.current = true;
-  }, [days, scrollToIso, dayColRem]);
+  }, [days, scrollToIso, dayColPx]);
+
+  useEffect(() => {
+    if (!active) return;
+    refreshDayWindow();
+    const main = mainScrollRef.current;
+    if (!main || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => refreshDayWindow());
+    observer.observe(main);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- measure viewport once days/col size settle
+  }, [active, days.length, dayColPx]);
 
   function autoScrollToward(iso: string) {
     const main = mainScrollRef.current;
     if (!main) return;
     const idx = days.indexOf(iso);
     if (idx < 0) return;
-    const cellLeft = idx * dayColRem * 16;
-    const cellRight = cellLeft + dayColRem * 16;
+    const cellLeft = idx * dayColPx;
+    const cellRight = cellLeft + dayColPx;
     const viewLeft = main.scrollLeft;
     const viewRight = viewLeft + main.clientWidth;
     if (cellRight > viewRight - 48) {
@@ -667,13 +751,13 @@ export function CrewMonthGrid({
     };
     const sorted = [...rows].sort(
       (a, b) =>
-        roleRank(a.person.role) - roleRank(b.person.role) ||
+        roleRank(a.displayRole || a.person.role) - roleRank(b.displayRole || b.person.role) ||
         categoryRank(crewCategoryFor(a.person)) - categoryRank(crewCategoryFor(b.person)) ||
         a.person.name.localeCompare(b.person.name),
     );
     const out: { role: string; people: CrewPerson[] }[] = [];
     for (const row of sorted) {
-      const role = normalizeRole(row.person.role);
+      const role = normalizeRole(row.displayRole || row.person.role);
       const last = out[out.length - 1];
       if (!last || last.role !== role) {
         out.push({ role, people: [row.person] });
@@ -1038,9 +1122,9 @@ export function CrewMonthGrid({
       ) : null}
       <div className="border-b border-border px-4 py-3">
         {flash ? (
-          <p className="mb-2 text-[12px] font-medium text-muted-foreground tabular-nums">{flash}</p>
+          <p className="mb-2 text-xs font-medium text-muted-foreground tabular-nums">{flash}</p>
         ) : null}
-        <div className="flex flex-wrap items-center gap-2 text-[13px]">
+        <div className="flex flex-wrap items-center gap-2 text-[0.8125rem]">
           <div
             className={cn(
               "flex flex-wrap items-center gap-2",
@@ -1106,7 +1190,7 @@ export function CrewMonthGrid({
                 title="Browse and scroll without changing the schedule"
                 onClick={() => onInteractionModeChange?.("view")}
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-semibold transition-colors",
+                  "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors",
                   !canEdit ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -1118,7 +1202,7 @@ export function CrewMonthGrid({
                 title="Drag to place stays, travel, and return windows"
                 onClick={() => onInteractionModeChange?.("edit")}
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-semibold transition-colors",
+                  "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors",
                   canEdit ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -1134,7 +1218,7 @@ export function CrewMonthGrid({
                   setTryOpen((open) => !open);
                   setTryDraft({ name: "", role: "Labourer" });
                 }}
-                className="inline-flex h-8 items-center rounded-lg border border-input bg-card px-2.5 text-[12px] font-semibold hover:bg-muted"
+                className="inline-flex h-8 items-center rounded-lg border border-input bg-card px-2.5 text-xs font-semibold hover:bg-muted"
               >
                 Simulate
               </button>
@@ -1144,7 +1228,7 @@ export function CrewMonthGrid({
         </div>
         {canEdit && tryOpen && onTryPerson ? (
           <div className="mt-2 flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-border bg-muted/30 px-3 py-2.5">
-            <label className="grid gap-1 text-[12px] text-muted-foreground">
+            <label className="grid gap-1 text-xs text-muted-foreground">
               <span>Name</span>
               <input
                 value={tryDraft.name}
@@ -1154,7 +1238,7 @@ export function CrewMonthGrid({
                 autoFocus
               />
             </label>
-            <label className="grid gap-1 text-[12px] text-muted-foreground">
+            <label className="grid gap-1 text-xs text-muted-foreground">
               <span>Role</span>
               <input
                 value={tryDraft.role}
@@ -1178,14 +1262,14 @@ export function CrewMonthGrid({
                 setTryDraft({ name: "", role: "Labourer" });
                 showFlash(id ? `Draft · ${name}` : `Draft · ${name}`);
               }}
-              className="h-8 rounded-lg bg-stone-900 px-3 text-[12px] font-semibold text-white hover:opacity-90"
+              className="h-8 rounded-lg bg-stone-900 px-3 text-xs font-semibold text-white hover:opacity-90"
             >
               Add draft
             </button>
             <button
               type="button"
               onClick={() => setTryOpen(false)}
-              className="h-8 rounded-lg border border-input px-3 text-[12px] font-medium hover:bg-muted"
+              className="h-8 rounded-lg border border-input px-3 text-xs font-medium hover:bg-muted"
             >
               Cancel
             </button>
@@ -1193,7 +1277,7 @@ export function CrewMonthGrid({
         ) : null}
         {canEdit && paintBrush.kind === "travel" ? (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               Via
             </span>
             {menuHubs.map((hub) => {
@@ -1205,7 +1289,7 @@ export function CrewMonthGrid({
                   title={`${hub.name} (${hub.code}) · pass-through`}
                   onClick={() => setPaintBrush({ kind: "travel", hub: hub.code })}
                   className={cn(
-                    "rounded-md border px-2 py-1 text-[11px] font-semibold",
+                    "rounded-md border px-2 py-1 text-xs font-semibold",
                     active
                       ? "border-transparent bg-stone-100 text-stone-800 ring-1 ring-inset ring-black/10"
                       : "border-border bg-card hover:bg-muted",
@@ -1273,7 +1357,11 @@ export function CrewMonthGrid({
             ) : (
               groups.map((group, groupIndex) => {
                 const visiblePeople = group.people.filter((person) => !hiddenIdSet.has(person.id));
-                const hiddenInRole = group.people.filter((person) => hiddenIdSet.has(person.id));
+                const hiddenInRole = (hiddenPeople || []).filter(
+                  (row) =>
+                    normalizeRole(row.role || "") === group.role ||
+                    (!row.role && group.people.some((person) => person.id === row.id && hiddenIdSet.has(row.id))),
+                );
                 return (
                   <div key={`list-${group.role}`}>
                     <div className="sticky top-0 z-20">
@@ -1305,85 +1393,103 @@ export function CrewMonthGrid({
                             : undefined
                         }
                         trailing={
-                          hiddenInRole.length && onShowPerson ? (
-                            <div className="relative">
+                          <div className="flex items-center gap-1.5">
+                            {canEdit && onAddUnderRole ? (
                               <button
                                 type="button"
-                                title={`${hiddenInRole.length} hidden in ${roleSectionTitle(group.role)}`}
-                                aria-expanded={roleHiddenOpen === group.role}
-                                aria-haspopup="menu"
+                                title={`Add someone under ${roleSectionTitle(group.role)}`}
+                                aria-label={`Add under ${roleSectionTitle(group.role)}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  setRowMenu(null);
-                                  setCellMenu(null);
-                                  setRoleHiddenOpen((open) => (open === group.role ? null : group.role));
+                                  onAddUnderRole(group.role);
                                 }}
-                                className="inline-flex items-center gap-1 rounded-md bg-slate-300/70 px-1.5 py-0.5 text-[11px] font-semibold text-slate-800 hover:bg-slate-300"
+                                className="inline-flex size-7 items-center justify-center rounded-md bg-slate-300/70 text-slate-800 hover:bg-slate-300"
                               >
-                                <Eye className="size-3" aria-hidden />
-                                {hiddenInRole.length} hidden
-                                <ChevronDown
-                                  className={cn(
-                                    "size-3 transition-transform",
-                                    roleHiddenOpen === group.role && "rotate-180",
-                                  )}
-                                  aria-hidden
-                                />
+                                <Plus className="size-3.5" aria-hidden />
                               </button>
-                              {roleHiddenOpen === group.role ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    aria-label="Close hidden list"
-                                    className="fixed inset-0 z-40 cursor-default"
-                                    onClick={() => setRoleHiddenOpen(null)}
+                            ) : null}
+                            {hiddenInRole.length && onShowPerson ? (
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  title={`${hiddenInRole.length} hidden in ${roleSectionTitle(group.role)}`}
+                                  aria-expanded={roleHiddenOpen === group.role}
+                                  aria-haspopup="menu"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setRowMenu(null);
+                                    setCellMenu(null);
+                                    setRoleHiddenOpen((open) => (open === group.role ? null : group.role));
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-md bg-slate-300/70 px-1.5 py-0.5 text-xs font-semibold text-slate-800 hover:bg-slate-300"
+                                >
+                                  <Eye className="size-3" aria-hidden />
+                                  {hiddenInRole.length} hidden
+                                  <ChevronDown
+                                    className={cn(
+                                      "size-3 transition-transform",
+                                      roleHiddenOpen === group.role && "rotate-180",
+                                    )}
+                                    aria-hidden
                                   />
-                                  <div
-                                    role="menu"
-                                    className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-border bg-card p-1 shadow-xl"
-                                  >
-                                    <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                      Hidden · {roleSectionTitle(group.role)}
-                                    </p>
-                                    <div className="max-h-48 overflow-y-auto">
-                                      {hiddenInRole.map((person) => (
+                                </button>
+                                {roleHiddenOpen === group.role ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      aria-label="Close hidden list"
+                                      className="fixed inset-0 z-40 cursor-default"
+                                      onClick={() => setRoleHiddenOpen(null)}
+                                    />
+                                    <div
+                                      role="menu"
+                                      className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-border bg-card p-1 shadow-xl"
+                                    >
+                                      <p className="px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        Hidden · {roleSectionTitle(group.role)}
+                                      </p>
+                                      <div className="max-h-48 overflow-y-auto">
+                                        {hiddenInRole.map((person) => (
+                                          <button
+                                            key={person.id}
+                                            type="button"
+                                            role="menuitem"
+                                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium hover:bg-muted"
+                                            onClick={() => {
+                                              onShowPerson(person.id, group.role);
+                                              showFlash(`Shown · ${person.name}`);
+                                              if (hiddenInRole.length <= 1) setRoleHiddenOpen(null);
+                                            }}
+                                          >
+                                            <Eye className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                            <span className="min-w-0 truncate">{person.name}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                      {hiddenInRole.length > 1 ? (
                                         <button
-                                          key={person.id}
                                           type="button"
                                           role="menuitem"
-                                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium hover:bg-muted"
+                                          className="mt-0.5 flex w-full items-center rounded-lg px-2.5 py-2 text-left text-sm font-medium text-primary hover:bg-muted"
                                           onClick={() => {
-                                            onShowPerson(person.id);
-                                            showFlash(`Shown · ${person.name}`);
-                                            if (hiddenInRole.length <= 1) setRoleHiddenOpen(null);
+                                            hiddenInRole.forEach((person) =>
+                                              onShowPerson(person.id, group.role),
+                                            );
+                                            setRoleHiddenOpen(null);
+                                            showFlash(
+                                              `Unhidden · ${hiddenInRole.length} ${roleSectionTitle(group.role)}`,
+                                            );
                                           }}
                                         >
-                                          <Eye className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                                          <span className="min-w-0 truncate">{person.name}</span>
+                                          Show all {hiddenInRole.length}
                                         </button>
-                                      ))}
+                                      ) : null}
                                     </div>
-                                    {hiddenInRole.length > 1 ? (
-                                      <button
-                                        type="button"
-                                        role="menuitem"
-                                        className="mt-0.5 flex w-full items-center rounded-lg px-2.5 py-2 text-left text-sm font-medium text-primary hover:bg-muted"
-                                        onClick={() => {
-                                          hiddenInRole.forEach((person) => onShowPerson(person.id));
-                                          setRoleHiddenOpen(null);
-                                          showFlash(
-                                            `Unhidden · ${hiddenInRole.length} ${roleSectionTitle(group.role)}`,
-                                          );
-                                        }}
-                                      >
-                                        Show all {hiddenInRole.length}
-                                      </button>
-                                    ) : null}
-                                  </div>
-                                </>
-                              ) : null}
-                            </div>
-                          ) : null
+                                  </>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
                         }
                       />
                     </div>
@@ -1392,7 +1498,7 @@ export function CrewMonthGrid({
                       const journeyLine = dynamicJourneyLine(person, stopoverBook, flightBook, year);
                       return (
                         <div
-                          key={person.id}
+                          key={`${person.id}::${group.role}`}
                           className="flex h-11 items-stretch border-b border-border bg-card"
                         >
                           <div
@@ -1430,6 +1536,7 @@ export function CrewMonthGrid({
                                 kind: "person",
                                 personId: person.id,
                                 personName: person.name,
+                                sectionRole: group.role,
                                 x: event.clientX,
                                 y: event.clientY,
                               });
@@ -1443,20 +1550,20 @@ export function CrewMonthGrid({
                               <span className="flex min-w-0 items-center gap-1.5">
                                 <span className="truncate text-sm font-medium">{person.name}</span>
                                 {person.provisional ? (
-                                  <span className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                  <span className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[0.625rem] font-semibold tracking-wide text-muted-foreground uppercase">
                                     Draft
                                   </span>
                                 ) : null}
                               </span>
                               {journeyLine ? (
                                 <span
-                                  className="mt-0.5 block truncate rounded bg-stone-100 px-1 py-0.5 text-[11px] font-semibold tracking-tight text-stone-800"
+                                  className="mt-0.5 block truncate rounded bg-stone-100 px-1 py-0.5 text-xs font-semibold tracking-tight text-stone-800"
                                   title={journeyLine}
                                 >
                                   {journeyLine}
                                 </span>
                               ) : (person.roles?.length ?? 0) > 1 ? (
-                                <span className="block truncate text-[12px] text-muted-foreground">
+                                <span className="block truncate text-xs text-muted-foreground">
                                   {roleLabel(person)}
                                 </span>
                               ) : null}
@@ -1471,7 +1578,7 @@ export function CrewMonthGrid({
                                       onCommitProvisional(person.id);
                                       showFlash(`Saved · ${person.name}`);
                                     }}
-                                    className="h-7 rounded-md border border-input bg-card px-2 text-[11px] font-semibold hover:bg-muted"
+                                    className="h-7 rounded-md border border-input bg-card px-2 text-xs font-semibold hover:bg-muted"
                                   >
                                     Save
                                   </button>
@@ -1491,7 +1598,7 @@ export function CrewMonthGrid({
                                       onDiscardProvisional(person.id);
                                       showFlash(`Discarded · ${person.name}`);
                                     }}
-                                    className="h-7 rounded-md border border-rose-200 bg-rose-50 px-2 text-[11px] font-semibold text-rose-900 hover:bg-rose-100"
+                                    className="h-7 rounded-md border border-rose-200 bg-rose-50 px-2 text-xs font-semibold text-rose-900 hover:bg-rose-100"
                                   >
                                     Discard
                                   </button>
@@ -1503,7 +1610,7 @@ export function CrewMonthGrid({
                                 title={`Hide ${person.name}`}
                                 aria-label={`Hide ${person.name}`}
                                 onClick={() => {
-                                  onHidePerson(person.id);
+                                  onHidePerson(person.id, group.role);
                                   showFlash(`Hidden · ${person.name}`);
                                 }}
                                 className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -1554,11 +1661,19 @@ export function CrewMonthGrid({
                   const journeyLine = dynamicJourneyLine(person, stopoverBook, flightBook, year);
                   return (
                     <div
-                      key={person.id}
+                      key={`${person.id}::${group.role}`}
                       className="grid border-b border-border"
-                      style={{ gridTemplateColumns: dayColumns, width: daysTrackWidth, minWidth: daysTrackWidth }}
+                      style={{
+                        gridTemplateColumns: visibleDayColumns,
+                        width: daysTrackWidth,
+                        minWidth: daysTrackWidth,
+                        contentVisibility: "auto",
+                        containIntrinsicSize: "auto 2.75rem",
+                      }}
                     >
-                      {days.map((iso) => {
+                      {dayWindow.start > 0 ? <div aria-hidden /> : null}
+                      {visibleDayMeta.map((day) => {
+                        const iso = day.iso;
                         const site = siteOnDay(person, iso);
                         const hubMark = hubOnDay(person, iso, stopoverBook, flightBook, travelHubs);
                         const hub = !site ? hubMark : null;
@@ -1584,14 +1699,9 @@ export function CrewMonthGrid({
                           hub || flight
                             ? journeyForPerson(flightBook, person.id, flight === "out" ? "return" : "outbound")
                             : "";
-                        const date = new Date(
-                          Number(iso.slice(0, 4)),
-                          Number(iso.slice(5, 7)) - 1,
-                          Number(iso.slice(8, 10)),
-                        );
-                        const weekend = date.getDay() === 0 || date.getDay() === 6;
-                        const monthIndex = Number(iso.slice(5, 7)) - 1;
-                        const monthStartDay = Number(iso.slice(8, 10)) === 1;
+                        const weekend = day.weekend;
+                        const monthIndex = day.monthIndex;
+                        const monthStartDay = day.monthStartDay;
                         const stintStart = Boolean(site && !siteOnDay(person, addDays(iso, -1)));
                         // Last day of the place = OUT (place end).
                         const stintEnd = Boolean(site && !siteOnDay(person, addDays(iso, 1)));
@@ -1701,7 +1811,7 @@ export function CrewMonthGrid({
                               );
                             }}
                             className={cn(
-                              "relative flex h-11 min-w-0 items-center justify-center overflow-hidden border-l border-border text-[10px] font-bold",
+                              "relative flex h-11 min-w-0 items-center justify-center overflow-hidden border-l border-border text-[0.625rem] font-bold",
                               canEdit ? "cursor-cell select-none touch-none" : "cursor-pointer touch-pan-x touch-pan-y",
                               monthStartDay && "border-l-2 border-l-primary/50",
                               !site &&
@@ -1808,6 +1918,7 @@ export function CrewMonthGrid({
                           </div>
                         );
                       })}
+                      {dayWindow.end < days.length ? <div aria-hidden /> : null}
                     </div>
                   );
                 })}
@@ -1848,7 +1959,7 @@ export function CrewMonthGrid({
                 role="menuitem"
                 className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium hover:bg-muted"
                 onClick={() => {
-                  onHidePerson?.(rowMenu.personId);
+                  onHidePerson?.(rowMenu.personId, rowMenu.sectionRole);
                   setRowMenu(null);
                   showFlash(`Hidden · ${rowMenu.personName}`);
                 }}
@@ -1863,7 +1974,7 @@ export function CrewMonthGrid({
                     role="menuitem"
                     className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium hover:bg-muted"
                     onClick={() => {
-                      rowMenu.personIds.forEach((id) => onHidePerson?.(id));
+                      rowMenu.personIds.forEach((id) => onHidePerson?.(id, rowMenu.role));
                       setRowMenu(null);
                       showFlash(`Hidden · ${roleSectionTitle(rowMenu.role)}`);
                     }}
@@ -1873,7 +1984,7 @@ export function CrewMonthGrid({
                 ) : null}
                 {rowMenu.canUnhide ? (
                   <>
-                    <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Unhide one
                     </div>
                     <div className="max-h-48 overflow-y-auto">
@@ -1884,7 +1995,7 @@ export function CrewMonthGrid({
                           role="menuitem"
                           className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium hover:bg-muted"
                           onClick={() => {
-                            onShowPerson?.(person.id);
+                            onShowPerson?.(person.id, rowMenu.role);
                             setRowMenu(null);
                             showFlash(`Shown · ${person.name}`);
                           }}
@@ -1899,7 +2010,9 @@ export function CrewMonthGrid({
                         role="menuitem"
                         className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium text-primary hover:bg-muted"
                         onClick={() => {
-                          rowMenu.hiddenPeople.forEach((person) => onShowPerson?.(person.id));
+                          rowMenu.hiddenPeople.forEach((person) =>
+                            onShowPerson?.(person.id, rowMenu.role),
+                          );
                           setRowMenu(null);
                           showFlash(`Unhidden · ${rowMenu.hiddenPeople.length} ${roleSectionTitle(rowMenu.role)}`);
                         }}
@@ -1933,7 +2046,7 @@ export function CrewMonthGrid({
             }}
             onClick={(event) => event.stopPropagation()}
           >
-            <p className="px-2 py-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <p className="px-2 py-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               {formatMedium(cellMenu.iso)}
             </p>
 
@@ -2051,7 +2164,7 @@ export function CrewMonthGrid({
 
             {onToggleStopover ? (
               <div className="mt-1 border-t border-border pt-2">
-                <p className="px-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <p className="px-2 pb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                   Add travel
                 </p>
                 <div className="grid grid-cols-3 gap-1 px-1 pb-1">
@@ -2071,7 +2184,7 @@ export function CrewMonthGrid({
                         )}
                         onClick={() => applyStopover(cellMenu.personId, cellMenu.iso, hub.code)}
                       >
-                        <span className="block truncate text-[11px] font-bold leading-tight">{hub.name}</span>
+                        <span className="block truncate text-xs font-bold leading-tight">{hub.name}</span>
                         <span className="block text-[9px] font-medium opacity-70">{hub.code}</span>
                       </button>
                     );
@@ -2079,7 +2192,7 @@ export function CrewMonthGrid({
                 </div>
                 {onTravelHubsChange ? (
                   <div className="mt-2 grid gap-1.5 border-t border-border px-2 pt-2">
-                    <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                       Add place to list
                     </p>
                     <div className="flex flex-wrap gap-1.5">
@@ -2134,13 +2247,13 @@ export function CrewMonthGrid({
             top: Math.min(travelHover.y + 12, typeof window !== "undefined" ? window.innerHeight - 80 : travelHover.y),
           }}
         >
-          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Journey</p>
+          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Journey</p>
           <p className="mt-0.5 font-medium leading-snug text-foreground">{travelHover.plan}</p>
         </div>
       ) : null}
     </section>
   );
-}
+});
 
 export function monthStartFromIso(iso: string) {
   return `${iso.slice(0, 7)}-01`;

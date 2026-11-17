@@ -23,6 +23,7 @@ export function CrewPlaceDialog({
   to,
   overlapError,
   sites = DEFAULT_SITES,
+  roles = [],
   onCancel,
   onSave,
 }: {
@@ -43,9 +44,10 @@ export function CrewPlaceDialog({
   const [site, setSite] = useState(() =>
     siteList.some((row) => row.code === home) ? home : siteList[0]!.code,
   );
-  const role = (defaultRole || "Labourer").trim();
+  const [role, setRole] = useState(() => (defaultRole || "Labourer").trim());
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  const roleOptions = roles.length ? roles : ["Labourer", "Operator/Truck Driver", "Surveyor", "Manager", "Mechanic"];
 
   const dayCount = daysBetween(from, to) + 1;
   const overCeiling = dayCount > MAX_ROTATION_DAYS;
@@ -100,12 +102,20 @@ export function CrewPlaceDialog({
             </select>
           </label>
 
-          <div className="grid gap-1 text-sm">
-            <span className="text-muted-foreground">Role</span>
-            <p className="flex h-9 items-center rounded-lg border border-border bg-muted/40 px-2 font-medium">
-              {role || "—"}
-            </p>
-          </div>
+          <label className="grid gap-1 text-sm">
+            <span className="text-muted-foreground">Role for this stay</span>
+            <input
+              value={role}
+              onChange={(event) => setRole(event.target.value)}
+              list="place-rotation-roles"
+              className="h-9 rounded-lg border border-input px-2"
+            />
+            <datalist id="place-rotation-roles">
+              {roleOptions.map((entry) => (
+                <option key={entry} value={entry} />
+              ))}
+            </datalist>
+          </label>
 
           <label className="grid gap-1 text-sm">
             <span className="text-muted-foreground">Note (optional)</span>
@@ -117,7 +127,7 @@ export function CrewPlaceDialog({
             />
           </label>
 
-          <div className="flex flex-wrap gap-2 text-[13px] text-muted-foreground">
+          <div className="flex flex-wrap gap-2 text-[0.8125rem] text-muted-foreground">
             {siteList.map((row) => (
               <span key={row.code} className="inline-flex items-center gap-1">
                 <span className={cn("size-2 rounded-sm", siteColour(row).swatch)} aria-hidden />

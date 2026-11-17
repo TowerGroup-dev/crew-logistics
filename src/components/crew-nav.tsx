@@ -1,9 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Bell, CalendarDays, ChevronLeft, ChevronRight, Contact, ListChecks, Settings } from "lucide-react";
+import {
+  Bell,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  ListChecks,
+  Menu,
+} from "lucide-react";
 import { CREW_SCHEDULE } from "@/lib/crew-schedule";
 import { loadScheduleYears } from "@/lib/crew-years";
 import { cn } from "@/lib/cn";
@@ -16,7 +23,8 @@ type Section = {
   match: (path: string) => boolean;
 };
 
-const SECTIONS: Section[] = [
+/** Primary work tabs — stay on the top bar. */
+const PRIMARY: Section[] = [
   { key: "overview", href: "/", label: "Overview", icon: ListChecks, match: (path) => path === "/" },
   {
     key: "calendar",
@@ -25,16 +33,14 @@ const SECTIONS: Section[] = [
     icon: CalendarDays,
     match: (path) => path.startsWith("/month") || path.startsWith("/year") || path.startsWith("/list"),
   },
-  { key: "employees", href: "/employees", label: "Employees", icon: Contact, match: (path) => path.startsWith("/employees") },
 ];
 
-const SETTINGS: Section = {
-  key: "settings",
-  href: "/settings",
-  label: "Settings",
-  icon: Settings,
-  match: (path) => path.startsWith("/settings"),
-};
+/** Right ☰ dropdown — plain list like B2W. */
+const MENU_ITEMS: { key: string; href: string; label: string; match: (path: string) => boolean }[] = [
+  { key: "employees", href: "/employees", label: "Employees", match: (path) => path.startsWith("/employees") },
+  { key: "reports", href: "/reports", label: "Reports", match: (path) => path.startsWith("/reports") },
+  { key: "settings", href: "/settings", label: "Settings", match: (path) => path.startsWith("/settings") },
+];
 
 const CALENDAR_VIEWS = [
   { href: "/month", label: "Month" },
@@ -43,7 +49,7 @@ const CALENDAR_VIEWS = [
 ] as const;
 
 function basePath(pathname: string) {
-  for (const prefix of ["/month", "/year", "/list", "/employees", "/settings"]) {
+  for (const prefix of ["/month", "/year", "/list", "/employees", "/reports", "/settings"]) {
     if (pathname.startsWith(prefix)) return prefix;
   }
   return "/";
@@ -62,6 +68,8 @@ export function CrewNav({
   const yearParam = Number(search.get("year") || "");
   const monthParam = search.get("month");
   const [years, setYears] = useState<number[]>(() => [...loadScheduleYears()]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const year =
     yearParam && Number.isInteger(yearParam) ? yearParam : CREW_SCHEDULE.year || new Date().getFullYear();
   const inCalendar =
@@ -81,6 +89,26 @@ export function CrewNav({
     setYears(loadScheduleYears());
   }, [yearParam]);
 
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+    function onPointer(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onPointer);
+    };
+  }, [menuOpen]);
+
   const yearIndex = years.indexOf(year);
   const prevYear = yearIndex > 0 ? years[yearIndex - 1] : null;
   const nextYear = yearIndex >= 0 && yearIndex < years.length - 1 ? years[yearIndex + 1] : null;
@@ -89,8 +117,13 @@ export function CrewNav({
     <nav className="sticky top-0 z-30 -mx-5 border-b border-border bg-background/95 px-5 backdrop-blur sm:-mx-8 sm:px-8">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 py-2">
         <div className="-mb-px flex flex-wrap items-center gap-1">
-          {SECTIONS.map((section) => (
-            <NavTab key={section.key} section={section} href={hrefFor(section.href)} active={section.match(pathname)} />
+          {PRIMARY.map((section) => (
+            <NavTab
+              key={section.key}
+              section={section}
+              href={hrefFor(section.href)}
+              active={section.match(pathname)}
+            />
           ))}
         </div>
 
@@ -106,7 +139,9 @@ export function CrewNav({
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "rounded-md px-3 py-1 text-sm font-medium transition",
-                    active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {view.label}
@@ -127,7 +162,7 @@ export function CrewNav({
             >
               <Bell className="size-4" />
               {reminderCount > 0 ? (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[12px] font-semibold text-white">
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-semibold text-white">
                   {reminderCount > 99 ? "99+" : reminderCount}
                 </span>
               ) : null}
@@ -168,20 +203,56 @@ export function CrewNav({
               <ChevronRight className="size-4" />
             </button>
           </div>
-          <Link
-            href={hrefFor(SETTINGS.href)}
-            scroll={false}
-            aria-label="Settings"
-            title="Settings"
-            className={cn(
-              "flex size-8 items-center justify-center rounded-lg border transition",
-              SETTINGS.match(pathname)
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-input bg-card text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Settings className="size-4" />
-          </Link>
+
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label="Menu"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              aria-controls="crew-util-menu"
+              title="Menu"
+              className={cn(
+                "flex size-8 items-center justify-center rounded-lg border transition",
+                menuOpen
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-input bg-card text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Menu className="size-4" aria-hidden />
+            </button>
+
+            {menuOpen ? (
+              <div
+                id="crew-util-menu"
+                role="menu"
+                className="absolute top-full right-0 z-50 mt-1 min-w-[14rem] overflow-hidden rounded-md border border-border bg-card py-0.5 shadow-lg"
+              >
+                {MENU_ITEMS.map((item) => {
+                  const active = item.match(pathname);
+                  return (
+                    <Link
+                      key={item.key}
+                      role="menuitem"
+                      href={hrefFor(item.href)}
+                      scroll={false}
+                      aria-current={active ? "page" : undefined}
+                      onClick={() => setMenuOpen(false)}
+                      className={cn(
+                        "block border-b border-border/70 px-4 py-2.5 text-sm last:border-b-0",
+                        active
+                          ? "bg-sky-100 font-medium text-sky-950"
+                          : "text-foreground hover:bg-sky-50",
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </nav>

@@ -17,24 +17,29 @@ export function CrewNextRotationForm({
   defaultRole,
   defaultDays,
   isActive,
+  roles = [],
   onSave,
 }: {
   defaultSite?: string | null;
   defaultRole?: string | null;
   defaultDays: number;
   isActive: boolean;
+  roles?: string[];
   onSave: (input: { site: string; from: string; out: string; role: string }) => void;
 }) {
   const [site, setSite] = useState(() => {
     const home = (defaultSite || "IQA").toUpperCase();
     return SITES.some((row) => row.code === home) ? home : "IQA";
   });
-  const role = (defaultRole || "Labourer").trim();
+  const [role, setRole] = useState(() => (defaultRole || "Labourer").trim());
   const [from, setFrom] = useState("");
   const [days, setDays] = useState(
     String(Math.min(defaultDays || DEFAULT_ROTATION_DAYS, MAX_ROTATION_DAYS)),
   );
   const [error, setError] = useState("");
+  const roleOptions = roles.length
+    ? roles
+    : ["Labourer", "Operator/Truck Driver", "Surveyor", "Manager", "Mechanic"];
 
   const out = useMemo(() => {
     if (!from || !/^\d{4}-\d{2}-\d{2}$/.test(from)) return "";
@@ -67,7 +72,7 @@ export function CrewNextRotationForm({
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Next rotation</p>
         <p className="mt-1 text-sm text-muted-foreground">
           {isActive
-            ? `Site + IN. Role stays ${role}. Standard ${DEFAULT_ROTATION_DAYS} days; up to ${MAX_ROTATION_DAYS}.`
+            ? `Site + IN. Change role for this stay if needed. Standard ${DEFAULT_ROTATION_DAYS} days; up to ${MAX_ROTATION_DAYS}.`
             : `Sets them active and places the next stay (standard ${DEFAULT_ROTATION_DAYS}, up to ${MAX_ROTATION_DAYS}).`}
         </p>
       </div>
@@ -87,12 +92,20 @@ export function CrewNextRotationForm({
             ))}
           </select>
         </label>
-        <div className="grid gap-1 text-sm">
-          <span className="text-muted-foreground">Role</span>
-          <p className="flex h-9 items-center rounded-lg border border-border bg-muted/40 px-2 font-medium">
-            {role || "—"}
-          </p>
-        </div>
+        <label className="grid gap-1 text-sm">
+          <span className="text-muted-foreground">Role for this stay</span>
+          <input
+            value={role}
+            onChange={(event) => setRole(event.target.value)}
+            list="next-rotation-roles"
+            className="h-9 rounded-lg border border-input px-2"
+          />
+          <datalist id="next-rotation-roles">
+            {roleOptions.map((entry) => (
+              <option key={entry} value={entry} />
+            ))}
+          </datalist>
+        </label>
         <label className="grid gap-1 text-sm">
           <span className="text-muted-foreground">IN</span>
           <input
@@ -129,7 +142,7 @@ export function CrewNextRotationForm({
         >
           {isActive ? "Add rotation" : "Set active + add rotation"}
         </button>
-        <div className="flex flex-wrap gap-2 text-[13px] text-muted-foreground">
+        <div className="flex flex-wrap gap-2 text-[0.8125rem] text-muted-foreground">
           {SITES.map((row) => (
             <span key={row.code} className="inline-flex items-center gap-1">
               <span className={cn("size-2 rounded-sm", row.swatch)} aria-hidden />

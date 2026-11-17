@@ -36,7 +36,7 @@ export function CrewRoleHeader({
         <p className="truncate text-sm font-bold tracking-wide text-slate-900">{role}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {count != null ? <span className="text-[13px] font-medium text-slate-600">{count}</span> : null}
+        {count != null ? <span className="text-[0.8125rem] font-medium text-slate-600">{count}</span> : null}
         {trailing}
       </div>
     </div>

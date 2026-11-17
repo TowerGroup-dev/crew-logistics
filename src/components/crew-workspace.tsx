@@ -1,15 +1,23 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import { Suspense, startTransition, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { CrewBoard, type CrewBoardView } from "@/components/crew-board";
+import type { CrewBoardView } from "@/components/crew-board";
 import { CrewNav } from "@/components/crew-nav";
+
+/** Client-only board: localStorage + schedule paint on first frame (no SSR empty → Loading flash). */
+const CrewBoard = dynamic(
+  () => import("@/components/crew-board").then((mod) => mod.CrewBoard),
+  { ssr: false },
+);
 
 function viewFromPath(pathname: string): CrewBoardView {
   if (pathname.startsWith("/month")) return "month";
   if (pathname.startsWith("/year")) return "year";
   if (pathname.startsWith("/list")) return "list";
   if (pathname.startsWith("/employees")) return "employees";
+  if (pathname.startsWith("/reports")) return "reports";
   if (pathname.startsWith("/settings")) return "settings";
   if (pathname.startsWith("/travel")) return "travel";
   if (pathname.startsWith("/accommodation")) return "accommodation";
@@ -21,9 +29,15 @@ function viewFromPath(pathname: string): CrewBoardView {
 export function CrewWorkspace() {
   const pathname = usePathname();
   const router = useRouter();
-  const view = useMemo(() => viewFromPath(pathname), [pathname]);
+  const [view, setView] = useState<CrewBoardView>(() => viewFromPath(pathname));
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [reminderCount, setReminderCount] = useState(0);
+
+  // Defer heavy view swaps so the nav stays responsive while Month/Year catch up.
+  useEffect(() => {
+    const next = viewFromPath(pathname);
+    startTransition(() => setView(next));
+  }, [pathname]);
 
   // Old /reminders route → open the popup on Overview instead of a full page.
   useEffect(() => {
@@ -35,10 +49,10 @@ export function CrewWorkspace() {
 
   return (
     <div className="flex flex-col gap-5">
-      <Suspense fallback={<div className="h-9 animate-pulse rounded-md bg-muted" />}>
+      <Suspense fallback={null}>
         <CrewNav onOpenReminders={() => setRemindersOpen(true)} reminderCount={reminderCount} />
       </Suspense>
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+      <Suspense fallback={null}>
         <CrewBoard
           view={view}
           remindersOpen={remindersOpen}

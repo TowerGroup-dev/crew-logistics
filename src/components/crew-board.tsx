@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, X } from "lucide-react";
 import { useCrewUndo } from "@/components/crew-undo-provider";
@@ -49,7 +49,6 @@ import {
   addProvisionalEmployee,
   commitProvisionalEmployee,
   discardProvisionalEmployee,
-  emptyRoster,
   isManualEmployee,
   loadRoster,
   mergePeople,
@@ -61,6 +60,7 @@ import {
   setRotationPlanNote,
   setStayOut,
   slugEmployee,
+  upsertEmployeeProfile,
   type CrewRosterBook,
   type EmploymentStatus,
 } from "@/lib/crew-roster";
@@ -70,10 +70,18 @@ import { CrewNextRotationForm } from "@/components/crew-next-rotation";
 import { CrewOverview, CrewReminders } from "@/components/crew-overview";
 import { buildSituationReminders } from "@/lib/crew-situation-reminders";
 import { CrewRoleHeader } from "@/components/crew-role-header";
+import { CrewRoleAddDialog } from "@/components/crew-role-add-dialog";
+import { CrewMonthlyReportPanel } from "@/components/crew-reports";
 import { CrewAccommodationDesk } from "@/components/crew-accommodation-desk";
 import { CrewTravelDesk } from "@/components/crew-travel-desk";
 import { CrewYearTape } from "@/components/crew-year-tape";
 import { CrewRotationDrawer } from "@/components/crew-rotation-drawer";
+import {
+  appendActivity,
+  loadActivityLog,
+  saveActivityLog,
+  type CrewActivityLog,
+} from "@/lib/crew-activity-log";
 import {
   currentRotationForPerson,
   extendRotationOut,
@@ -87,7 +95,6 @@ import {
 } from "@/lib/crew-rotations";
 import { autoSeedTravelOps } from "@/lib/crew-auto-ops";
 import {
-  emptyFlightBook,
   clearFlightsForPerson,
   loadFlights,
   saveFlights,
@@ -106,24 +113,27 @@ import {
 } from "@/lib/crew-stopovers";
 import { addScheduleYear, loadScheduleYears } from "@/lib/crew-years";
 import {
-  emptyScheduleViewPrefs,
+  addPersonUnderRole,
   hidePerson,
+  hideRoleRow,
+  hiddenRoleRows,
+  isRoleRowHidden,
   loadScheduleViewPrefs,
+  membershipsForPerson,
   saveScheduleViewPrefs,
   setCalendarMode,
   showAllPeople,
   showPerson,
+  unhideRoleRow,
   type CrewScheduleViewPrefs,
 } from "@/lib/crew-schedule-view";
 import {
-  emptyRolesBook,
   loadRolesBook,
   saveRolesBook,
   type CrewRolesBook,
 } from "@/lib/crew-roles-catalog";
 import {
   DEFAULT_SITES,
-  emptySitesBook,
   loadSitesBook,
   saveSitesBook,
   siteColour,
@@ -132,13 +142,12 @@ import {
   type CrewSitesBook,
 } from "@/lib/crew-sites";
 import {
-  emptyTravelHubsBook,
   loadTravelHubs,
   saveTravelHubs,
   type CrewTravelHubsBook,
 } from "@/lib/crew-travel-hubs";
 import { CrewSettingsPanel } from "@/components/crew-settings-panel";
-import { formatLong, formatMedium, todayInZone } from "@/lib/dates";
+import { addDays, formatLong, formatMedium, todayInZone } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 export type CrewBoardView =
@@ -150,6 +159,7 @@ export type CrewBoardView =
   | "accommodation"
   | "alerts"
   | "employees"
+  | "reports"
   | "settings";
 
 function siteTone(site: string | null, sitesBook?: CrewSitesBook) {
@@ -210,10 +220,11 @@ export function CrewBoard({
   const searchParams = useSearchParams();
   const today = todayInZone();
   const boardView = view;
-  const [opsBook, setOpsBook] = useState<CrewOpsBook>({});
-  const [flightBook, setFlightBook] = useState<FlightBook>(emptyFlightBook);
-  const [stopoverBook, setStopoverBook] = useState<CrewStopoverBook>({});
-  const [roster, setRoster] = useState<CrewRosterBook>(emptyRoster());
+  /** Eager client load — board is dynamic(ssr:false), so first paint already has local data. */
+  const [opsBook, setOpsBook] = useState<CrewOpsBook>(() => loadCrewOps());
+  const [flightBook, setFlightBook] = useState<FlightBook>(() => loadFlights());
+  const [stopoverBook, setStopoverBook] = useState<CrewStopoverBook>(() => loadStopovers());
+  const [roster, setRoster] = useState<CrewRosterBook>(() => loadRoster());
   const [hydrated, setHydrated] = useState(false);
   const [role, setRole] = useState("");
   const [site, setSite] = useState("");
@@ -225,14 +236,27 @@ export function CrewBoard({
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedRotationId, setSelectedRotationId] = useState<string | null>(null);
-  const [rotationBook, setRotationBook] = useState<RotationBook>({ version: 1, rotations: [] });
+  const [rotationBook, setRotationBook] = useState<RotationBook>(() => loadRotations());
   const [staffName, setStaffName] = useState("Crew coordinator");
   const [showAddEmployee, setShowAddEmployee] = useState(false);
   const [notify, setNotify] = useState<CrewNotifySettings>(() => loadNotifySettings());
-  const [scheduleView, setScheduleView] = useState<CrewScheduleViewPrefs>(() => emptyScheduleViewPrefs());
-  const [sitesBook, setSitesBook] = useState<CrewSitesBook>(() => emptySitesBook());
-  const [travelHubsBook, setTravelHubsBook] = useState<CrewTravelHubsBook>(() => emptyTravelHubsBook());
-  const [rolesBook, setRolesBook] = useState<CrewRolesBook>(() => emptyRolesBook());
+  const [scheduleView, setScheduleView] = useState<CrewScheduleViewPrefs>(() => loadScheduleViewPrefs());
+  const [activityLog, setActivityLog] = useState<CrewActivityLog>(() => loadActivityLog());
+  const [roleAddSection, setRoleAddSection] = useState<string | null>(null);
+  /** Keep heavy calendar panes mounted after first open so tab switches do not rebuild them. */
+  const [seenViews, setSeenViews] = useState<Partial<Record<CrewBoardView, true>>>(() => ({
+    [view]: true,
+  }));
+  const [employeeEditId, setEmployeeEditId] = useState<string | null>(null);
+  const [employeeEditDraft, setEmployeeEditDraft] = useState({
+    name: "",
+    role: "",
+    notes: "",
+    category: "Regular" as "Regular" | "Local" | "Subcontractor",
+  });
+  const [sitesBook, setSitesBook] = useState<CrewSitesBook>(() => loadSitesBook());
+  const [travelHubsBook, setTravelHubsBook] = useState<CrewTravelHubsBook>(() => loadTravelHubs());
+  const [rolesBook, setRolesBook] = useState<CrewRolesBook>(() => loadRolesBook());
   const [newEmployee, setNewEmployee] = useState({ name: "", role: "Labourer" });
   const { pushSnapshot, registerRestorer } = useCrewUndo();
   const booksRef = useRef({
@@ -244,6 +268,10 @@ export function CrewBoard({
   });
   const skipHistoryRef = useRef(false);
   booksRef.current = { opsBook, roster, rotationBook, flightBook, stopoverBook };
+
+  useEffect(() => {
+    setSeenViews((current) => (current[boardView] ? current : { ...current, [boardView]: true }));
+  }, [boardView]);
 
   function captureHistory() {
     if (!hydrated || skipHistoryRef.current) return;
@@ -284,41 +312,39 @@ export function CrewBoard({
     if (personParam) setSelectedId(personParam);
   }, [searchParams]);
 
-  useEffect(() => {
-    const todayIso = todayInZone();
-    const loadedOps = loadCrewOps();
-    const seededOps = autoSeedTravelOps(CREW_SCHEDULE.people, loadedOps, todayIso);
-    if (seededOps !== loadedOps) saveCrewOps(seededOps);
-    setOpsBook(seededOps);
-    const flights = loadFlights();
-    setFlightBook(flights);
-    setStopoverBook(loadStopovers());
-
-    const loadedRoster = loadRoster();
-    setRoster(loadedRoster);
-    setNotify(loadNotifySettings());
-    setScheduleView(loadScheduleViewPrefs());
-    const cleanedSites = loadSitesBook();
-    setSitesBook(cleanedSites);
-    saveSitesBook(cleanedSites);
-    const hubs = loadTravelHubs();
-    setTravelHubsBook(hubs);
-    saveTravelHubs(hubs);
-    setRolesBook(loadRolesBook());
-    setScheduleYears(loadScheduleYears());
-
-    const mergedPeople = mergePeople(CREW_SCHEDULE.people, loadedRoster);
-    const merged = mergeRotationBook(mergedPeople, loadRotations());
-    const migrated = migrateOpsIntoRotations(merged, seededOps, flights);
-    const withFlights = assumeFlightsBooked(migrated);
-    setRotationBook(withFlights);
-    saveRotations(withFlights);
-
+  // First paint already has local books; unlock undo/sync immediately, migrate in the background.
+  useLayoutEffect(() => {
+    saveSitesBook(sitesBook);
+    saveTravelHubs(travelHubsBook);
     setHydrated(true);
-    const params = new URLSearchParams(window.location.search);
-    const person = params.get("person");
+    const person = new URLSearchParams(window.location.search).get("person");
     if (person) setSelectedId(person);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot boot from eager state
   }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const todayIso = todayInZone();
+    const loadedOps = opsBook;
+    const flights = flightBook;
+    const loadedRoster = roster;
+
+    startTransition(() => {
+      const seededOps = autoSeedTravelOps(CREW_SCHEDULE.people, loadedOps, todayIso);
+      if (seededOps !== loadedOps) {
+        saveCrewOps(seededOps);
+        setOpsBook(seededOps);
+      }
+
+      const mergedPeople = mergePeople(CREW_SCHEDULE.people, loadedRoster);
+      const merged = mergeRotationBook(mergedPeople, rotationBook);
+      const migrated = migrateOpsIntoRotations(merged, seededOps, flights);
+      const withFlights = assumeFlightsBooked(migrated);
+      setRotationBook(withFlights);
+      saveRotations(withFlights);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- migrate once after hydrate
+  }, [hydrated]);
 
   useEffect(() => {
     if (!selectedId && !selectedRotationId) return;
@@ -634,10 +660,53 @@ export function CrewBoard({
     });
   }
 
-  const hiddenIdSet = useMemo(
-    () => new Set(scheduleView.hiddenPersonIds),
-    [scheduleView.hiddenPersonIds],
-  );
+  function logActivity(
+    input: Omit<Parameters<typeof appendActivity>[1], "at"> & { at?: string },
+  ) {
+    setActivityLog((prev) => {
+      const next = appendActivity(prev, input);
+      saveActivityLog(next);
+      return next;
+    });
+  }
+
+  function hideCalendarPerson(personId: string, sectionRole?: string) {
+    patchScheduleView((current) =>
+      sectionRole ? hideRoleRow(current, personId, sectionRole) : hidePerson(current, personId),
+    );
+  }
+
+  function showCalendarPerson(personId: string, sectionRole?: string) {
+    const person = overview.rows.find((row) => row.person.id === personId)?.person;
+    const homeRole = person?.role || sectionRole || "Labourer";
+    if (sectionRole) {
+      patchScheduleView((current) => unhideRoleRow(current, personId, sectionRole, homeRole));
+      logActivity({
+        kind: "role_section_move",
+        personId,
+        personName: person?.name,
+        text: `${person?.name || personId} shown under ${sectionRole}`,
+      });
+      return;
+    }
+    patchScheduleView((current) => showPerson(current, personId));
+  }
+
+  function openEmployeeEdit(personId: string) {
+    const person = overview.rows.find((row) => row.person.id === personId)?.person;
+    if (!person) return;
+    const overlay = roster.employees.find((row) => row.id === personId);
+    setEmployeeEditId(personId);
+    setEmployeeEditDraft({
+      name: person.name,
+      role: person.role,
+      notes: overlay?.notes || "",
+      category:
+        person.category === "Local" || person.category === "Subcontractor"
+          ? person.category
+          : "Regular",
+    });
+  }
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -685,22 +754,45 @@ export function CrewBoard({
       });
   }, [boardView, query, role, site, workingRows]);
 
-  const scheduleRows = useMemo(
-    () => rows.filter((row) => !hiddenIdSet.has(row.person.id)),
-    [hiddenIdSet, rows],
-  );
+  const calendarRows = useMemo(() => {
+    const out: { person: (typeof rows)[number]["person"]; displayRole: string }[] = [];
+    for (const row of rows) {
+      if (scheduleView.hiddenPersonIds.includes(row.person.id)) continue;
+      const memberships = membershipsForPerson(scheduleView, row.person.id, row.person.role);
+      for (const displayRole of memberships) {
+        if (isRoleRowHidden(scheduleView, row.person.id, displayRole)) continue;
+        out.push({ person: row.person, displayRole });
+      }
+    }
+    return out;
+  }, [rows, scheduleView]);
 
   const hiddenPeople = useMemo(() => {
     const byId = new Map(overview.rows.map((row) => [row.person.id, row.person]));
-    return scheduleView.hiddenPersonIds.map((id) => {
+    const out: { id: string; name: string; role?: string }[] = [];
+    for (const id of scheduleView.hiddenPersonIds) {
       const person = byId.get(id);
-      return {
-        id,
-        name: person?.name || id,
-        role: person?.role || "",
-      };
-    });
-  }, [overview.rows, scheduleView.hiddenPersonIds]);
+      out.push({ id, name: person?.name || id, role: person?.role });
+    }
+    for (const row of hiddenRoleRows(scheduleView)) {
+      if (scheduleView.hiddenPersonIds.includes(row.personId)) continue;
+      const person = byId.get(row.personId);
+      out.push({ id: row.personId, name: person?.name || row.personId, role: row.role });
+    }
+    return out;
+  }, [overview.rows, scheduleView]);
+
+  const roleCatalog = useMemo(
+    () => [...new Set([...CREW_ROLES, ...rolesBook.extras])],
+    [rolesBook.extras],
+  );
+
+  const reportMonth = useMemo(() => {
+    const iso = monthCursor.slice(0, 7);
+    const year = Number(iso.slice(0, 4)) || scheduleYear;
+    const month = Number(iso.slice(5, 7)) || 1;
+    return { year, month };
+  }, [monthCursor, scheduleYear]);
 
   const selected = overview.rows.find((row) => row.person.id === selectedId) ?? null;
   const selectedOps = selected ? opsFor(opsBook, selected.person.id) : null;
@@ -745,12 +837,10 @@ export function CrewBoard({
 
       <section
         className={cn(
-          boardView === "overview" || boardView === "settings"
-            ? ""
-            : "overflow-hidden rounded-2xl border border-border bg-card",
+          boardView === "overview" ? "" : "overflow-hidden rounded-2xl border border-border bg-card",
         )}
       >
-        {boardView !== "overview" && boardView !== "settings" ? (
+        {boardView !== "overview" && boardView !== "settings" && boardView !== "reports" ? (
           <div className="flex flex-wrap items-end gap-3 border-b border-border px-3 py-3 sm:px-4">
             <label className="grid gap-1 text-sm text-muted-foreground">
               <span>Search</span>
@@ -792,7 +882,7 @@ export function CrewBoard({
               </select>
             </label>
             <div className="ml-auto flex flex-wrap items-end gap-2 pb-0.5">
-              <p className="pb-2 text-sm text-muted-foreground">{hydrated ? `${rows.length} people` : "Loading…"}</p>
+              <p className="pb-2 text-sm text-muted-foreground">{rows.length} people</p>
               <button
                 type="button"
                 onClick={() => setShowAddEmployee((open) => !open)}
@@ -804,27 +894,29 @@ export function CrewBoard({
           </div>
         ) : null}
 
-        {boardView === "overview" ? (
-          <CrewOverview
-            rows={overview.rows.filter((row) => row.person.active !== false)}
-            rotationBook={rotationBook}
-            opsBook={opsBook}
-            asOf={asOf}
-            reminders={{
-              planDays: notify.reminderPlanDays,
-              checkDays: notify.reminderCheckDays,
-              escalateDays: notify.reminderEscalateDays,
-            }}
-            onOpenPerson={openPersonRotation}
-            onOpenRotation={(rotationId) => {
-              setSelectedRotationId(rotationId);
-              setSelectedId(null);
-            }}
-          />
+        {seenViews.overview ? (
+          <div className={cn(boardView !== "overview" && "hidden")}>
+            <CrewOverview
+              rows={overview.rows.filter((row) => row.person.active !== false)}
+              rotationBook={rotationBook}
+              opsBook={opsBook}
+              asOf={asOf}
+              reminders={{
+                planDays: notify.reminderPlanDays,
+                checkDays: notify.reminderCheckDays,
+                escalateDays: notify.reminderEscalateDays,
+              }}
+              onOpenPerson={openPersonRotation}
+              onOpenRotation={(rotationId) => {
+                setSelectedRotationId(rotationId);
+                setSelectedId(null);
+              }}
+            />
+          </div>
         ) : null}
 
-        {boardView === "travel" ? (
-          <div className="border-t border-border p-3 sm:p-4">
+        {seenViews.travel ? (
+          <div className={cn("border-t border-border p-3 sm:p-4", boardView !== "travel" && "hidden")}>
             <CrewTravelDesk
               rows={rows}
               opsBook={opsBook}
@@ -835,8 +927,8 @@ export function CrewBoard({
           </div>
         ) : null}
 
-        {boardView === "accommodation" ? (
-          <div className="border-t border-border p-3 sm:p-4">
+        {seenViews.accommodation ? (
+          <div className={cn("border-t border-border p-3 sm:p-4", boardView !== "accommodation" && "hidden")}>
             <CrewAccommodationDesk
               rows={rows}
               opsBook={opsBook}
@@ -849,13 +941,20 @@ export function CrewBoard({
           </div>
         ) : null}
 
-        {boardView === "year" ? (
-          <div className="overflow-auto border-t border-border p-3 sm:p-4" style={{ maxHeight: "var(--app-board-max-h)" }}>
+        {seenViews.year ? (
+          <div
+            className={cn(
+              "overflow-auto border-t border-border p-3 sm:p-4",
+              boardView !== "year" && "hidden",
+            )}
+            style={{ maxHeight: "var(--app-board-max-h)" }}
+          >
             <CrewYearTape
               year={scheduleYear}
               today={today}
-              rows={scheduleRows.map((row) => ({ person: row.person }))}
+              rows={calendarRows}
               sites={sitesBook.sites}
+              roles={roleCatalog}
               onOpen={openPersonRotation}
               onMonthClick={(year, monthIndex, personId) => {
                 const month = String(monthIndex).padStart(2, "0");
@@ -882,29 +981,43 @@ export function CrewBoard({
                     "";
                   return next;
                 }, { history: true });
+                const person = overview.rows.find((row) => row.person.id === personId)?.person;
+                logActivity({
+                  kind: "stay_place",
+                  personId,
+                  personName: person?.name,
+                  text: `${person?.name || personId} placed ${input.site} as ${input.role} · ${input.from}`,
+                });
                 return planId;
               }}
-              onHidePerson={(personId) => patchScheduleView((current) => hidePerson(current, personId))}
+              onHidePerson={hideCalendarPerson}
               hiddenPeople={hiddenPeople}
-              onShowPerson={(personId) => patchScheduleView((current) => showPerson(current, personId))}
+              onShowPerson={showCalendarPerson}
               onShowAllHidden={() => patchScheduleView((current) => showAllPeople(current))}
+              onAddUnderRole={(sectionRole) => setRoleAddSection(sectionRole)}
             />
           </div>
         ) : null}
 
-        {boardView === "month" ? (
-          <div className="flex flex-col gap-4 border-t border-border p-3 sm:p-4">
+        {seenViews.month ? (
+          <div
+            className={cn(
+              "flex flex-col gap-4 border-t border-border p-3 sm:p-4",
+              boardView !== "month" && "hidden",
+            )}
+          >
             <CrewMonthGrid
               year={scheduleYear}
               today={today}
               scrollToIso={monthScrollTo}
-              rows={rows.map((row) => ({ person: row.person }))}
+              rows={calendarRows}
               opsBook={opsBook}
               flightBook={flightBook}
               stopoverBook={stopoverBook}
               roster={roster}
               sites={sitesBook.sites}
               travelHubs={travelHubsBook.hubs}
+              active={boardView === "month"}
               interactionMode={scheduleView.calendarMode === "edit" ? "edit" : "view"}
               onInteractionModeChange={(mode) =>
                 patchScheduleView((current) => setCalendarMode(current, mode))
@@ -943,6 +1056,13 @@ export function CrewBoard({
                     "";
                   return next;
                 }, { history: true });
+                const person = overview.rows.find((row) => row.person.id === personId)?.person;
+                logActivity({
+                  kind: "stay_place",
+                  personId,
+                  personName: person?.name,
+                  text: `${person?.name || personId} placed ${input.site} as ${input.role} · ${input.from}`,
+                });
                 return planId;
               }}
               onRemoveRotation={(personId, planId) =>
@@ -966,11 +1086,19 @@ export function CrewBoard({
                   saveRotations(next);
                   return next;
                 });
+                const person = overview.rows.find((row) => row.person.id === personId)?.person;
+                logActivity({
+                  kind: "stay_extend",
+                  personId,
+                  personName: person?.name,
+                  text: `${person?.name || personId} stay extended · out ${newOut}`,
+                });
               }}
-              onHidePerson={(personId) => patchScheduleView((current) => hidePerson(current, personId))}
+              onHidePerson={hideCalendarPerson}
               hiddenPeople={hiddenPeople}
-              onShowPerson={(personId) => patchScheduleView((current) => showPerson(current, personId))}
+              onShowPerson={showCalendarPerson}
               onShowAllHidden={() => patchScheduleView((current) => showAllPeople(current))}
+              onAddUnderRole={(sectionRole) => setRoleAddSection(sectionRole)}
               onTryPerson={({ name, role }) => {
                 let personId = "";
                 patchRoster(
@@ -999,32 +1127,163 @@ export function CrewBoard({
           </div>
         ) : null}
 
-        {boardView === "settings" ? (
-          <CrewSettingsPanel
-            sitesBook={sitesBook}
-            travelHubsBook={travelHubsBook}
-            rolesBook={rolesBook}
-            notify={notify}
-            years={scheduleYears}
-            onSitesChange={(book) => {
-              setSitesBook(book);
-              saveSitesBook(book);
-            }}
-            onTravelHubsChange={(book) => {
-              setTravelHubsBook(book);
-              saveTravelHubs(book);
-            }}
-            onRolesChange={(book) => {
-              setRolesBook(book);
-              saveRolesBook(book);
-            }}
-            onNotifyChange={patchNotify}
-            onYearsChange={setScheduleYears}
-          />
+        {seenViews.reports ? (
+          <div className={cn(boardView !== "reports" && "hidden")}>
+            <CrewMonthlyReportPanel
+              year={scheduleYear}
+              month={reportMonth.month}
+              people={people}
+              opsBook={opsBook}
+              flightBook={flightBook}
+              stopoverBook={stopoverBook}
+              activityLog={activityLog}
+              travelHubs={travelHubsBook.hubs}
+              onOpen={openPersonRotation}
+            />
+          </div>
         ) : null}
 
-        {boardView === "employees" ? (
-          <div className="overflow-y-auto border-t border-border" style={{ maxHeight: "var(--app-board-max-h)" }}>
+        {seenViews.settings ? (
+          <div className={cn(boardView !== "settings" && "hidden")}>
+            <CrewSettingsPanel
+              sitesBook={sitesBook}
+              travelHubsBook={travelHubsBook}
+              rolesBook={rolesBook}
+              notify={notify}
+              years={scheduleYears}
+              onSitesChange={(book) => {
+                setSitesBook(book);
+                saveSitesBook(book);
+              }}
+              onTravelHubsChange={(book) => {
+                setTravelHubsBook(book);
+                saveTravelHubs(book);
+              }}
+              onRolesChange={(book) => {
+                setRolesBook(book);
+                saveRolesBook(book);
+              }}
+              onNotifyChange={patchNotify}
+              onYearsChange={setScheduleYears}
+            />
+          </div>
+        ) : null}
+
+        {seenViews.employees ? (
+          <div
+            className={cn(
+              "overflow-y-auto border-t border-border",
+              boardView !== "employees" && "hidden",
+            )}
+            style={{ maxHeight: "var(--app-board-max-h)" }}
+          >
+            {employeeEditId ? (
+              <div className="border-b border-border bg-muted/20 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold tracking-tight">Edit employee info</h3>
+                  <button
+                    type="button"
+                    onClick={() => setEmployeeEditId(null)}
+                    className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-muted-foreground">Name</span>
+                    <input
+                      value={employeeEditDraft.name}
+                      onChange={(event) =>
+                        setEmployeeEditDraft((current) => ({ ...current, name: event.target.value }))
+                      }
+                      className="h-9 rounded-lg border border-input bg-card px-2"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-muted-foreground">Home role</span>
+                    <input
+                      value={employeeEditDraft.role}
+                      onChange={(event) =>
+                        setEmployeeEditDraft((current) => ({ ...current, role: event.target.value }))
+                      }
+                      list="employee-edit-roles"
+                      className="h-9 rounded-lg border border-input bg-card px-2"
+                    />
+                    <datalist id="employee-edit-roles">
+                      {roleCatalog.map((entry) => (
+                        <option key={entry} value={entry} />
+                      ))}
+                    </datalist>
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-muted-foreground">Category</span>
+                    <select
+                      value={employeeEditDraft.category}
+                      onChange={(event) =>
+                        setEmployeeEditDraft((current) => ({
+                          ...current,
+                          category: event.target.value as "Regular" | "Local" | "Subcontractor",
+                        }))
+                      }
+                      className="h-9 rounded-lg border border-input bg-card px-2"
+                    >
+                      <option value="Regular">Regular</option>
+                      <option value="Local">Local</option>
+                      <option value="Subcontractor">Subcontractor</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-sm sm:col-span-2 lg:col-span-4">
+                    <span className="text-muted-foreground">Notes</span>
+                    <input
+                      value={employeeEditDraft.notes}
+                      onChange={(event) =>
+                        setEmployeeEditDraft((current) => ({ ...current, notes: event.target.value }))
+                      }
+                      className="h-9 rounded-lg border border-input bg-card px-2"
+                      placeholder="Optional"
+                    />
+                  </label>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={!employeeEditDraft.name.trim()}
+                    onClick={() => {
+                      const personId = employeeEditId;
+                      const seed = overview.rows.find((row) => row.person.id === personId)?.person;
+                      patchRoster(
+                        (current) =>
+                          upsertEmployeeProfile(
+                            current,
+                            personId,
+                            {
+                              name: employeeEditDraft.name,
+                              role: employeeEditDraft.role,
+                              notes: employeeEditDraft.notes,
+                              category: employeeEditDraft.category,
+                            },
+                            seed
+                              ? { name: seed.name, role: seed.role }
+                              : undefined,
+                          ),
+                        { history: true },
+                      );
+                      logActivity({
+                        kind: "employee_edit",
+                        personId,
+                        personName: employeeEditDraft.name.trim(),
+                        text: `Updated ${employeeEditDraft.name.trim()} · ${employeeEditDraft.role} · ${employeeEditDraft.category}`,
+                      });
+                      setEmployeeEditId(null);
+                    }}
+                    className="h-9 rounded-lg bg-stone-900 px-3 text-sm font-semibold text-white disabled:opacity-40"
+                  >
+                    Save info
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {rows.length === 0 ? (
               <p className="px-4 py-8 text-sm text-muted-foreground">No crew match these filters.</p>
             ) : (
@@ -1036,19 +1295,20 @@ export function CrewBoard({
                     <li key={row.person.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                       <button
                         type="button"
-                        onClick={() => openPersonRotation(row.person.id)}
+                        onClick={() => openEmployeeEdit(row.person.id)}
                         className="min-w-0 flex-1 text-left hover:opacity-80"
                       >
                         <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                           <span>{row.person.name}</span>
                           {row.person.provisional ? (
-                            <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                            <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[0.625rem] font-semibold tracking-wide text-muted-foreground uppercase">
                               Draft
                             </span>
                           ) : null}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {roleLabel(row.person)}
+                          {row.person.category ? ` · ${row.person.category}` : ""}
                           {row.person.manual ? " · Manual" : ""}
                         </p>
                       </button>
@@ -1060,6 +1320,13 @@ export function CrewBoard({
                       >
                         {isActive ? "Active" : "Inactive"}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => openEmployeeEdit(row.person.id)}
+                        className="h-8 rounded-lg border border-input px-3 text-xs font-medium hover:bg-muted"
+                      >
+                        Edit info
+                      </button>
                       <button
                         type="button"
                         onClick={() => setSelectedId(row.person.id)}
@@ -1108,7 +1375,7 @@ export function CrewBoard({
           className={cn("min-w-0 overflow-auto", boardView !== "list" && "hidden")}
           style={{ maxHeight: "var(--app-board-max-h)" }}
         >
-          <div className="sticky top-0 z-10 grid min-w-[56rem] grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] gap-2 border-b border-border bg-card px-4 py-2 text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
+          <div className="sticky top-0 z-10 grid min-w-[56rem] grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] gap-2 border-b border-border bg-card px-4 py-2 text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">
             <span>Crew</span>
             <span>Site</span>
             <span>Status</span>
@@ -1172,7 +1439,7 @@ export function CrewBoard({
                       </span>
                       <span className="text-sm tabular-nums text-muted-foreground">
                         {row.rotationDay == null ? "-" : `Day ${row.rotationDay} of ${row.rotationDays}`}
-                        {progress != null ? <span className="mt-0.5 block text-[13px]">{progress}%</span> : null}
+                        {progress != null ? <span className="mt-0.5 block text-[0.8125rem]">{progress}%</span> : null}
                       </span>
                       <span
                         className={cn(
@@ -1195,6 +1462,59 @@ export function CrewBoard({
         </div>
       </section>
 
+      {roleAddSection ? (
+        <CrewRoleAddDialog
+          sectionRole={roleAddSection}
+          people={overview.rows.map((row) => ({
+            id: row.person.id,
+            name: row.person.name,
+            role: row.person.role,
+          }))}
+          onClose={() => setRoleAddSection(null)}
+          onPickExisting={(personId) => {
+            const person = overview.rows.find((row) => row.person.id === personId)?.person;
+            if (!person) return;
+            patchScheduleView((current) =>
+              addPersonUnderRole(current, personId, person.role, roleAddSection),
+            );
+            logActivity({
+              kind: "role_section_move",
+              personId,
+              personName: person.name,
+              text: `${person.name} moved under ${roleAddSection} (prior section hidden)`,
+            });
+            setRoleAddSection(null);
+          }}
+          onCreateNew={({ name, role }) => {
+            let personId = "";
+            patchRoster(
+              (current) => {
+                const created = addProvisionalEmployee(current, {
+                  name,
+                  role: role || roleAddSection,
+                });
+                if (!created) return current;
+                personId = created.personId;
+                return created.roster;
+              },
+              { history: true },
+            );
+            if (personId) {
+              patchScheduleView((current) =>
+                addPersonUnderRole(current, personId, role || roleAddSection, roleAddSection),
+              );
+              logActivity({
+                kind: "role_section_move",
+                personId,
+                personName: name,
+                text: `New ${name} under ${roleAddSection}`,
+              });
+            }
+            setRoleAddSection(null);
+          }}
+        />
+      ) : null}
+
       {selected && selectedOps ? (
         <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/45 p-0 sm:p-4" role="presentation">
           <button type="button" aria-label="Close crew detail" className="absolute inset-0" onClick={() => setSelectedId(null)} />
@@ -1211,15 +1531,24 @@ export function CrewBoard({
               year={CREW_SCHEDULE.year}
               flightBook={flightBook}
               sites={sitesBook.sites}
+              roles={roleCatalog}
               onClose={() => setSelectedId(null)}
               onChange={(recipe) => patchOps(selected.person.id, recipe)}
               onSaveFlight={saveFlightBooking}
               onEmploymentStatus={(status) =>
                 patchRoster((current) => setEmploymentStatus(current, selected.person.id, status))
               }
-              onAddRotation={(input) =>
-                patchRoster((current) => addNextRotation(current, selected.person.id, input))
-              }
+              onAddRotation={(input) => {
+                patchRoster((current) => addNextRotation(current, selected.person.id, input), {
+                  history: true,
+                });
+                logActivity({
+                  kind: "stay_place",
+                  personId: selected.person.id,
+                  personName: selected.person.name,
+                  text: `${selected.person.name} next rotation ${input.site} as ${input.role} · ${input.from}`,
+                });
+              }}
             />
           </div>
         </div>
@@ -1274,6 +1603,7 @@ function PersonProfile({
   year,
   flightBook,
   sites = DEFAULT_SITES,
+  roles = [],
   onClose,
   onChange,
   onSaveFlight,
@@ -1285,6 +1615,7 @@ function PersonProfile({
   staffName: string;
   year: number;
   sites?: CrewSite[];
+  roles?: string[];
   flightBook: FlightBook;
   onClose: () => void;
   onChange: (recipe: (current: CrewPersonOps) => CrewPersonOps) => void;
@@ -1317,7 +1648,7 @@ function PersonProfile({
     <div className="flex h-full flex-col">
       <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-7">
         <div className="min-w-0">
-          <p className="text-[13px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+          <p className="text-[0.8125rem] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
             Schedule year {year}
           </p>
           <h2 id="crew-person-title" className="mt-1 text-lg font-semibold tracking-tight">
@@ -1371,7 +1702,7 @@ function PersonProfile({
       <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-7">
       <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4">
         <div>
-          <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">Employment</p>
+          <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">Employment</p>
           <p className="mt-1 text-sm">
             {isActive
               ? "Included in live ops, travel, and action lists."
@@ -1392,6 +1723,7 @@ function PersonProfile({
         defaultRole={snap.person.role}
         defaultDays={rotationFor(snap.person)}
         isActive={isActive}
+        roles={roles}
         onSave={onAddRotation}
       />
 
@@ -1415,7 +1747,7 @@ function PersonProfile({
       </section>
 
       <section className="grid gap-3 rounded-xl bg-muted/40 p-3">
-        <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">Current assignment</p>
+        <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">Current assignment</p>
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <Fact label="Site" value={snap.site ? siteLabel(snap.site) : "No current assignment"} />
           <Fact label="Status" value={dutyLabel(snap.duty)} />
@@ -1446,8 +1778,45 @@ function PersonProfile({
         ) : null}
       </section>
 
+      <section className="grid gap-2">
+        <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">
+          Rotations · {year}
+        </p>
+        {(snap.person.stints?.length ?? 0) === 0 ? (
+          <p className="text-sm text-muted-foreground">No rotations on the schedule yet.</p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {[...(snap.person.stints ?? [])]
+              .sort((a, b) => a.from.localeCompare(b.from))
+              .map((stint) => {
+                const lastInclusive = stint.out ? addDays(stint.out, -1) : null;
+                return (
+                  <li
+                    key={`${stint.from}-${stint.site}-${stint.out ?? "open"}`}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-2.5 py-2 text-sm"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-950">
+                        {stint.site}
+                      </span>
+                      {stint.role ? (
+                        <span className="text-xs text-muted-foreground">{stint.role}</span>
+                      ) : null}
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {formatMedium(stint.from)}
+                      {" – "}
+                      {lastInclusive ? formatMedium(lastInclusive) : "open"}
+                    </span>
+                  </li>
+                );
+              })}
+          </ul>
+        )}
+      </section>
+
       <section className="grid gap-3">
-        <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">IN &amp; OUT</p>
+        <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">IN &amp; OUT</p>
         <div className="grid gap-2 sm:grid-cols-2">
           <DateField
             label="IN"
@@ -1475,7 +1844,7 @@ function PersonProfile({
       />
 
       <section className="grid gap-3">
-        <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">
+        <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">
           Accommodation
         </p>
         <label className="flex items-start gap-3 rounded-xl border border-border bg-card px-3 py-3 text-sm">
@@ -1503,7 +1872,7 @@ function PersonProfile({
         </label>
         {(snap.person.flights?.length ?? 0) > 0 ? (
           <div className="space-y-2 rounded-xl border border-border bg-card p-3">
-            <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">Sheet flights</p>
+            <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">Sheet flights</p>
             <ul className="space-y-2 text-sm">
               {snap.person.flights!.map((flight, index) => (
                 <li key={`${snap.person.id}-flight-${index}`} className="rounded-lg bg-muted/50 px-3 py-2">
@@ -1536,7 +1905,7 @@ function PersonProfile({
       </section>
 
       <section className="grid gap-3">
-        <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">Updates</p>
+        <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">Updates</p>
         <div className="flex gap-2">
           <input
             value={note}
@@ -1575,7 +1944,7 @@ function PersonProfile({
       </section>
 
       <section className="grid gap-2">
-        <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">Work & travel timeline</p>
+        <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">Work & travel timeline</p>
         {segments.length === 0 ? (
           <p className="text-sm text-muted-foreground">No dated marks for this person yet.</p>
         ) : (

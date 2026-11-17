@@ -42,9 +42,16 @@
   --input: #d7e0ec;
   --ring: #356dbd;
   --radius: 0.625rem;
+
+  /*
+   * Fluid UI for every desk — rem Tailwind follows html font-size.
+   * Laptop ≈15–16px · typical desk ≈17px · Gord / wall ≤18.5px (not a zoom circus).
+   */
+  --app-type-min: 15px;
+  --app-type-max: 18.5px;
   /* Shell width: laptop-friendly, stretches on Gord-class / wall monitors. */
   --app-shell-max: min(100%, 100rem);
-  /* Month / year boards: tall vertical pane so you scroll less up-down. */
+  /* Month / year boards: use most of the screen height. */
   --app-board-max-h: min(100dvh - 12rem, 90rem);
 }
 
@@ -57,6 +64,7 @@
 
 @media (min-width: 2000px) {
   :root {
+    --app-type-max: 19px;
     --app-shell-max: min(100%, 140rem);
     --app-board-max-h: min(100dvh - 10rem, 110rem);
   }
@@ -64,6 +72,7 @@
 
 @media (min-width: 2560px) {
   :root {
+    --app-type-max: 19px;
     --app-shell-max: min(100%, 168rem);
     --app-board-max-h: min(100dvh - 9rem, 120rem);
   }
@@ -73,9 +82,8 @@
   * {
     @apply border-border;
   }
-  /* Fluid type: readable on normal desks, a step larger on big displays — not a zoom circus. */
   html {
-    font-size: clamp(15px, 0.38vw + 11.4px, 20px);
+    font-size: clamp(var(--app-type-min), 0.3vw + 12.4px, var(--app-type-max));
   }
   body {
     @apply bg-background text-foreground font-sans text-sm antialiased;

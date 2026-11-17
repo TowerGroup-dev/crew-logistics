@@ -559,7 +559,15 @@ export function dayCounts(iso: string) {
   return { total: known, camp, out, other, bySite };
 }
 
+/**
+ * Work & travel timeline for a person.
+ * Prefers merged stints (import + calendar adjustments) so profile/year stay in sync
+ * with places painted or OUT changes on Month. Falls back to sheet event marks.
+ */
 export function personSegments(person: CrewPerson) {
+  if (person.stints && person.stints.length > 0) {
+    return segmentsFromStints(person.stints);
+  }
   if (person.events.length === 0) return [] as { from: string; to: string; mark: string }[];
   const events = [...person.events].sort((a, b) => a.date.localeCompare(b.date));
   const segments: { from: string; to: string; mark: string }[] = [];
@@ -568,6 +576,39 @@ export function personSegments(person: CrewPerson) {
     const next = events[index + 1];
     const to = next ? addDays(next.date, -1) : scheduleYearLastDay();
     segments.push({ from: event.date, to: to < event.date ? event.date : to, mark: event.mark });
+  }
+  return segments;
+}
+
+/** Inclusive on-site windows + Out gaps from exclusive-out stints. */
+function segmentsFromStints(stints: CrewStint[]) {
+  const yearEnd = scheduleYearLastDay();
+  const sorted = [...stints]
+    .filter((stint) => stint.from && stint.from <= yearEnd)
+    .sort((a, b) => a.from.localeCompare(b.from));
+  const segments: { from: string; to: string; mark: string }[] = [];
+  let cursor: string | null = null;
+
+  for (const stint of sorted) {
+    const mark =
+      worksiteFromMarkLocal(stint.site) ||
+      stint.sites.map(worksiteFromMarkLocal).find(Boolean) ||
+      stint.site ||
+      "IQA";
+    const lastInclusive = stint.out ? addDays(stint.out, -1) : yearEnd;
+    const to = lastInclusive > yearEnd ? yearEnd : lastInclusive;
+    if (cursor && cursor < stint.from) {
+      const gapTo = addDays(stint.from, -1);
+      segments.push({ from: cursor, to: gapTo < cursor ? cursor : gapTo, mark: "Out" });
+    }
+    if (to >= stint.from) {
+      segments.push({ from: stint.from, to, mark });
+    }
+    cursor = stint.out && stint.out <= yearEnd ? stint.out : to < yearEnd ? addDays(to, 1) : null;
+  }
+
+  if (cursor && cursor <= yearEnd) {
+    segments.push({ from: cursor, to: yearEnd, mark: "Out" });
   }
   return segments;
 }

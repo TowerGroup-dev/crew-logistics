@@ -430,15 +430,15 @@ function RemindersSheet({
         window.sections.length ? (
           <div key={window.label} className="space-y-2">
             <div className="px-2 pt-1">
-              <p className="text-[13px] font-semibold tracking-[0.12em] text-foreground uppercase">{window.label}</p>
-              <p className="text-[13px] text-foreground/70">{window.range}</p>
+              <p className="text-[0.8125rem] font-semibold tracking-[0.12em] text-foreground uppercase">{window.label}</p>
+              <p className="text-[0.8125rem] text-foreground/70">{window.range}</p>
             </div>
             {window.sections.map((section) => (
               <div key={`${window.label}-${section.key}`} className="overflow-hidden rounded-xl border border-border/70">
-                <p className="border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[13px] font-semibold text-foreground">
+                <p className="border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[0.8125rem] font-semibold text-foreground">
                   {section.label}
                 </p>
-                <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 border-b border-border/60 px-3 py-1.5 text-[12px] font-semibold tracking-wide text-foreground uppercase">
+                <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 border-b border-border/60 px-3 py-1.5 text-xs font-semibold tracking-wide text-foreground uppercase">
                   <span>Date</span>
                   <span>Description</span>
                 </div>
@@ -528,7 +528,7 @@ function ReminderWindow({
       >
         <span className="min-w-0">
           <span className="block text-sm font-semibold tracking-wide text-foreground uppercase">{label}</span>
-          <span className="block text-[13px] font-medium text-foreground/75">
+          <span className="block text-[0.8125rem] font-medium text-foreground/75">
             {range}
             {count ? ` · ${count}` : " · clear"}
           </span>
@@ -540,10 +540,10 @@ function ReminderWindow({
           <div className="border-t border-border/70">
             {sections.map((section) => (
               <div key={section.key} className="border-b border-border/60 last:border-b-0">
-                <p className="px-4 pt-3 pb-1 text-[13px] font-semibold tracking-wide text-foreground uppercase">
+                <p className="px-4 pt-3 pb-1 text-[0.8125rem] font-semibold tracking-wide text-foreground uppercase">
                   {section.label}
                 </p>
-                <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 px-4 pb-1 text-[12px] font-semibold tracking-wide text-foreground uppercase">
+                <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 px-4 pb-1 text-xs font-semibold tracking-wide text-foreground uppercase">
                   <span>Date</span>
                   <span>Description</span>
                 </div>
@@ -624,7 +624,7 @@ function WeekStoryList({
           >
             <span
               className={cn(
-                "mt-0.5 w-14 shrink-0 text-[12px] font-semibold tracking-wide uppercase",
+                "mt-0.5 w-14 shrink-0 text-xs font-semibold tracking-wide uppercase",
                 line.kind === "here" && "text-emerald-700",
                 line.kind === "arriving" && "text-teal-700",
                 line.kind === "leaving" && "text-indigo-700",
@@ -824,10 +824,18 @@ function ActionRow({
 
 function OnSiteTable({ rows, onOpen }: { rows: OnSiteRow[]; onOpen: (rotationId: string | null, personId: string) => void }) {
   if (!rows.length) return <p className="px-4 py-7 text-sm text-muted-foreground">Nobody on site right now.</p>;
+  const cols =
+    "lg:grid-cols-[minmax(11rem,1.3fr)_minmax(4.5rem,0.65fr)_minmax(7.5rem,1fr)_minmax(7.5rem,1fr)_minmax(6.5rem,0.8fr)_minmax(6.5rem,0.8fr)_minmax(6.5rem,0.8fr)]";
   return (
     <div>
-      <div className="hidden grid-cols-[minmax(12rem,1.4fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(7rem,0.85fr)_minmax(7rem,0.85fr)_minmax(7rem,0.85fr)] gap-4 border-b border-border px-4 py-2 text-[13px] font-medium tracking-wide text-muted-foreground uppercase lg:grid">
+      <div
+        className={cn(
+          "hidden gap-4 border-b border-border px-4 py-2 text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase lg:grid",
+          cols,
+        )}
+      >
         <span>Crew</span>
+        <span>Location</span>
         <span>Time in</span>
         <span>To go</span>
         <span>Flight in</span>
@@ -840,15 +848,24 @@ function OnSiteTable({ rows, onOpen }: { rows: OnSiteRow[]; onOpen: (rotationId:
             <button
               type="button"
               onClick={() => onOpen(row.rotationId, row.personId)}
-              className="grid w-full grid-cols-1 gap-3 px-4 py-3 text-left transition hover:bg-muted/40 lg:grid-cols-[minmax(12rem,1.4fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_minmax(7rem,0.85fr)_minmax(7rem,0.85fr)_minmax(7rem,0.85fr)] lg:items-center lg:gap-4"
+              className={cn(
+                "grid w-full grid-cols-1 gap-3 px-4 py-3 text-left transition hover:bg-muted/40 lg:items-center lg:gap-4",
+                cols,
+              )}
             >
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">{row.name}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {row.role}
-                  {row.site ? ` · ${row.site}` : ""}
-                </span>
+                <span className="block truncate text-xs text-muted-foreground">{row.role}</span>
               </span>
+              <Labelled label="Location">
+                {row.site ? (
+                  <span className="inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-950">
+                    {row.site}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </Labelled>
               <TimeIn row={row} />
               <ToGo row={row} />
               <Labelled label="Flight in">

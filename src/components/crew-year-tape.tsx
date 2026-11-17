@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { EyeOff } from "lucide-react";
+import { EyeOff, Plus } from "lucide-react";
 import {
   CREW_ROLE_ORDER,
+  CREW_ROLES,
   CREW_SCHEDULE,
   isCampSite,
   isOffRotation,
+  normalizeRole,
   siteLabel,
   statusOnDate,
   yearOnSiteBars,
@@ -66,6 +68,7 @@ function overlapMessage(person: CrewPerson, from: string, to: string) {
 
 type Row = {
   person: CrewPerson;
+  displayRole?: string;
 };
 
 export function CrewYearTape({
@@ -73,6 +76,7 @@ export function CrewYearTape({
   today,
   rows,
   sites = DEFAULT_SITES,
+  roles = [],
   onOpen,
   onMonthClick,
   onAddRotation,
@@ -80,47 +84,56 @@ export function CrewYearTape({
   hiddenPeople,
   onShowPerson,
   onShowAllHidden,
+  onAddUnderRole,
 }: {
   year?: number;
   today: string;
   rows: Row[];
   sites?: CrewSite[];
+  roles?: string[];
   onOpen: (personId: string) => void;
   /** monthIndex is 1–12. personId set when clicking a crew row month cell. */
   onMonthClick?: (year: number, monthIndex: number, personId?: string) => void;
   onAddRotation?: (personId: string, input: PlaceRotationInput) => string | void;
-  onHidePerson?: (personId: string) => void;
-  hiddenPeople?: { id: string; name: string }[];
-  onShowPerson?: (personId: string) => void;
+  onHidePerson?: (personId: string, sectionRole?: string) => void;
+  hiddenPeople?: { id: string; name: string; role?: string }[];
+  onShowPerson?: (personId: string, sectionRole?: string) => void;
   onShowAllHidden?: () => void;
+  onAddUnderRole?: (sectionRole: string) => void;
 }) {
   const siteList = sites.length ? sites : DEFAULT_SITES;
+  const roleOptions = roles.length ? roles : [...CREW_ROLES];
   const todayPct = yearTodayMarker(today, year);
   const todayMonth = today.startsWith(String(year)) ? Number(today.slice(5, 7)) : null;
   const [placePrompt, setPlacePrompt] = useState<{
     person: CrewPerson;
+    sectionRole: string;
     from: string;
     to: string;
   } | null>(null);
 
   const groups = useMemo(() => {
     const roleRank = (value: string) => {
-      const index = (CREW_ROLE_ORDER as readonly string[]).indexOf(value);
+      const key = normalizeRole(value);
+      const index = (CREW_ROLE_ORDER as readonly string[]).indexOf(key as (typeof CREW_ROLE_ORDER)[number]);
       return index === -1 ? CREW_ROLE_ORDER.length : index;
     };
     const sorted = [...rows].sort(
-      (a, b) => roleRank(a.person.role) - roleRank(b.person.role) || a.person.name.localeCompare(b.person.name),
+      (a, b) =>
+        roleRank(a.displayRole || a.person.role) - roleRank(b.displayRole || b.person.role) ||
+        a.person.name.localeCompare(b.person.name),
     );
     const out: { role: string; people: CrewPerson[] }[] = [];
     for (const row of sorted) {
+      const role = normalizeRole(row.displayRole || row.person.role);
       const last = out[out.length - 1];
-      if (!last || last.role !== row.person.role) out.push({ role: row.person.role, people: [row.person] });
+      if (!last || last.role !== role) out.push({ role, people: [row.person] });
       else last.people.push(row.person);
     }
     return out;
   }, [rows]);
 
-  function startPlace(person: CrewPerson, monthIndex: number) {
+  function startPlace(person: CrewPerson, monthIndex: number, sectionRole: string) {
     const month = String(monthIndex).padStart(2, "0");
     const monthStart = `${year}-${month}-01`;
     const nextMonth =
@@ -138,7 +151,7 @@ export function CrewYearTape({
       to = next;
     }
     if (onAddRotation) {
-      setPlacePrompt({ person, from, to });
+      setPlacePrompt({ person, sectionRole, from, to });
       return;
     }
     onMonthClick?.(year, monthIndex, person.id);
@@ -182,10 +195,10 @@ export function CrewYearTape({
                       active && "bg-rose-50",
                     )}
                   >
-                    <p className={cn("truncate text-[13px] font-bold tracking-wide", active ? "text-rose-700" : "text-foreground")}>
+                    <p className={cn("truncate text-[0.8125rem] font-bold tracking-wide", active ? "text-rose-700" : "text-foreground")}>
                       {month.short}
                     </p>
-                    <p className={cn("mt-0.5 truncate text-[12px]", active ? "font-medium text-rose-600" : "text-muted-foreground")}>
+                    <p className={cn("mt-0.5 truncate text-xs", active ? "font-medium text-rose-600" : "text-muted-foreground")}>
                       {year}
                     </p>
                   </button>
@@ -200,12 +213,32 @@ export function CrewYearTape({
             ) : (
               groups.map((group, groupIndex) => (
                 <li key={group.role}>
-                  <CrewRoleHeader role={group.role} count={group.people.length} spaced={groupIndex > 0} />
+                  <CrewRoleHeader
+                    role={group.role}
+                    count={group.people.length}
+                    spaced={groupIndex > 0}
+                    trailing={
+                      onAddUnderRole ? (
+                        <button
+                          type="button"
+                          title={`Add someone under ${group.role}`}
+                          aria-label={`Add under ${group.role}`}
+                          onClick={() => onAddUnderRole(group.role)}
+                          className="inline-flex size-7 items-center justify-center rounded-md bg-slate-300/70 text-slate-800 hover:bg-slate-300"
+                        >
+                          <Plus className="size-3.5" aria-hidden />
+                        </button>
+                      ) : null
+                    }
+                  />
                   <ul className="divide-y divide-border">
                     {group.people.map((person) => {
                       const bars = yearOnSiteBars(person, year);
                       return (
-                        <li key={person.id} className="grid grid-cols-[minmax(0,13rem)_minmax(0,1fr)] hover:bg-muted/40">
+                        <li
+                          key={`${person.id}::${group.role}`}
+                          className="grid grid-cols-[minmax(0,13rem)_minmax(0,1fr)] hover:bg-muted/40"
+                        >
                           <div className="flex min-w-0 items-center gap-0.5 py-2 pr-1 pl-4">
                             <button
                               type="button"
@@ -219,7 +252,7 @@ export function CrewYearTape({
                                 type="button"
                                 title={`Hide ${person.name}`}
                                 aria-label={`Hide ${person.name}`}
-                                onClick={() => onHidePerson(person.id)}
+                                onClick={() => onHidePerson(person.id, group.role)}
                                 className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                               >
                                 <EyeOff className="size-3.5" />
@@ -233,7 +266,7 @@ export function CrewYearTape({
                                   key={month.key}
                                   type="button"
                                   title={`Place ${person.name} from ${month.long} ${year}`}
-                                  onClick={() => startPlace(person, index + 1)}
+                                  onClick={() => startPlace(person, index + 1, group.role)}
                                   className={cn(
                                     "border-r border-border/50 last:border-r-0 hover:bg-primary/15",
                                     todayMonth === index + 1 && "bg-rose-50/40",
@@ -259,7 +292,7 @@ export function CrewYearTape({
                                   key={`${person.id}-${bar.from}-${bar.site}`}
                                   title={`${label} · ${siteLabel(bar.site)} · ${formatMedium(bar.from)} – ${formatMedium(bar.to)}`}
                                   className={cn(
-                                    "pointer-events-none absolute top-3 z-[1] flex h-8 items-center overflow-hidden rounded-md px-1.5 text-[12px] font-semibold text-white",
+                                    "pointer-events-none absolute top-3 z-[1] flex h-8 items-center overflow-hidden rounded-md px-1.5 text-xs font-semibold text-white",
                                     siteBarTone(bar.site, siteList),
                                   )}
                                   style={{ left: `${bar.leftPct}%`, width: `${bar.widthPct}%` }}
@@ -284,10 +317,11 @@ export function CrewYearTape({
         <CrewPlaceDialog
           personName={placePrompt.person.name}
           defaultSite={siteList[0]?.code || "IQA"}
-          defaultRole={placePrompt.person.role}
+          defaultRole={placePrompt.sectionRole || placePrompt.person.role}
           from={placePrompt.from}
           to={placePrompt.to}
           sites={siteList}
+          roles={roleOptions}
           overlapError={overlapMessage(placePrompt.person, placePrompt.from, placePrompt.to)}
           onCancel={() => setPlacePrompt(null)}
           onSave={(input) => {
