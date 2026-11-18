@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Eye, EyeOff, Pencil, Plus } from "lucide-react";
 import type { CalendarInteractionMode } from "@/lib/crew-schedule-view";
 import {
@@ -503,10 +503,10 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     y: number;
     plan: string;
   } | null>(null);
-  const topScrollRef = useRef<HTMLDivElement>(null);
   const leftScrollRef = useRef<HTMLDivElement>(null);
   const syncingVertical = useRef(false);
-  const syncingHorizontal = useRef(false);
+  const lastScrollTop = useRef(0);
+  const dayWindowRaf = useRef<number | null>(null);
   const menuHubs = useMemo(() => stopoverMenuHubs(travelHubs), [travelHubs]);
 
   function showFlash(message: string) {
@@ -518,13 +518,18 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   useEffect(() => {
     return () => {
       if (flashTimer.current) clearTimeout(flashTimer.current);
+      if (dayWindowRaf.current != null) cancelAnimationFrame(dayWindowRaf.current);
     };
   }, []);
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const didScrollToToday = useRef(false);
-  /** Only mount day cells in the viewport (+ buffer). Full-year DOM was freezing tab switches. */
-  const DAY_WINDOW_BUFFER = 42;
-  const [dayWindow, setDayWindow] = useState({ start: 0, end: 90 });
+  /**
+   * Wide day window + hysteresis so horizontal scrubbing stays native-smooth.
+   * React only remounts cells when the viewport nears the edge of the mounted range.
+   */
+  const DAY_WINDOW_BUFFER = 90;
+  const DAY_WINDOW_MARGIN = 28;
+  const [dayWindow, setDayWindow] = useState({ start: 0, end: 120 });
   const dayWindowRef = useRef(dayWindow);
   dayWindowRef.current = dayWindow;
 
@@ -602,36 +607,32 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     return bands;
   }, [days]);
 
-  function refreshDayWindow() {
-    const main = mainScrollRef.current;
-    if (!main || days.length === 0) return;
-    const col = dayColPx || 1;
-    const left = main.scrollLeft;
-    const start = Math.max(0, Math.floor(left / col) - DAY_WINDOW_BUFFER);
-    const end = Math.min(
-      days.length,
-      Math.ceil((left + main.clientWidth) / col) + DAY_WINDOW_BUFFER,
-    );
-    const prev = dayWindowRef.current;
-    if (prev.start === start && prev.end === end) return;
-    dayWindowRef.current = { start, end };
-    setDayWindow({ start, end });
-  }
-
-  /** Top scrubber ↔ day boxes — same scrollLeft in the same turn. */
-  function syncDaysScroll(from: "top" | "main") {
-    const top = topScrollRef.current;
-    const main = mainScrollRef.current;
-    if (!top || !main || syncingHorizontal.current) return;
-    syncingHorizontal.current = true;
-    const left = from === "top" ? top.scrollLeft : main.scrollLeft;
-    if (main.scrollLeft !== left) main.scrollLeft = left;
-    if (top.scrollLeft !== left) top.scrollLeft = left;
-    refreshDayWindow();
-    // Keep both panes on the same offset after virtualized rows re-layout.
-    if (main.scrollLeft !== left) main.scrollLeft = left;
-    if (top.scrollLeft !== left) top.scrollLeft = left;
-    syncingHorizontal.current = false;
+  function refreshDayWindow(force = false) {
+    if (dayWindowRaf.current != null) return;
+    dayWindowRaf.current = requestAnimationFrame(() => {
+      dayWindowRaf.current = null;
+      const main = mainScrollRef.current;
+      if (!main || days.length === 0) return;
+      const col = dayColPx || 1;
+      const left = main.scrollLeft;
+      const viewStart = Math.max(0, Math.floor(left / col));
+      const viewEnd = Math.min(days.length, Math.ceil((left + main.clientWidth) / col));
+      const prev = dayWindowRef.current;
+      // Stay on the current mounted strip until the viewport nears either edge.
+      if (
+        !force &&
+        viewStart >= prev.start + DAY_WINDOW_MARGIN &&
+        viewEnd <= prev.end - DAY_WINDOW_MARGIN
+      ) {
+        return;
+      }
+      const start = Math.max(0, viewStart - DAY_WINDOW_BUFFER);
+      const end = Math.min(days.length, viewEnd + DAY_WINDOW_BUFFER);
+      if (prev.start === start && prev.end === end) return;
+      dayWindowRef.current = { start, end };
+      // Don't block the scroll thread with cell remounts.
+      startTransition(() => setDayWindow({ start, end }));
+    });
   }
 
   /** Names on the left stay locked to the day rows while scrolling vertically. */
@@ -642,33 +643,31 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     syncingVertical.current = true;
     if (from === "main") left.scrollTop = main.scrollTop;
     else main.scrollTop = left.scrollTop;
-    requestAnimationFrame(() => {
-      syncingVertical.current = false;
-    });
+    syncingVertical.current = false;
   }
+
+  // Virtualized rows can reset scrollLeft on re-layout — pin it back.
+  const pinnedScrollLeft = useRef(0);
 
   function setDaysScrollLeft(left: number) {
     const main = mainScrollRef.current;
-    const top = topScrollRef.current;
     const next = Math.max(0, left);
+    pinnedScrollLeft.current = next;
     if (main) main.scrollLeft = next;
-    if (top) top.scrollLeft = next;
-    refreshDayWindow();
+    refreshDayWindow(true);
   }
 
-  // After row virtualization re-layouts, put both panes back on the scrubber offset.
   useLayoutEffect(() => {
-    const top = topScrollRef.current;
     const main = mainScrollRef.current;
-    if (!top || !main) return;
-    const left = top.scrollLeft || main.scrollLeft;
-    if (main.scrollLeft !== left) main.scrollLeft = left;
-    if (top.scrollLeft !== left) top.scrollLeft = left;
+    if (!main) return;
+    if (Math.abs(main.scrollLeft - pinnedScrollLeft.current) > 1) {
+      main.scrollLeft = pinnedScrollLeft.current;
+    }
   }, [dayWindow.start, dayWindow.end]);
 
   const listHeader = (
     <div
-      className="flex shrink-0 flex-col border-r border-border bg-card"
+      className="flex shrink-0 flex-col bg-card"
       style={{ width: `${listColRem}rem` }}
     >
       <div className="flex h-8 items-center justify-center border-b border-border bg-muted/40 px-3 text-sm font-medium tracking-wide text-foreground">
@@ -1379,26 +1378,18 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
         ) : null}
       </div>
 
-      {/* Type/Name fixed left; top scrubber + day boxes stay locked together. */}
-      <div className="flex flex-col overflow-hidden" style={{ maxHeight: "var(--app-board-max-h)" }}>
-        <div className="flex shrink-0 border-b border-border bg-card">
-          {listHeader}
+      {/* Type/Name fixed left; date header + boxes share one pane — scrollbar at the bottom. */}
+      <div className="flex min-h-0 overflow-hidden" style={{ maxHeight: "var(--app-board-max-h)" }}>
           <div
-            ref={topScrollRef}
-            className="crew-days-top-scroll min-w-0 flex-1 overflow-x-scroll overflow-y-hidden"
-            onScroll={() => syncDaysScroll("top")}
-          >
-            {daysHeader}
-          </div>
-        </div>
-
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <div
-            ref={leftScrollRef}
-            className="shrink-0 overflow-y-auto overflow-x-hidden"
+            className="flex shrink-0 flex-col overflow-hidden border-r border-border"
             style={{ width: `${listColRem}rem` }}
-            onScroll={() => syncVerticalScroll("left")}
           >
+            {listHeader}
+            <div
+              ref={leftScrollRef}
+              className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+              onScroll={() => syncVerticalScroll("left")}
+            >
             {groups.length === 0 ? (
               <p className="px-3 py-8 text-sm text-muted-foreground">No crew.</p>
             ) : (
@@ -1673,28 +1664,27 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                 );
               })
             )}
+            </div>
           </div>
 
           <div
             ref={mainScrollRef}
-            className="crew-days-h-scroll min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
+            className="crew-days-h-scroll min-w-0 flex-1 overflow-auto"
             onScroll={() => {
-              syncVerticalScroll("main");
-            }}
-            onWheel={(event) => {
-              // Sideways → top scrubber drives both panes (no bottom bar).
-              if (Math.abs(event.deltaX) <= Math.abs(event.deltaY) && !event.shiftKey) return;
-              event.preventDefault();
-              const top = topScrollRef.current;
               const main = mainScrollRef.current;
-              if (!top || !main) return;
-              const delta = event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX;
-              const maxLeft = Math.max(0, days.length * dayColPx - top.clientWidth);
-              setDaysScrollLeft(Math.min(maxLeft, Math.max(0, top.scrollLeft + delta)));
+              if (!main) return;
+              pinnedScrollLeft.current = main.scrollLeft;
+              // Horizontal scrub must stay native — only sync names on vertical moves.
+              if (main.scrollTop !== lastScrollTop.current) {
+                lastScrollTop.current = main.scrollTop;
+                syncVerticalScroll("main");
+              }
+              refreshDayWindow();
             }}
             onPointerUp={commitDrag}
             onPointerCancel={commitDrag}
           >
+          <div className="sticky top-0 z-30 border-b border-border bg-card">{daysHeader}</div>
           {groups.length === 0 ? (
             <p className="px-4 py-8 text-sm text-muted-foreground">No crew match these filters.</p>
           ) : (
@@ -1704,7 +1694,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               <div key={`days-${group.role}`}>
                 <div
                   className={cn(
-                    "sticky top-0 z-20 h-10 border-y border-slate-300 bg-slate-200",
+                    "sticky top-[4.5rem] z-20 h-10 border-y border-slate-300 bg-slate-200",
                     groupIndex > 0 && "border-t-2",
                   )}
                   style={{ width: daysTrackWidth, minWidth: daysTrackWidth }}
@@ -1724,8 +1714,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                         gridTemplateColumns: visibleDayColumns,
                         width: daysTrackWidth,
                         minWidth: daysTrackWidth,
-                        contentVisibility: "auto",
-                        containIntrinsicSize: "auto 2.75rem",
+                        contain: "layout style",
                       }}
                     >
                       {dayWindow.start > 0 ? <div aria-hidden /> : null}
@@ -2000,7 +1989,6 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             })
           )}
           </div>
-        </div>
       </div>
 
       {rowMenu ? (
