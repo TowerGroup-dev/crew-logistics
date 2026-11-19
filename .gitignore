@@ -5,6 +5,8 @@ out
 .env*.local
 .DS_Store
 *.log
+__pycache__/
+*.pyc
 
 # Source workbooks (contain employee details) - never commit
 /data/
