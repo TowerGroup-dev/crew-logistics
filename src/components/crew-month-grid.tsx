@@ -534,7 +534,6 @@ const MonthRow = memo(function MonthRow({
             className={cn(
               "relative flex h-11 min-w-0 items-center justify-center overflow-hidden border-l border-border text-[0.625rem] font-bold",
               canEdit ? "cursor-cell select-none touch-none" : "cursor-pointer touch-pan-x touch-pan-y",
-              monthStartDay && "border-l-2 border-l-primary/50",
               !site &&
                 !hub &&
                 !flight &&
@@ -624,6 +623,17 @@ const MonthRow = memo(function MonthRow({
           </span>
         </div>
       ))}
+      {/* Month rule: one solid blue line, same as the header, drawn over the boxes. */}
+      {dayMeta.map((day, index) =>
+        day.monthStartDay && index > 0 ? (
+          <div
+            key={`m-${day.iso}`}
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 z-[5] w-0.5 bg-primary"
+            style={{ left: `${index * dayColRem}rem` }}
+          />
+        ) : null,
+      )}
       {dateNoteBars.map((row) => (
         <div
           key={row.id}
@@ -2157,7 +2167,18 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                   )}
                   style={{ width: daysTrackWidth, minWidth: daysTrackWidth }}
                   aria-hidden
-                />
+                >
+                  {/* Keep the blue month line unbroken through the role bars. */}
+                  {monthBands.map((band) =>
+                    band.startIndex > 0 ? (
+                      <div
+                        key={band.key}
+                        className="absolute inset-y-0 w-0.5 bg-primary"
+                        style={{ left: `${band.startIndex * dayColRem}rem` }}
+                      />
+                    ) : null,
+                  )}
+                </div>
                 {visiblePeople.map((person) => (
                   <MonthRow
                     key={`${person.id}::${group.role}`}
