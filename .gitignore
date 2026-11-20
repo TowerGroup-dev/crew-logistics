@@ -16,3 +16,6 @@ __pycache__/
 # SQA test output
 tests/report/
 test-results/
+
+# Shared app data saved by the local dev server (on Azure it lives in /home/data)
+/.data/

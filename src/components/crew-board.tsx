@@ -1,5 +1,6 @@
 "use client";
 
+import { SYNC_CHANGE_EVENT } from "@/lib/crew-sync";
 import { siteOnDay } from "@/lib/crew-site-days";
 import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -535,6 +536,26 @@ export function CrewBoard({
     setRotationBook(next);
     saveRotations(next);
   }
+
+  // Someone on another computer saved: reload just the books that changed.
+  useEffect(() => {
+    function onShared(event: Event) {
+      const keys = new Set((event as CustomEvent<{ keys: string[] }>).detail?.keys ?? []);
+      if (keys.has("tower-arctic-crew-roster")) setRoster(loadRoster());
+      if (keys.has("tower-arctic-crew-rotations-v1")) setRotationBook(loadRotations());
+      if (keys.has("tower-arctic-crew-ops")) setOpsBook(loadCrewOps());
+      if (keys.has("tower-arctic-crew-flights")) setFlightBook(loadFlights());
+      if (keys.has("tower-arctic-crew-stopovers-v1")) setStopoverBook(loadStopovers());
+      if (keys.has("tower-arctic-crew-notify")) setNotify(loadNotifySettings());
+      if (keys.has("tower-arctic-crew-activity-log-v1")) setActivityLog(loadActivityLog());
+      if (keys.has("tower-arctic-crew-sites-v1")) setSitesBook(loadSitesBook());
+      if (keys.has("tower-arctic-crew-travel-hubs-v1")) setTravelHubsBook(loadTravelHubs());
+      if (keys.has("tower-arctic-crew-roles-v1")) setRolesBook(loadRolesBook());
+      if (keys.has("tower-arctic-crew-years")) setScheduleYears([...loadScheduleYears()]);
+    }
+    window.addEventListener(SYNC_CHANGE_EVENT, onShared);
+    return () => window.removeEventListener(SYNC_CHANGE_EVENT, onShared);
+  }, []);
 
   // Keep rotation book in sync when roster people/stints change
   useEffect(() => {

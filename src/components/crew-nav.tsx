@@ -15,6 +15,7 @@ import {
 import { CREW_SCHEDULE } from "@/lib/crew-schedule";
 import { loadScheduleYears } from "@/lib/crew-years";
 import { cn } from "@/lib/cn";
+import { CrewSyncStatus } from "@/components/crew-sync-status";
 
 type Section = {
   key: string;
@@ -154,6 +155,7 @@ export function CrewNav({
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
+          <CrewSyncStatus />
           {onOpenReminders ? (
             <button
               type="button"

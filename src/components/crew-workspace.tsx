@@ -5,10 +5,18 @@ import { Suspense, startTransition, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { CrewBoardView } from "@/components/crew-board";
 import { CrewNav } from "@/components/crew-nav";
+import { startSync } from "@/lib/crew-sync";
 
-/** Client-only board: localStorage + schedule paint on first frame (no SSR empty → Loading flash). */
+/**
+ * Client-only board: localStorage + schedule paint on first frame (no SSR empty → Loading flash).
+ * Shared data is pulled from the server first (capped at a few seconds), so the board
+ * opens on everyone's latest bookings, moves and notes.
+ */
 const CrewBoard = dynamic(
-  () => import("@/components/crew-board").then((mod) => mod.CrewBoard),
+  () =>
+    Promise.race([startSync(), new Promise((resolve) => setTimeout(resolve, 5000))]).then(() =>
+      import("@/components/crew-board").then((mod) => mod.CrewBoard),
+    ),
   { ssr: false },
 );
 
