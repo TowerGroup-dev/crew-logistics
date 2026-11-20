@@ -85,7 +85,7 @@ export function useCrewUndo() {
   return ctx;
 }
 
-/** Undo control for Month calendar edits — Excel-style step-back. */
+/** Undo control for Month calendar edits, Excel-style step-back. */
 export function CrewUndoButton({ className }: { className?: string } = {}) {
   const { canUndo, undo } = useCrewUndo();
   return (

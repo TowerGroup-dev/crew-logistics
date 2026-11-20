@@ -44,7 +44,7 @@
   --radius: 0.625rem;
 
   /*
-   * Fluid UI for every desk — rem Tailwind follows html font-size.
+   * Fluid UI for every desk, rem Tailwind follows html font-size.
    * Laptop ≈15–16px · typical desk ≈17px · Gord / wall ≤18.5px (not a zoom circus).
    */
   --app-type-min: 15px;
@@ -88,7 +88,7 @@
   body {
     @apply bg-background text-foreground font-sans text-sm antialiased;
   }
-  /* Month board: one pane — date header + boxes; horizontal bar at the bottom. */
+  /* Month board: one pane, date header + boxes; horizontal bar at the bottom. */
   .crew-days-h-scroll {
     scrollbar-gutter: stable;
     scrollbar-width: auto;
@@ -116,5 +116,47 @@
   h2,
   h3 {
     @apply font-sans tracking-tight text-foreground;
+  }
+}
+
+/* Reports: Print / PDF shows only the report, on white paper. */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  body > header,
+  nav {
+    display: none !important;
+  }
+  [data-print-root] {
+    padding: 0 !important;
+  }
+  [data-print-root] .break-inside-avoid {
+    break-inside: avoid;
+  }
+  [data-print-root] .overflow-x-auto {
+    overflow: visible !important;
+  }
+  [data-print-root] table {
+    font-size: 8.5pt;
+  }
+  [data-print-root] th,
+  [data-print-root] td {
+    padding: 3px 6px !important;
+    white-space: normal !important;
+  }
+  [data-print-root] tr {
+    break-inside: avoid;
+  }
+  [data-print-root] section {
+    overflow: visible !important;
+  }
+  [data-print-root] td .rounded-full {
+    padding: 0 4px;
+    font-size: 7.5pt;
   }
 }

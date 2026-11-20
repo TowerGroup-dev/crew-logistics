@@ -40,7 +40,7 @@ export type ManualCrewPerson = {
   createdAt: string;
   /** Defaults to active when omitted. */
   employmentStatus?: EmploymentStatus;
-  /** What-if hire — place on Calendar, then Save or Discard. */
+  /** What-if hire, place on Calendar, then Save or Discard. */
   provisional?: boolean;
   /** Hire type overlay (REG / LOC / SUB). */
   category?: "Regular" | "Local" | "Subcontractor";
@@ -761,7 +761,8 @@ export function upsertEmployeeProfile(
     name?: string;
     role?: string;
     notes?: string;
-    category?: "Regular" | "Local" | "Subcontractor";
+    /** Pass null to clear a previously saved hire type. */
+    category?: "Regular" | "Local" | "Subcontractor" | null;
   },
   seed?: { name: string; role: string },
 ): CrewRosterBook {
@@ -773,7 +774,12 @@ export function upsertEmployeeProfile(
       name: patch.name?.trim() || current.name,
       role: patch.role?.trim() || current.role,
       notes: patch.notes !== undefined ? patch.notes : current.notes,
-      category: patch.category ?? current.category,
+      category:
+        patch.category === null
+          ? undefined
+          : patch.category !== undefined
+            ? patch.category
+            : current.category,
     };
     const employees = [...roster.employees];
     employees[index] = next;
@@ -793,7 +799,7 @@ export function upsertEmployeeProfile(
     createdAt: new Date().toISOString(),
     employmentStatus: "active",
     provisional: false,
-    category: patch.category,
+    category: patch.category || undefined,
   };
   return {
     ...roster,
@@ -860,7 +866,7 @@ function applyStintOutOverrides<T extends { from: string; out: string | null }>(
 
 /**
  * Set exclusive OUT for a stay (app plan or sheet stint).
- * Use to extend or end early — keeps extracted Excel data editable.
+ * Use to extend or end early, keeps extracted Excel data editable.
  */
 export function setStayOut(
   roster: CrewRosterBook,
@@ -963,7 +969,8 @@ export function mergePeople(imported: ImportedPerson[], roster: CrewRosterBook):
           active: employmentStatusFor(roster, employee.id) === "active",
           category: employee.category ?? base.category,
           provisional: employee.provisional === true ? true : base.provisional,
-          manual: true,
+          // Sheet people stay non-manual even when a profile overlay edits name/role.
+          manual: false,
         };
       }
       continue;

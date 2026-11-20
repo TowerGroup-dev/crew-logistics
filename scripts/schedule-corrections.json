@@ -1,0 +1,17 @@
+{
+  "_about": "Facts that override the Excel sheet, day by day (inclusive dates). place: IQA, POND, KUG, ALRT = on site; any other code (YOW, YK ...) = stopover; \"away\" = not working; \"to\": \"open\" = still there, no OUT date yet. Applied on every import.",
+  "people": {
+    "Eric Jacobsen": [
+      { "from": "2026-06-04", "to": "2026-07-07", "place": "POND", "source": "Yimika, 19 Nov" },
+      { "from": "2026-07-08", "to": "2026-07-27", "place": "IQA", "source": "Yimika, 19 Nov" },
+      { "from": "2026-07-29", "to": "2026-09-20", "place": "POND", "source": "Yimika, 19 Nov" },
+      { "from": "2026-09-21", "to": "2026-10-06", "place": "IQA", "source": "Yimika, 19 Nov" },
+      { "from": "2026-10-07", "to": "2026-10-11", "place": "away", "source": "Yimika, 19 Nov" },
+      { "from": "2026-10-12", "to": "2026-10-12", "place": "POND", "source": "Yimika, 19 Nov" },
+      { "from": "2026-10-13", "to": "2026-11-15", "place": "IQA", "source": "Yimika, 19 Nov" },
+      { "from": "2026-11-16", "to": "2026-11-16", "place": "YOW", "source": "Katrina via Yimika: Ottawa, heading back to Iqaluit" },
+      { "from": "2026-11-17", "to": "2026-11-22", "place": "away", "source": "Katrina via Yimika" },
+      { "from": "2026-11-23", "to": "open", "place": "IQA", "note": "OUT date not set", "source": "Yimika, 20 Nov: IN at Iqaluit 23 Nov, still there, OUT not known yet" }
+    ]
+  }
+}

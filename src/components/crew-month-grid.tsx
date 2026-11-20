@@ -23,8 +23,7 @@ import {
 } from "@/lib/crew-schedule";
 import { CrewRoleHeader } from "@/components/crew-role-header";
 import { type PlaceRotationInput } from "@/components/crew-place-dialog";
-import { CrewScheduleHiddenBar } from "@/components/crew-schedule-hidden-bar";
-import { opsFor, type CrewOpsBook, type CrewPersonOps } from "@/lib/crew-ops";
+import { emptyCrewOps, opsFor, type CrewOpsBook, type CrewPersonOps } from "@/lib/crew-ops";
 import {
   MAX_ROTATION_DAYS,
   MAX_STAY_NOTE_CHARS,
@@ -57,6 +56,7 @@ import {
   type TravelHub,
 } from "@/lib/crew-travel-hubs";
 import { returnWindowFromStayDay } from "@/lib/crew-month-gestures";
+import { flightPlaceOnDay } from "@/lib/crew-routes";
 import type { FlightBook } from "@/lib/crew-flights";
 import {
   stopoverDatesFor,
@@ -64,8 +64,9 @@ import {
   travelPlanForStay,
   type CrewStopoverBook,
 } from "@/lib/crew-stopovers";
-import { addDays, daysBetween, formatMedium, toISODate } from "@/lib/dates";
+import { addDays, daysBetween, formatDate, formatMedium, formatWeekdayNarrow, toISODate } from "@/lib/dates";
 import { cn } from "@/lib/cn";
+import { roleOnDay, siteOnDay, travelSegmentOnDay } from "@/lib/crew-site-days";
 import { CrewUndoButton } from "@/components/crew-undo-provider";
 
 type StaySelection = {
@@ -77,7 +78,7 @@ type StaySelection = {
   note: string;
 };
 
-/** Legend paint brush — click a camp site on top, then drag In→Out on the grid. */
+/** Legend paint brush, click a camp site on top, then drag In→Out on the grid. */
 type PaintBrush =
   | { kind: "site"; code: string }
   | { kind: "travel"; hub: string };
@@ -134,32 +135,10 @@ function siteTone(site: string, sites: CrewSite[]) {
   return siteColour(site).solid;
 }
 
-/** Yellow return paint stays until leave tickets are confirmed — then back to site colour. */
+/** Yellow return paint stays until leave tickets are confirmed, then back to site colour. */
 function showReturnWindow(ops: CrewPersonOps, iso: string) {
   if (ops.returnFlight === "confirmed") return false;
   return inBookWindow(iso, ops.returnBookFrom, ops.returnBookTo);
-}
-
-function siteOnDay(person: CrewPerson, iso: string) {
-  const seasonExclusive = scheduleYearOutExclusive(Number(iso.slice(0, 4)));
-  for (const stint of person.stints || []) {
-    const out = stint.out && stint.out < seasonExclusive ? stint.out : seasonExclusive;
-    if (stint.from <= iso && iso < out) {
-      const site = worksiteFromMark(stint.site) || stint.sites.map(worksiteFromMark).find(Boolean);
-      return site || null;
-    }
-  }
-  const mark = statusOnDate(person, iso);
-  if (!mark || isOffRotation(mark)) return null;
-  if (iso > scheduleYearLastDay(Number(iso.slice(0, 4)))) return null;
-  return worksiteFromMark(mark);
-}
-
-function roleOnDay(person: CrewPerson, iso: string) {
-  for (const stint of person.stints || []) {
-    if (stint.from <= iso && (!stint.out || iso < stint.out)) return stint.role || null;
-  }
-  return null;
 }
 
 function flightOnDay(
@@ -194,6 +173,9 @@ function hubOnDay(
 ) {
   const painted = stopoverOnDay(stopoverBook || {}, person.id, iso);
   if (painted) return painted;
+  // Travel legs typed on the sheet inside a stay (YK, IQA on the way to Pond, ...).
+  const sheetLeg = travelSegmentOnDay(person, iso);
+  if (sheetLeg?.label) return sheetLeg.label;
   for (const event of person.events || []) {
     if (event.date === iso) {
       const hub = hubFromMark(event.mark, hubs);
@@ -201,18 +183,11 @@ function hubOnDay(
     }
   }
   if (!flightBook) return null;
+  // Booked trip: every day from first take-off to final landing, including nights at a stopover.
   for (const booking of flightBook.bookings) {
     if (booking.personId !== person.id || booking.status === "cancelled") continue;
-    for (const segment of booking.segments) {
-      if (segment.departDate === iso) {
-        const hub = hubFromMark(segment.fromAirport, hubs);
-        if (hub) return hub;
-      }
-      if (segment.arriveDate === iso) {
-        const hub = hubFromMark(segment.toAirport, hubs);
-        if (hub) return hub;
-      }
-    }
+    const place = flightPlaceOnDay(booking.segments, iso);
+    if (place) return hubFromMark(place, hubs) || place.toUpperCase();
   }
   return null;
 }
@@ -258,8 +233,17 @@ function dynamicJourneyLine(
 }
 
 /** Hover / tooltip: turn a code path into place names with arrows. */
+/** Short code in a travel box (YK, YEG, IQA ...); the full route is on hover. */
+function travelBoxCode(hub: string) {
+  const code = hub.replace(/^via\s+/i, "").trim().toUpperCase();
+  if (code === "KU") return "KUG";
+  if (code === "IQ") return "IQA";
+  if (code === "PD" || code === "PND") return "POND";
+  return code.length > 5 ? code.slice(0, 5) : code;
+}
+
 function journeyDisplayNames(path: string, hubs: TravelHub[]) {
-  if (!path || path === "No travel yet — right-click to add") return path;
+  if (!path || path === "No travel yet, right-click to add") return path;
   const codes = path
     .split(/\s*→\s*/)
     .map((part) => part.replace(/^[→\s]+|[→\s]+$/g, "").trim())
@@ -317,6 +301,319 @@ function placementHasBookedFlights(ops: CrewPersonOps) {
   );
 }
 
+type MonthRowActions = {
+  click: (personId: string, iso: string) => void;
+  pointerDown: (event: React.PointerEvent, personId: string, iso: string, hasSite: boolean) => void;
+  contextMenu: (event: React.MouseEvent, personId: string, iso: string) => void;
+  pointerEnter: (event: React.PointerEvent, personId: string, iso: string, hasMark: boolean, plan: string) => void;
+  pointerMove: (event: React.PointerEvent, personId: string, iso: string, hasMark: boolean) => void;
+  pointerLeave: (personId: string, iso: string) => void;
+};
+
+type DayMeta = {
+  iso: string;
+  d: number;
+  monthIndex: number;
+  weekend: boolean;
+  monthStartDay: boolean;
+  isToday: boolean;
+  weekday: string;
+};
+
+/**
+ * One person's row of day boxes for the whole year. Memoised: it only redraws when
+ * this person's data, the drag on this row, or the selection on this row changes.
+ * Scrolling, hovering and edits to other people never touch it.
+ */
+const MonthRow = memo(function MonthRow({
+  person,
+  opsEntry,
+  draft,
+  staySelection,
+  stopoverBook,
+  flightBook,
+  roster,
+  travelHubs,
+  siteList,
+  paintBrush,
+  canEdit,
+  year,
+  dayMeta,
+  gridColumns,
+  daysTrackWidth,
+  dayColRem,
+  actions,
+}: {
+  person: CrewPerson;
+  opsEntry: CrewPersonOps | undefined;
+  draft: { personId: string; start: string; end: string; mode: DragMode } | null;
+  staySelection: StaySelection | null;
+  stopoverBook: CrewStopoverBook | undefined;
+  flightBook: FlightBook | undefined;
+  roster: CrewRosterBook | undefined;
+  travelHubs: TravelHub[];
+  siteList: CrewSite[];
+  paintBrush: PaintBrush;
+  canEdit: boolean;
+  year: number;
+  dayMeta: DayMeta[];
+  gridColumns: string;
+  daysTrackWidth: string;
+  dayColRem: number;
+  actions: MonthRowActions;
+}) {
+  const siteAt = dayMeta.map((day) => siteOnDay(person, day.iso));
+  const hubAt = dayMeta.map((day) => hubOnDay(person, day.iso, stopoverBook, flightBook, travelHubs));
+  const ops = opsEntry ?? emptyCrewOps(person.id);
+  const draftRange =
+    draft?.personId === person.id ? orderedRange(draft.start, draft.end) : null;
+  const draftMode = draft?.personId === person.id ? draft.mode : null;
+  const journeyLine = dynamicJourneyLine(person, stopoverBook, flightBook, year);
+  // Stay notes are written once across the whole stay (not squeezed into one box).
+  const yearStart = dayMeta[0]?.iso || `${year}-01-01`;
+  const stayNotes: { key: string; start: number; span: number; note: string }[] = [];
+  for (const stint of person.stints || []) {
+    const out = stint.out || scheduleYearOutExclusive(year);
+    const plan = roster ? findRotationPlanAt(roster, person.id, stint.from) : null;
+    const note =
+      getStayNote(roster, person.id, stint.from, out) ||
+      (plan && plan.from === stint.from ? plan.note || "" : "");
+    if (!note) continue;
+    const start = Math.max(0, daysBetween(yearStart, stint.from));
+    const end = Math.min(dayMeta.length, daysBetween(yearStart, out));
+    if (end > start) stayNotes.push({ key: `${stint.from}|${out}`, start, span: end - start, note });
+  }
+  return (
+    <div
+      className="crew-day-row relative grid h-11 border-b border-border"
+      style={{
+        gridTemplateColumns: gridColumns,
+        width: daysTrackWidth,
+        minWidth: daysTrackWidth,
+        // Rows scrolled out of view are skipped by the browser until they come back.
+        contentVisibility: "auto",
+        containIntrinsicSize: `${daysTrackWidth} 2.75rem`,
+      }}
+    >
+                            {dayMeta.map((day, dayIndex) => {
+        const iso = day.iso;
+        const site = siteAt[dayIndex];
+        const hubMark = hubAt[dayIndex];
+        const hub = !site ? hubMark : null;
+        const travelOnStay = Boolean(site && hubMark);
+        const prevIso = addDays(iso, -1);
+        const nextIso = addDays(iso, 1);
+        const prevHubCode =
+          !(dayIndex > 0 ? siteAt[dayIndex - 1] : siteOnDay(person, prevIso))
+            ? (dayIndex > 0 ? hubAt[dayIndex - 1] : hubOnDay(person, prevIso, stopoverBook, flightBook, travelHubs))
+            : null;
+        const nextHubCode =
+          !(dayIndex < siteAt.length - 1 ? siteAt[dayIndex + 1] : siteOnDay(person, nextIso))
+            ? (dayIndex < hubAt.length - 1 ? hubAt[dayIndex + 1] : hubOnDay(person, nextIso, stopoverBook, flightBook, travelHubs))
+            : null;
+        const prevHub = Boolean(prevHubCode);
+        const nextHub = Boolean(nextHubCode);
+        const nextSite = Boolean((dayIndex < siteAt.length - 1 ? siteAt[dayIndex + 1] : siteOnDay(person, nextIso)));
+        const hubTransition =
+          Boolean(hub && prevHubCode && prevHubCode !== hub);
+        const assignmentRole = roleOnDay(person, iso);
+        const flight = flightOnDay(person, iso, flightBook);
+        const journey =
+          hub || flight
+            ? journeyForPerson(flightBook, person.id, flight === "out" ? "return" : "outbound")
+            : "";
+        const weekend = day.weekend;
+        const monthIndex = day.monthIndex;
+        const monthStartDay = day.monthStartDay;
+        const dayPlan = site ? (roster ? findRotationPlanAt(roster, person.id, iso) : null) : null;
+        const covering = site ? stintCovering(person, iso) : null;
+        // One IN (first day of stay) and one OUT (last day), never mid-stay doubles.
+        // A stay can end on a travel day (e.g. IQA, then YOW on the way home): OUT goes on that last box.
+        const stayForOut = covering || (hub ? stintCovering(person, iso) : null);
+        const stayLastDay =
+          stayForOut?.out && stayForOut.out.length >= 10
+            ? addDays(stayForOut.out, -1)
+            : null;
+        // IN on the first day of a stay, and on a camp arrival partway through one
+        // (e.g. KUG → YK → IQA: IN on the first IQA day, then again on reaching Pond).
+        const stintStart = Boolean(
+          covering &&
+            (iso === covering.from ||
+              (site && (dayIndex > 0 ? siteAt[dayIndex - 1] : null) !== site)),
+        );
+        const stintEnd = Boolean(stayLastDay && iso === stayLastDay);
+        // Today's box on a stay: "day / length" (e.g. 18/42), length grows when the stay is stretched.
+        const dayCount =
+          day.isToday && site && covering
+            ? `${daysBetween(covering.from, iso) + 1}/${daysBetween(covering.from, covering.out || addDays(scheduleYearLastDay(year), 1))}`
+            : "";
+        const work = site ? workLabelForAssignment(person, site, iso, iso) : "";
+        const inDraft =
+          Boolean(draftRange && iso >= draftRange.from && iso <= draftRange.to);
+        // Yellow only on stay days; white (away) days stay white.
+        const returnWindow = Boolean(site) && showReturnWindow(ops, iso);
+        const placePreview = inDraft && draftMode === "place";
+        const extendPreview = inDraft && draftMode === "extend";
+        const paintPreview = placePreview || extendPreview;
+        const staySelected = Boolean(
+          staySelection &&
+            staySelection.personId === person.id &&
+            covering &&
+            staySelection.from === covering.from &&
+            staySelection.out === (covering.out || staySelection.out),
+        );
+        const stayFrom = covering?.from || dayPlan?.from || "";
+        const stayOut = covering?.out || dayPlan?.out || "";
+        const stayNote =
+          (stayFrom && stayOut
+            ? getStayNote(roster, person.id, stayFrom, stayOut)
+            : "") ||
+          dayPlan?.note ||
+          "";
+        const stayTravel =
+          covering && stopoverBook
+            ? travelPlanForStay(
+                stopoverBook,
+                person.id,
+                covering.from,
+                covering.out,
+                site,
+              )
+            : "";
+        const bookedTravel = journey || journeyForPerson(flightBook, person.id, "return");
+        const sheetRoute = hub ? travelSegmentOnDay(person, iso)?.route || "" : "";
+        const travelDisplay = journeyDisplayNames(
+          sheetRoute || bookedTravel || stayTravel || journeyLine || "",
+          travelHubs,
+        );
+        const hubJourneyTitle = travelDisplay
+          ? `${travelHubName(hub || "", travelHubs)} · ${formatMedium(iso)} · ${travelDisplay}`
+          : `${travelHubLabel(hub || "", travelHubs)} · ${formatMedium(iso)}`;
+
+        return (
+          <div
+            key={`${person.id}-${iso}`}
+            role="button"
+            tabIndex={0}
+            title={
+              flight
+                ? `${flight === "in" ? "Inbound" : "Outbound"} · ${formatMedium(iso)}${travelDisplay ? ` · ${travelDisplay}` : journey ? ` · ${journey}` : ""}`
+                : hub
+                  ? `${stintEnd ? "OUT · " : ""}${hubJourneyTitle}`
+                  : site
+                    ? `${stintEnd ? "OUT · " : ""}${assignmentRole ? `${assignmentRole} · ` : ""}${work ? `${work} · ` : ""}${siteLabel(site)} · ${formatMedium(iso)}${stayNote ? ` · ${stayNote}` : ""}${travelDisplay ? ` · Travel ${travelDisplay}` : ""}${covering?.unsure ? " · No site code on the Excel for this stay, please confirm" : ""}`
+                    : `Empty · ${formatMedium(iso)} · drag ${paintBrush.kind === "site" ? paintBrush.code : `Travel ${paintBrush.hub}`} · IN → OUT`
+            }
+            onClick={() => actions.click(person.id, iso)}
+            onPointerDown={(event) => actions.pointerDown(event, person.id, iso, Boolean(site))}
+            onContextMenu={(event) => actions.contextMenu(event, person.id, iso)}
+            onPointerEnter={(event) =>
+              actions.pointerEnter(
+                event,
+                person.id,
+                iso,
+                Boolean(site || hub),
+                travelDisplay || (hub ? travelHubName(hub, travelHubs) : "No travel yet, right-click to add"),
+              )
+            }
+            onPointerMove={(event) => actions.pointerMove(event, person.id, iso, Boolean(site || hub))}
+            onPointerLeave={() => actions.pointerLeave(person.id, iso)}
+            className={cn(
+              "relative flex h-11 min-w-0 items-center justify-center overflow-hidden border-l border-border text-[0.625rem] font-bold",
+              canEdit ? "cursor-cell select-none touch-none" : "cursor-pointer touch-pan-x touch-pan-y",
+              monthStartDay && "border-l-2 border-l-primary/50",
+              !site &&
+                !hub &&
+                !flight &&
+                !returnWindow &&
+                !paintPreview &&
+                weekend &&
+                "bg-muted/40",
+              !site &&
+                !hub &&
+                !flight &&
+                !returnWindow &&
+                !paintPreview &&
+                !weekend &&
+                monthIndex % 2 === 1 &&
+                "bg-sky-50/40",
+              // Camp stays always use the legend IQA/POND/ALRT/KUG colours.
+              site && !returnWindow && !paintPreview && siteTone(site, siteList),
+              // Travel / hub / flight legs, one grey (not teal/indigo “off” colours).
+              (hub || flight) &&
+                !site &&
+                !returnWindow &&
+                !paintPreview &&
+                "bg-stone-500 text-white",
+              returnWindow && "bg-[#FFD600] text-stone-900",
+              placePreview &&
+                paintBrush.kind === "site" &&
+                cn(siteTone(paintBrush.code, siteList), "opacity-80 ring-1 ring-inset ring-stone-900/40"),
+              placePreview &&
+                paintBrush.kind === "travel" &&
+                "bg-stone-500/55 text-white ring-1 ring-inset ring-stone-700/50",
+              extendPreview && "bg-emerald-500/40 text-emerald-950 ring-1 ring-inset ring-emerald-600/40",
+              staySelected && "ring-2 ring-inset ring-stone-900/70",
+            )}
+          >
+            {travelOnStay && hubMark ? (
+              <span
+                className="absolute bottom-0.5 left-0.5 z-[2] rounded bg-stone-900/85 px-0.5 text-[8px] font-bold leading-tight text-white"
+                title={travelHubLabel(hubMark, travelHubs)}
+              >
+                {hubMark.slice(0, 3)}
+              </span>
+            ) : null}
+            <span
+              className={cn(
+                "relative z-[1] block max-w-full px-0.5",
+                hub && !paintPreview && !flight && !returnWindow && !stintEnd
+                  ? "whitespace-normal text-center text-[8px] font-bold leading-[1.05]"
+                  : "truncate",
+              )}
+            >
+              {paintPreview
+                ? (() => {
+                    const dayNum = daysBetween(draftRange!.from, iso) + 1;
+                    const last = iso === draftRange!.to;
+                    if (dayNum === 1) return "IN";
+                    if (last) return `OUT ${dayNum}`;
+                    return dayNum % 7 === 0 ? String(dayNum) : "";
+                  })()
+                : stintStart
+                  ? covering?.unsure && iso === covering.from
+                    ? "IN?"
+                    : "IN"
+                  : stintEnd
+                    ? "OUT"
+                    : dayCount
+                      ? dayCount
+                      : hub && !site
+                        ? travelBoxCode(hub)
+                        : ""}
+            </span>
+          </div>
+        );
+      })}
+      {stayNotes.map((row) => (
+        <div
+          key={row.key}
+          className="pointer-events-none absolute inset-y-0 z-[3] flex items-center px-1"
+          style={{ left: `${row.start * dayColRem}rem`, width: `${row.span * dayColRem}rem` }}
+        >
+          {/* Sticky: stays in view at the left edge of the visible part of a long stay. */}
+          <span
+            title={row.note}
+            className="sticky left-1 max-w-full truncate rounded bg-white/90 px-1.5 py-px text-[10px] font-semibold leading-tight text-stone-900 shadow-sm"
+          >
+            {row.note}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+});
+
 export const CrewMonthGrid = memo(function CrewMonthGrid({
   year,
   today,
@@ -351,12 +648,12 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onDiscardProvisional,
   onAddUnderRole,
 }: {
-  /** Selected schedule year — grid scrolls freely Jan 1 → Dec 31. */
+  /** Selected schedule year, grid scrolls freely Jan 1 → Dec 31. */
   year: number;
   today: string;
   /** Optional day/month to land on when opening Month (e.g. from Year tape). */
   scrollToIso?: string | null;
-  /** False while another tab is showing — skip viewport work until Month is visible again. */
+  /** False while another tab is showing, skip viewport work until Month is visible again. */
   active?: boolean;
   /** displayRole = calendar section this row sits under (may differ from home role). */
   rows: { person: CrewPerson; displayRole?: string }[];
@@ -366,7 +663,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   /** Live roster so NAV-07/08 can resolve app-painted plans. */
   roster?: CrewRosterBook;
   sites?: CrewSite[];
-  /** Editable travel places (short codes) — Settings + right-click Add travel. */
+  /** Editable travel places (short codes), Settings + right-click Add travel. */
   travelHubs?: TravelHub[];
   onTravelHubsChange?: (book: CrewTravelHubsBook) => void;
   onOpen: (personId: string) => void;
@@ -402,15 +699,19 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onTryPerson?: (input: { name: string; role: string }) => string | void;
   onCommitProvisional?: (personId: string, name?: string) => void;
   onDiscardProvisional?: (personId: string) => void;
-  /** Plus on role header — add someone under this section. */
+  /** Plus on role header, add someone under this section. */
   onAddUnderRole?: (sectionRole: string) => void;
 }) {
   const canEdit = interactionMode === "edit";
-  // Legend stays the four camps — sheet off-colours still map onto these.
-  const siteList = sortSitesForDisplay(
-    (sites.length ? sites : DEFAULT_SITES).filter((row) =>
-      DEFAULT_SITES.some((camp) => camp.code === row.code),
-    ),
+  // Legend stays the four camps, sheet off-colours still map onto these.
+  const siteList = useMemo(
+    () =>
+      sortSitesForDisplay(
+        (sites.length ? sites : DEFAULT_SITES).filter((row) =>
+          DEFAULT_SITES.some((camp) => camp.code === row.code),
+        ),
+      ),
+    [sites],
   );
   const [tryOpen, setTryOpen] = useState(false);
   const [tryDraft, setTryDraft] = useState({ name: "", role: "Labourer" });
@@ -436,7 +737,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   );
   const dragRef = useRef<{
     personId: string;
-    /** Fixed day the drag started on — never moves during place. */
+    /** Fixed day the drag started on, never moves during place. */
     anchor: string;
     start: string;
     end: string;
@@ -468,7 +769,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     return { kind: "site", code: siteList[0]?.code || "IQA" };
   }
 
-  /** Place a stay immediately — no dialog. Inclusive last day is OUT (sheet rule). */
+  /** Place a stay immediately, no dialog. Inclusive last day is OUT (sheet rule). */
   function placeStayNow(personId: string, from: string, inclusiveTo: string, siteCode: string) {
     const person = peopleById.get(personId);
     if (!person) return;
@@ -496,6 +797,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     showFlash(`${siteCode}  ${formatMedium(from)} – ${formatMedium(cappedTo)}`);
   }
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Where the pointer is while dragging a stay, for the live day count. */
+  const [dragTip, setDragTip] = useState<{ x: number; y: number } | null>(null);
   const [travelHover, setTravelHover] = useState<{
     personId: string;
     iso: string;
@@ -529,7 +832,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
    */
   const DAY_WINDOW_BUFFER = 90;
   const DAY_WINDOW_MARGIN = 28;
-  const [dayWindow, setDayWindow] = useState({ start: 0, end: 120 });
+  // Whole year stays mounted: sliding across months is plain native scrolling, no redraws.
+  const [dayWindow, setDayWindow] = useState({ start: 0, end: 400 });
   const dayWindowRef = useRef(dayWindow);
   dayWindowRef.current = dayWindow;
 
@@ -568,11 +872,26 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
           weekend: date.getDay() === 0 || date.getDay() === 6,
           monthStartDay: d === 1,
           isToday: iso === today,
-          weekday: date.toLocaleDateString("en-US", { weekday: "narrow" }),
+          weekday: formatWeekdayNarrow(iso),
         };
       }),
     [days, today],
   );
+
+  /** Head count per day: people shown on the calendar who are on site that day. */
+  const onSiteCounts = useMemo(() => {
+    const counts = new Array<number>(days.length).fill(0);
+    const seen = new Set<string>();
+    for (const row of rows) {
+      const person = row.person;
+      if (seen.has(person.id) || hiddenIdSet.has(person.id)) continue;
+      seen.add(person.id);
+      for (let index = 0; index < days.length; index += 1) {
+        if (siteOnDay(person, days[index])) counts[index] += 1;
+      }
+    }
+    return counts;
+  }, [days, hiddenIdSet, rows]);
 
   const visibleDayMeta = useMemo(
     () => dayMeta.slice(dayWindow.start, dayWindow.end),
@@ -598,7 +917,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
         last.count += 1;
         return;
       }
-      const label = new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, 1).toLocaleDateString(
+      const label = formatDate(new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, 1),
         "en-US",
         { month: "long" },
       );
@@ -608,6 +927,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   }, [days]);
 
   function refreshDayWindow(force = false) {
+    // All days are mounted; nothing to recompute while scrolling.
+    if (dayWindow.start === 0 && dayWindow.end >= days.length) return;
     if (dayWindowRaf.current != null) return;
     dayWindowRaf.current = requestAnimationFrame(() => {
       dayWindowRaf.current = null;
@@ -646,7 +967,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     syncingVertical.current = false;
   }
 
-  // Virtualized rows can reset scrollLeft on re-layout — pin it back.
+  // Virtualized rows can reset scrollLeft on re-layout, pin it back.
   const pinnedScrollLeft = useRef(0);
 
   function setDaysScrollLeft(left: number) {
@@ -665,6 +986,66 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     }
   }, [dayWindow.start, dayWindow.end]);
 
+  /** Latest handlers for the memoised rows; the object passed down never changes. */
+  const rowActionsRef = useRef<MonthRowActions | null>(null);
+  rowActionsRef.current = {
+    click(personId, iso) {
+      if (canEdit) return;
+      setTravelHover(null);
+      const plan = planOnDay(personId, iso);
+      if (plan) selectPlan(plan, personId);
+      openDay(personId, iso);
+    },
+    pointerDown(event, personId, iso, hasSite) {
+      if (!canEdit || event.button !== 0) return;
+      event.preventDefault();
+      setTravelHover(null);
+      if (event.shiftKey && onToggleStopover && !hasSite) {
+        applyStopover(personId, iso, "YK");
+        return;
+      }
+      startDrag(personId, iso, event.button);
+    },
+    contextMenu(event, personId, iso) {
+      if (!canEdit) return;
+      event.preventDefault();
+      setTravelHover(null);
+      setRowMenu(null);
+      openCellMenu(personId, iso, event.clientX, event.clientY);
+    },
+    pointerEnter(event, personId, iso, hasMark, plan) {
+      if (canEdit) moveDrag(personId, iso);
+      if (canEdit && dragRef.current) setDragTip({ x: event.clientX, y: event.clientY });
+      if (!hasMark || cellMenu || dragRef.current) {
+        setTravelHover(null);
+        return;
+      }
+      setTravelHover({ personId, iso, x: event.clientX, y: event.clientY, plan });
+    },
+    pointerMove(event, personId, iso, hasMark) {
+      if (!hasMark || cellMenu || dragRef.current) return;
+      setTravelHover((prev) =>
+        prev && prev.personId === personId && prev.iso === iso
+          ? { ...prev, x: event.clientX, y: event.clientY }
+          : prev,
+      );
+    },
+    pointerLeave(personId, iso) {
+      setTravelHover((prev) => (prev && prev.personId === personId && prev.iso === iso ? null : prev));
+    },
+  };
+  const rowActions = useMemo<MonthRowActions>(
+    () => ({
+      click: (...args) => rowActionsRef.current!.click(...args),
+      pointerDown: (...args) => rowActionsRef.current!.pointerDown(...args),
+      contextMenu: (...args) => rowActionsRef.current!.contextMenu(...args),
+      pointerEnter: (...args) => rowActionsRef.current!.pointerEnter(...args),
+      pointerMove: (...args) => rowActionsRef.current!.pointerMove(...args),
+      pointerLeave: (...args) => rowActionsRef.current!.pointerLeave(...args),
+    }),
+    [],
+  );
+
   const listHeader = (
     <div
       className="flex shrink-0 flex-col bg-card"
@@ -673,7 +1054,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       <div className="flex h-8 items-center justify-center border-b border-border bg-muted/40 px-3 text-sm font-medium tracking-wide text-foreground">
         {year}
       </div>
-      <div className="flex min-h-10">
+      <div className="flex min-h-14">
         <div
           className="flex items-center border-r border-border px-1.5"
           style={{ width: `${typeColRem}rem` }}
@@ -695,7 +1076,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   const daysHeader = (
     <div className="flex min-w-max flex-col bg-card" style={{ width: daysTrackWidth }}>
       {/*
-        Month labels are absolutely placed by day index (rem), not CSS grid spans —
+        Month labels are absolutely placed by day index (rem), not CSS grid spans -
         spanned tracks drift from per-day columns and throw the blue month rule off.
       */}
       <div
@@ -720,17 +1101,17 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
         ))}
       </div>
       <div
-        className="grid min-h-10"
+        className="grid min-h-14"
         style={{
           gridTemplateColumns: `repeat(${days.length}, ${dayColRem}rem)`,
           width: daysTrackWidth,
           minWidth: daysTrackWidth,
         }}
       >
-        {dayMeta.map((day) => (
+        {dayMeta.map((day, dayIndex) => (
           <div
             key={day.iso}
-            title={formatMedium(day.iso)}
+            title={`${formatMedium(day.iso)} · ${onSiteCounts[dayIndex]} on site`}
             className={cn(
               "flex min-w-0 flex-col justify-center overflow-hidden border-l border-border px-0.5 py-1 text-center text-xs leading-tight tabular-nums",
               day.weekend && "bg-muted/60",
@@ -741,6 +1122,14 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
           >
             <div className="truncate">{day.d}</div>
             <div className="truncate text-muted-foreground">{day.weekday}</div>
+            <div
+              className={cn(
+                "mx-auto mt-0.5 min-w-[1.25rem] rounded-sm px-0.5 text-[0.6875rem] font-semibold leading-4",
+                onSiteCounts[dayIndex] ? "bg-primary/10 text-primary" : "text-muted-foreground/60",
+              )}
+            >
+              {onSiteCounts[dayIndex]}
+            </div>
           </div>
         ))}
       </div>
@@ -755,7 +1144,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     if (didScrollToToday.current) return;
     const main = mainScrollRef.current;
     if (!main || days.length === 0) return;
-    // Days pane: January 1 is scrollLeft 0. Only jump when Year tape deep-links a month.
+    // Open on this week (today a few days in from the left); a Year-tape deep link wins.
     const explicitMonth =
       scrollToIso &&
       (days.includes(scrollToIso) || days.some((iso) => iso.startsWith(scrollToIso.slice(0, 7))));
@@ -763,12 +1152,13 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       ? days.includes(scrollToIso!)
         ? scrollToIso!
         : days.find((iso) => iso.startsWith(scrollToIso!.slice(0, 7)))!
-      : days[0]!;
-    const idx = days.indexOf(preferred);
-    if (idx < 0) return;
+      : days.includes(today)
+        ? addDays(today, -3)
+        : days[0]!;
+    const idx = Math.max(0, days.indexOf(preferred) >= 0 ? days.indexOf(preferred) : days.indexOf(today) - 3);
     setDaysScrollLeft(Math.max(0, idx * dayColPx));
     didScrollToToday.current = true;
-  }, [days, scrollToIso, dayColPx]);
+  }, [days, scrollToIso, dayColPx, today]);
 
   useEffect(() => {
     if (!active) return;
@@ -915,6 +1305,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   // NAV-07: Delete / Backspace clears the selected app placement.
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
+      // Month stays mounted behind other tabs; only react while it is on screen.
+      if (mainScrollRef.current && mainScrollRef.current.offsetParent === null) return;
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
         return;
@@ -1093,19 +1485,11 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     const person = peopleById.get(personId);
     if (!person) return;
 
-    // View mode uses onClick — never start a drag (stops phone scroll wobble).
+    // View mode uses onClick, never start a drag (stops phone scroll wobble).
     if (!canEdit) return;
 
-    const ops = opsFor(opsBook, personId);
-
-    if (inBookWindow(iso, ops.returnBookFrom, ops.returnBookTo)) {
-      dragRef.current = { personId, anchor: iso, start: iso, end: iso, mode: "clear", moved: false };
-      setDraft(null);
-      return;
-    }
-
     if (siteOnDay(person, iso)) {
-      // Click opens; drag extends the stay (not yellow — yellow is right-click).
+      // Click opens; drag extends the stay (not yellow, yellow is right-click).
       dragRef.current = { personId, anchor: iso, start: iso, end: iso, mode: "open", moved: false };
       setDraft(null);
       return;
@@ -1153,7 +1537,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     const person = peopleById.get(personId);
     if (!person) return;
     let range = clampPlaceRange(active.anchor, iso);
-    // Don't paint through an existing stay — stop before the conflict.
+    // Don't paint through an existing stay, stop before the conflict.
     if (overlapMessage(person, range.from, range.to)) {
       const forward = iso >= active.anchor;
       if (forward) {
@@ -1188,15 +1572,6 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
 
   return (
     <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
-      {hiddenPeople?.length && onShowPerson && onShowAllHidden ? (
-        <div className="border-b border-border px-4 py-2">
-          <CrewScheduleHiddenBar
-            hidden={hiddenPeople}
-            onShow={onShowPerson}
-            onShowAll={onShowAllHidden}
-          />
-        </div>
-      ) : null}
       <div className="border-b border-border px-4 py-3">
         {flash ? (
           <p className="mb-2 text-xs font-medium text-muted-foreground tabular-nums">{flash}</p>
@@ -1289,7 +1664,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             {canEdit && onTryPerson ? (
               <button
                 type="button"
-                title="Add a draft person to try on the schedule"
+                title="Add crew to try on the schedule"
                 onClick={() => {
                   setTryOpen((open) => !open);
                   setTryDraft({ name: "", role: "Labourer" });
@@ -1351,34 +1726,9 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             </button>
           </div>
         ) : null}
-        {canEdit && draftDays != null ? (
-          <div className="mt-3 max-w-md rounded-xl border border-border bg-muted/40 px-3 py-2.5">
-            <div className="flex items-baseline justify-between gap-3">
-              <p className="text-sm font-semibold text-foreground">
-                {draft?.mode === "extend" ? "Extend stay" : paintBrush.kind === "site" ? paintBrush.code : "Stay"}
-              </p>
-              <p className="text-sm font-semibold tabular-nums text-muted-foreground">
-                {draft?.mode === "place"
-                  ? `IN → OUT · ${draftDays} day${draftDays === 1 ? "" : "s"}`
-                  : draftDays > STANDARD_ROTATION_DAYS
-                    ? `${draftDays} days · past 6 weeks`
-                    : `${draftDays} / ${STANDARD_ROTATION_DAYS} days`}
-              </p>
-            </div>
-            {draft?.mode === "extend" && draftDays > STANDARD_ROTATION_DAYS ? (
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Extending past 6 weeks · release to save (max {MAX_ROTATION_DAYS} days)
-              </p>
-            ) : draft?.mode === "place" ? (
-              <p className="mt-1.5 text-xs text-muted-foreground">Release to place</p>
-            ) : (
-              <p className="mt-1.5 text-xs text-muted-foreground">Release to push OUT later</p>
-            )}
-          </div>
-        ) : null}
       </div>
 
-      {/* Type/Name fixed left; date header + boxes share one pane — scrollbar at the bottom. */}
+      {/* Type/Name fixed left; date header + boxes share one pane, scrollbar at the bottom. */}
       <div className="flex min-h-0 overflow-hidden" style={{ maxHeight: "var(--app-board-max-h)" }}>
           <div
             className="flex shrink-0 flex-col overflow-hidden border-r border-border"
@@ -1674,7 +2024,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               const main = mainScrollRef.current;
               if (!main) return;
               pinnedScrollLeft.current = main.scrollLeft;
-              // Horizontal scrub must stay native — only sync names on vertical moves.
+              // Horizontal scrub must stay native, only sync names on vertical moves.
               if (main.scrollTop !== lastScrollTop.current) {
                 lastScrollTop.current = main.scrollTop;
                 syncVerticalScroll("main");
@@ -1694,296 +2044,34 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               <div key={`days-${group.role}`}>
                 <div
                   className={cn(
-                    "sticky top-[4.5rem] z-20 h-10 border-y border-slate-300 bg-slate-200",
+                    "sticky top-[5.5rem] z-20 h-10 border-y border-slate-300 bg-slate-200",
                     groupIndex > 0 && "border-t-2",
                   )}
                   style={{ width: daysTrackWidth, minWidth: daysTrackWidth }}
                   aria-hidden
                 />
-                {visiblePeople.map((person) => {
-                  const ops = opsFor(opsBook, person.id);
-                  const draftRange =
-                    draft?.personId === person.id ? orderedRange(draft.start, draft.end) : null;
-                  const draftMode = draft?.personId === person.id ? draft.mode : null;
-                  const journeyLine = dynamicJourneyLine(person, stopoverBook, flightBook, year);
-                  return (
-                    <div
-                      key={`${person.id}::${group.role}`}
-                      className="grid h-11 border-b border-border"
-                      style={{
-                        gridTemplateColumns: visibleDayColumns,
-                        width: daysTrackWidth,
-                        minWidth: daysTrackWidth,
-                        contain: "layout style",
-                      }}
-                    >
-                      {dayWindow.start > 0 ? <div aria-hidden /> : null}
-                      {visibleDayMeta.map((day) => {
-                        const iso = day.iso;
-                        const site = siteOnDay(person, iso);
-                        const hubMark = hubOnDay(person, iso, stopoverBook, flightBook, travelHubs);
-                        const hub = !site ? hubMark : null;
-                        const travelOnStay = Boolean(site && hubMark);
-                        const prevIso = addDays(iso, -1);
-                        const nextIso = addDays(iso, 1);
-                        const prevHubCode =
-                          !siteOnDay(person, prevIso)
-                            ? hubOnDay(person, prevIso, stopoverBook, flightBook, travelHubs)
-                            : null;
-                        const nextHubCode =
-                          !siteOnDay(person, nextIso)
-                            ? hubOnDay(person, nextIso, stopoverBook, flightBook, travelHubs)
-                            : null;
-                        const prevHub = Boolean(prevHubCode);
-                        const nextHub = Boolean(nextHubCode);
-                        const nextSite = Boolean(siteOnDay(person, nextIso));
-                        const hubTransition =
-                          Boolean(hub && prevHubCode && prevHubCode !== hub);
-                        const assignmentRole = roleOnDay(person, iso);
-                        const flight = flightOnDay(person, iso, flightBook);
-                        const journey =
-                          hub || flight
-                            ? journeyForPerson(flightBook, person.id, flight === "out" ? "return" : "outbound")
-                            : "";
-                        const weekend = day.weekend;
-                        const monthIndex = day.monthIndex;
-                        const monthStartDay = day.monthStartDay;
-                        const dayPlan = site ? planOnDay(person.id, iso) : null;
-                        const covering = site ? stintCovering(person, iso) : null;
-                        // One IN (first day of stay) and one OUT (last day) — never mid-stay doubles.
-                        const stayLastDay =
-                          covering?.out && covering.out.length >= 10
-                            ? addDays(covering.out, -1)
-                            : null;
-                        const stintStart = Boolean(covering && iso === covering.from);
-                        const stintEnd = Boolean(stayLastDay && iso === stayLastDay);
-                        const work = site ? workLabelForAssignment(person, site, iso, iso) : "";
-                        const inDraft =
-                          Boolean(draftRange && iso >= draftRange.from && iso <= draftRange.to);
-                        const returnWindow = showReturnWindow(ops, iso);
-                        const placePreview = inDraft && draftMode === "place";
-                        const extendPreview = inDraft && draftMode === "extend";
-                        const paintPreview = placePreview || extendPreview;
-                        const staySelected = Boolean(
-                          staySelection &&
-                            staySelection.personId === person.id &&
-                            covering &&
-                            staySelection.from === covering.from &&
-                            staySelection.out === (covering.out || staySelection.out),
-                        );
-                        const stayFrom = covering?.from || dayPlan?.from || "";
-                        const stayOut = covering?.out || dayPlan?.out || "";
-                        const stayNote =
-                          (stayFrom && stayOut
-                            ? getStayNote(roster, person.id, stayFrom, stayOut)
-                            : "") ||
-                          dayPlan?.note ||
-                          "";
-                        // Excel-style: paint the note once, centered on the middle visible day of the stay.
-                        const showStayNoteLabel = Boolean(
-                          stayNote &&
-                            stayFrom &&
-                            stayOut &&
-                            (() => {
-                              const visibleStay = visibleDayMeta
-                                .map((d) => d.iso)
-                                .filter((d) => d >= stayFrom && d < stayOut);
-                              if (!visibleStay.length) return false;
-                              return iso === visibleStay[Math.floor(visibleStay.length / 2)];
-                            })(),
-                        );
-                        const stayTravel =
-                          covering && stopoverBook
-                            ? travelPlanForStay(
-                                stopoverBook,
-                                person.id,
-                                covering.from,
-                                covering.out,
-                                site,
-                              )
-                            : "";
-                        const bookedTravel = journey || journeyForPerson(flightBook, person.id, "return");
-                        const travelDisplay = journeyDisplayNames(
-                          bookedTravel || stayTravel || journeyLine || "",
-                          travelHubs,
-                        );
-                        const hubJourneyTitle = travelDisplay
-                          ? `${travelHubName(hub || "", travelHubs)} · ${formatMedium(iso)} · ${travelDisplay}`
-                          : `${travelHubLabel(hub || "", travelHubs)} · ${formatMedium(iso)}`;
-
-                        return (
-                          <div
-                            key={`${person.id}-${iso}`}
-                            role="button"
-                            tabIndex={0}
-                            title={
-                              flight
-                                ? `${flight === "in" ? "Inbound" : "Outbound"} · ${formatMedium(iso)}${travelDisplay ? ` · ${travelDisplay}` : journey ? ` · ${journey}` : ""}`
-                                : hub
-                                  ? hubJourneyTitle
-                                  : site
-                                    ? `${stintEnd ? "OUT · " : ""}${assignmentRole ? `${assignmentRole} · ` : ""}${work ? `${work} · ` : ""}${siteLabel(site)} · ${formatMedium(iso)}${stayNote ? ` · ${stayNote}` : ""}${travelDisplay ? ` · Travel ${travelDisplay}` : ""}`
-                                    : `Empty · ${formatMedium(iso)} · drag ${paintBrush.kind === "site" ? paintBrush.code : `Travel ${paintBrush.hub}`} · IN → OUT`
-                            }
-                            onClick={() => {
-                              if (canEdit) return;
-                              setTravelHover(null);
-                              const plan = planOnDay(person.id, iso);
-                              if (plan) selectPlan(plan, person.id);
-                              openDay(person.id, iso);
-                            }}
-                            onPointerDown={(event) => {
-                              if (!canEdit || event.button !== 0) return;
-                              event.preventDefault();
-                              setTravelHover(null);
-                              if (event.shiftKey && onToggleStopover && !site) {
-                                applyStopover(person.id, iso, "YK");
-                                return;
-                              }
-                              startDrag(person.id, iso, event.button);
-                            }}
-                            onContextMenu={(event) => {
-                              if (!canEdit) return;
-                              event.preventDefault();
-                              setTravelHover(null);
-                              setRowMenu(null);
-                              openCellMenu(person.id, iso, event.clientX, event.clientY);
-                            }}
-                            onPointerEnter={(event) => {
-                              if (canEdit) moveDrag(person.id, iso);
-                              if ((!site && !hub) || cellMenu || dragRef.current) {
-                                setTravelHover(null);
-                                return;
-                              }
-                              setTravelHover({
-                                personId: person.id,
-                                iso,
-                                x: event.clientX,
-                                y: event.clientY,
-                                plan:
-                                  travelDisplay ||
-                                  (hub
-                                    ? travelHubName(hub, travelHubs)
-                                    : "No travel yet — right-click to add"),
-                              });
-                            }}
-                            onPointerMove={(event) => {
-                              if ((!site && !hub) || cellMenu || dragRef.current) return;
-                              setTravelHover((prev) =>
-                                prev && prev.personId === person.id && prev.iso === iso
-                                  ? { ...prev, x: event.clientX, y: event.clientY }
-                                  : prev,
-                              );
-                            }}
-                            onPointerLeave={() => {
-                              setTravelHover((prev) =>
-                                prev && prev.personId === person.id && prev.iso === iso ? null : prev,
-                              );
-                            }}
-                            className={cn(
-                              "relative flex h-11 min-w-0 items-center justify-center overflow-hidden border-l border-border text-[0.625rem] font-bold",
-                              canEdit ? "cursor-cell select-none touch-none" : "cursor-pointer touch-pan-x touch-pan-y",
-                              monthStartDay && "border-l-2 border-l-primary/50",
-                              !site &&
-                                !hub &&
-                                !flight &&
-                                !returnWindow &&
-                                !paintPreview &&
-                                weekend &&
-                                "bg-muted/40",
-                              !site &&
-                                !hub &&
-                                !flight &&
-                                !returnWindow &&
-                                !paintPreview &&
-                                !weekend &&
-                                monthIndex % 2 === 1 &&
-                                "bg-sky-50/40",
-                              // Camp stays always use the legend IQA/POND/ALRT/KUG colours.
-                              site && !returnWindow && !paintPreview && siteTone(site, siteList),
-                              // Travel / hub / flight legs — one grey (not teal/indigo “off” colours).
-                              (hub || flight) &&
-                                !site &&
-                                !returnWindow &&
-                                !paintPreview &&
-                                "bg-stone-500 text-white",
-                              returnWindow && "bg-[#FFD600] text-stone-900",
-                              placePreview &&
-                                paintBrush.kind === "site" &&
-                                cn(siteTone(paintBrush.code, siteList), "opacity-80 ring-1 ring-inset ring-stone-900/40"),
-                              placePreview &&
-                                paintBrush.kind === "travel" &&
-                                "bg-stone-500/55 text-white ring-1 ring-inset ring-stone-700/50",
-                              extendPreview && "bg-emerald-500/40 text-emerald-950 ring-1 ring-inset ring-emerald-600/40",
-                              staySelected && "ring-2 ring-inset ring-stone-900/70",
-                            )}
-                          >
-                            {showStayNoteLabel ? (
-                              <span
-                                className="pointer-events-none absolute inset-y-0 left-1/2 z-[3] flex max-w-[min(18rem,70vw)] -translate-x-1/2 items-center justify-center px-1"
-                                title={stayNote}
-                              >
-                                <span className="truncate text-[10px] font-semibold leading-tight text-stone-950 drop-shadow-[0_0_2px_rgba(255,255,255,0.9)]">
-                                  {stayNote}
-                                </span>
-                              </span>
-                            ) : stayNote ? (
-                              <span
-                                className="absolute top-0.5 right-0.5 z-[2] size-1.5 rounded-full bg-stone-900/70"
-                                title={stayNote}
-                                aria-hidden
-                              />
-                            ) : null}
-                            {travelOnStay && hubMark ? (
-                              <span
-                                className="absolute bottom-0.5 left-0.5 z-[2] rounded bg-stone-900/85 px-0.5 text-[8px] font-bold leading-tight text-white"
-                                title={travelHubLabel(hubMark, travelHubs)}
-                              >
-                                {hubMark.slice(0, 3)}
-                              </span>
-                            ) : null}
-                            <span
-                              className={cn(
-                                "relative z-[1] block max-w-full px-0.5",
-                                hub && !paintPreview && !flight && !returnWindow && !stintEnd
-                                  ? "whitespace-normal text-center text-[8px] font-bold leading-[1.05]"
-                                  : "truncate",
-                              )}
-                            >
-                              {paintPreview
-                                ? (() => {
-                                    const dayNum = daysBetween(draftRange!.from, iso) + 1;
-                                    const last = iso === draftRange!.to;
-                                    if (dayNum === 1) return "IN";
-                                    if (last) return "OUT";
-                                    return dayNum % 7 === 0 ? String(dayNum) : "";
-                                  })()
-                                : stintStart
-                                  ? "IN"
-                                  : stintEnd
-                                    ? "OUT"
-                                    : hub && !site
-                                      ? hubTransition
-                                        ? `→${travelHubName(hub, travelHubs)}→`
-                                        : prevHub && nextSite
-                                          ? `→${travelHubName(hub, travelHubs)}`
-                                          : transitCellMark(
-                                              hub,
-                                              {
-                                                fromTravel: prevHub,
-                                                toTravel: nextHub || nextSite,
-                                              },
-                                              travelHubs,
-                                            )
-                                      : ""}
-                            </span>
-                          </div>
-                        );
-                      })}
-                      {dayWindow.end < days.length ? <div aria-hidden /> : null}
-                    </div>
-                  );
-                })}
+                {visiblePeople.map((person) => (
+                  <MonthRow
+                    key={`${person.id}::${group.role}`}
+                    person={person}
+                    opsEntry={opsBook[person.id]}
+                    draft={draft?.personId === person.id ? draft : null}
+                    staySelection={staySelection?.personId === person.id ? staySelection : null}
+                    stopoverBook={stopoverBook}
+                    flightBook={flightBook}
+                    roster={roster}
+                    travelHubs={travelHubs}
+                    siteList={siteList}
+                    paintBrush={paintBrush}
+                    canEdit={canEdit}
+                    year={year}
+                    dayMeta={dayMeta}
+                    gridColumns={visibleDayColumns}
+                    daysTrackWidth={daysTrackWidth}
+                    dayColRem={dayColRem}
+                    actions={rowActions}
+                  />
+                ))}
               </div>
               );
             })
@@ -2315,6 +2403,35 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
         </div>
       ) : null}
 
+      {canEdit && draft && draftDays != null && dragTip ? (
+        <div
+          className={cn(
+            "pointer-events-none fixed z-50 rounded-xl px-3 py-2 text-white shadow-xl ring-1 ring-black/10",
+            draftDays > STANDARD_ROTATION_DAYS ? "bg-amber-600" : "bg-stone-900",
+          )}
+          style={{
+            left:
+              typeof window !== "undefined" && dragTip.x + 240 > window.innerWidth
+                ? Math.max(8, dragTip.x - 236)
+                : dragTip.x + 16,
+            top: Math.max(8, dragTip.y - 84),
+          }}
+        >
+          <p className="text-lg font-bold leading-none tabular-nums">
+            {draftDays}
+            <span className="text-sm font-semibold opacity-80"> / {STANDARD_ROTATION_DAYS} days</span>
+          </p>
+          <p className="mt-1 text-[11px] font-medium opacity-85">
+            {draftDays > STANDARD_ROTATION_DAYS
+              ? `${draftDays - STANDARD_ROTATION_DAYS} day${draftDays - STANDARD_ROTATION_DAYS === 1 ? "" : "s"} past 6 weeks`
+              : draftDays === STANDARD_ROTATION_DAYS
+                ? "Full 6 weeks"
+                : `${STANDARD_ROTATION_DAYS - draftDays} day${STANDARD_ROTATION_DAYS - draftDays === 1 ? "" : "s"} short of 6 weeks`}
+            {" · OUT "}
+            {formatMedium(orderedRange(draft.start, draft.end).to)}
+          </p>
+        </div>
+      ) : null}
       {travelHover && !cellMenu ? (
         <div
           className="pointer-events-none fixed z-40 max-w-xs rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-lg"

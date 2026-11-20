@@ -1,4 +1,4 @@
-/** Airports / stopovers on the way to camp — not rotation worksites. Editable in Settings. */
+/** Airports / stopovers on the way to camp, not rotation worksites. Editable in Settings. */
 
 export type TravelHub = {
   /** Short form shown in Month cells / right-click boxes. */
@@ -14,7 +14,7 @@ export type CrewTravelHubsBook = {
 const STORAGE_KEY = "tower-arctic-crew-travel-hubs-v1";
 
 /**
- * Pass-through airports / hubs only — not the camp worksites (IQA, KUG, POND, ALRT).
+ * Pass-through airports / hubs only, not the camp worksites (IQA, KUG, POND, ALRT).
  * Those stay in the site legend; these are places people connect through.
  */
 export const DEFAULT_TRAVEL_HUBS: TravelHub[] = [
@@ -34,7 +34,7 @@ export const DEFAULT_TRAVEL_HUBS: TravelHub[] = [
   { code: "YRT", name: "Rankin Inlet" },
 ];
 
-/** Main rotation worksites — never treat these as pass-through hub menu entries. */
+/** Main rotation worksites, never treat these as pass-through hub menu entries. */
 export const WORK_SITE_CODES = new Set(["IQA", "KUG", "POND", "ALRT", "KU", "IQ"]);
 
 /** @deprecated use DEFAULT_TRAVEL_HUBS or loadTravelHubs() */
@@ -132,7 +132,7 @@ export function travelHubLabel(code: string, hubs: TravelHub[] = DEFAULT_TRAVEL_
 export function travelHubName(code: string, hubs: TravelHub[] = DEFAULT_TRAVEL_HUBS) {
   const key = normalizeHubCode(code.replace(/^via\s+/i, ""));
   if (WORK_SITE_CODES.has(key) || key === "KU" || key === "IQ") {
-    // Connecting through a camp city — keep the short code so it doesn't look like a second worksite.
+    // Connecting through a camp city, keep the short code so it doesn't look like a second worksite.
     return key === "KU" ? "KUG" : key === "IQ" ? "IQA" : key;
   }
   const map = hubMap(hubs);
@@ -209,7 +209,7 @@ export function transitCellMark(
   return name;
 }
 
-/** Right-click pass-through boxes — never the worksite camps from the legend. */
+/** Right-click pass-through boxes, never the worksite camps from the legend. */
 export function stopoverMenuHubs(hubs: TravelHub[] = DEFAULT_TRAVEL_HUBS): TravelHub[] {
   const preferred = new Set([
     "YOW",

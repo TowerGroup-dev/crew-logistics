@@ -39,7 +39,15 @@ export function autoSeedTravelOps(people: CrewPerson[], opsBook: CrewOpsBook, to
       };
       dirty = true;
     }
-    if (snap.plannedOut && (!patched.returnBookFrom || !patched.returnBookTo)) {
+    // Stay with no OUT date yet (still there): no return window until an OUT is set.
+    // Clears one the app filled in itself; a window painted by hand is kept.
+    const stay = (person.stints || []).find((row) => row.from === snap.plannedIn);
+    const openStay = Boolean(stay && !stay.out);
+    if (openStay && !patched.returnWindowPainted && (patched.returnBookFrom || patched.returnBookTo)) {
+      patched = { ...patched, returnBookFrom: null, returnBookTo: null };
+      dirty = true;
+    }
+    if (!openStay && snap.plannedOut && (!patched.returnBookFrom || !patched.returnBookTo)) {
       patched = {
         ...patched,
         returnBookFrom: patched.returnBookFrom || addDays(snap.plannedOut, -FOUR_WEEK_TRACK_DAYS),

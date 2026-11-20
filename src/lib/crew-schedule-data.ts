@@ -1,6 +1,6 @@
 export const CREW_SCHEDULE_DATA = {
   "year": 2026,
-  "source": "2026_ Crew Schedules (Master).xlsm",
+  "source": "2026_ Crew Schedules (Master) 2026-11-20.xlsm",
   "sheet": "Crew - Schedule - 2026",
   "rules": {
     "defaultRotationDays": 42,
@@ -50,6 +50,29 @@ export const CREW_SCHEDULE_DATA = {
       ]
     },
     {
+      "id": "cbc-access-road-and-piles",
+      "name": "CBC - Access road and piles",
+      "year": 2026,
+      "source": "project-timeline",
+      "region": "Iqaluit",
+      "active": true,
+      "starred": false,
+      "windows": [
+        {
+          "from": "2026-05-29",
+          "to": "2026-06-01"
+        },
+        {
+          "from": "2026-06-22",
+          "to": "2026-06-28"
+        },
+        {
+          "from": "2026-08-06",
+          "to": "2026-08-14"
+        }
+      ]
+    },
+    {
       "id": "critical-pipeline-project",
       "name": "Critical Pipeline Project",
       "year": 2026,
@@ -78,6 +101,16 @@ export const CREW_SCHEDULE_DATA = {
           "to": "2026-08-29"
         }
       ]
+    },
+    {
+      "id": "elder-s-facility-civil",
+      "name": "Elder's Facility Civil",
+      "year": 2026,
+      "source": "project-timeline",
+      "region": "Pending Project",
+      "active": true,
+      "starred": false,
+      "windows": []
     },
     {
       "id": "hospital-hill-bdl",
@@ -159,6 +192,35 @@ export const CREW_SCHEDULE_DATA = {
       "region": "Iqaluit",
       "active": true,
       "starred": true,
+      "windows": []
+    },
+    {
+      "id": "nrc",
+      "name": "NRC",
+      "year": 2026,
+      "source": "project-timeline",
+      "region": "Iqaluit",
+      "active": true,
+      "starred": true,
+      "windows": [
+        {
+          "from": "2026-06-20",
+          "to": "2026-06-28"
+        },
+        {
+          "from": "2026-08-04",
+          "to": "2026-08-05"
+        }
+      ]
+    },
+    {
+      "id": "nunavut-heritage-center",
+      "name": "Nunavut Heritage Center",
+      "year": 2026,
+      "source": "project-timeline",
+      "region": "Iqaluit",
+      "active": true,
+      "starred": false,
       "windows": []
     },
     {
@@ -296,6 +358,44 @@ export const CREW_SCHEDULE_DATA = {
       ]
     },
     {
+      "id": "water-sewer",
+      "name": "Water/Sewer",
+      "year": 2026,
+      "source": "project-timeline",
+      "region": "Iqaluit",
+      "active": true,
+      "starred": false,
+      "windows": [
+        {
+          "from": "2026-05-29",
+          "to": "2026-06-01"
+        },
+        {
+          "from": "2026-06-22",
+          "to": "2026-06-28"
+        },
+        {
+          "from": "2026-07-22",
+          "to": "2026-07-31"
+        }
+      ]
+    },
+    {
+      "id": "waterline-project",
+      "name": "Waterline Project",
+      "year": 2026,
+      "source": "project-timeline",
+      "region": "Alert",
+      "active": true,
+      "starred": false,
+      "windows": [
+        {
+          "from": "2025-12-08",
+          "to": "2026-08-18"
+        }
+      ]
+    },
+    {
       "id": "wtp-project",
       "name": "WTP Project",
       "year": 2026,
@@ -328,44 +428,8 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-05-07",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-05-26",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-07-06",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-07-08",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-08-26",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-08-28",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-09-17",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-09-21",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-10-09",
-          "mark": "Out"
-        },
-        {
           "date": "2025-12-08",
-          "mark": "POND"
+          "mark": "IQA"
         },
         {
           "date": "2026-01-29",
@@ -373,34 +437,74 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-02-09",
-          "mark": "POND"
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "IQA"
         },
         {
           "date": "2026-04-30",
           "mark": "Out"
         },
         {
-          "date": "2026-06-05",
-          "mark": "POND"
+          "date": "2026-05-07",
+          "mark": "IQA"
         },
         {
-          "date": "2026-07-06",
+          "date": "2026-05-27",
           "mark": "Out"
         },
         {
-          "date": "2026-08-29",
+          "date": "2026-06-04",
           "mark": "POND"
         },
         {
-          "date": "2026-09-17",
+          "date": "2026-07-08",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-07-29",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-21",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-07",
           "mark": "Out"
+        },
+        {
+          "date": "2026-10-12",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-10-13",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-11-16",
+          "mark": "YOW"
+        },
+        {
+          "date": "2026-11-17",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-11-23",
+          "mark": "IQA"
         }
       ],
       "stints": [
         {
-          "site": "POND",
+          "site": "IQA",
           "sites": [
-            "POND"
+            "IQA"
           ],
           "from": "2025-12-08",
           "out": "2026-01-29",
@@ -409,9 +513,9 @@ export const CREW_SCHEDULE_DATA = {
           "tentative": false
         },
         {
-          "site": "POND",
+          "site": "IQA",
           "sites": [
-            "POND"
+            "IQA"
           ],
           "from": "2026-02-09",
           "out": "2026-04-30",
@@ -425,44 +529,9 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-05-07",
-          "out": "2026-05-26",
+          "out": "2026-05-27",
           "arrival": "marked",
           "departure": "marked",
-          "tentative": false
-        },
-        {
-          "site": "POND",
-          "sites": [
-            "POND"
-          ],
-          "from": "2026-06-05",
-          "out": "2026-07-06",
-          "arrival": "shading",
-          "departure": "shading-ended",
-          "tentative": false
-        },
-        {
-          "site": "POND",
-          "sites": [
-            "POND",
-            "IQA",
-            "POND"
-          ],
-          "from": "2026-07-06",
-          "out": "2026-08-28",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        },
-        {
-          "site": "POND",
-          "sites": [
-            "POND"
-          ],
-          "from": "2026-08-29",
-          "out": "2026-09-17",
-          "arrival": "shading",
-          "departure": "shading-ended",
           "tentative": false
         },
         {
@@ -471,20 +540,87 @@ export const CREW_SCHEDULE_DATA = {
             "POND",
             "IQA"
           ],
-          "from": "2026-09-17",
-          "out": "2026-10-09",
+          "from": "2026-06-04",
+          "out": "2026-10-07",
           "arrival": "marked",
-          "departure": "homeward",
-          "tentative": false
+          "departure": "shading-ended",
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-06-04",
+              "out": "2026-07-08",
+              "kind": "site",
+              "site": "POND"
+            },
+            {
+              "from": "2026-07-08",
+              "out": "2026-07-29",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-07-29",
+              "out": "2026-09-21",
+              "kind": "site",
+              "site": "POND"
+            },
+            {
+              "from": "2026-09-21",
+              "out": "2026-10-07",
+              "kind": "site",
+              "site": "IQA"
+            }
+          ]
+        },
+        {
+          "site": "POND",
+          "sites": [
+            "POND",
+            "IQA"
+          ],
+          "from": "2026-10-12",
+          "out": "2026-11-17",
+          "arrival": "marked",
+          "departure": "shading-ended",
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-10-12",
+              "out": "2026-10-13",
+              "kind": "site",
+              "site": "POND"
+            },
+            {
+              "from": "2026-10-13",
+              "out": "2026-11-16",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-11-16",
+              "out": "2026-11-17",
+              "kind": "travel",
+              "label": "YOW",
+              "route": "IQA → YOW"
+            }
+          ]
+        },
+        {
+          "site": "IQA",
+          "sites": [
+            "IQA"
+          ],
+          "from": "2026-11-23",
+          "out": null,
+          "arrival": "marked",
+          "departure": "shading-ended",
+          "tentative": false,
+          "note": "OUT date not set"
         }
       ],
       "warnings": [
-        "OUT typed on 2026-06-04 while already off site",
-        "planned shading ended 2026-10-07 — counted homeward OUT on 2026-10-09",
-        "shaded 2025-12-08 to 2026-01-28 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-02-09 to 2026-04-29 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-06-05 to 2026-07-05 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-08-29 to 2026-09-16 had no typed IN/OUT — counted as on site at POND from shading"
+        "shaded 2025-12-08 to 2026-01-28 had no typed IN/OUT, counted as on site at IQA from shading",
+        "shaded 2026-02-09 to 2026-04-29 had no typed IN/OUT, counted as on site at IQA from shading"
       ],
       "fullName": "Eric Jacobsen",
       "flights": [
@@ -578,6 +714,22 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-04-27",
+          "mark": "Travel"
+        },
+        {
+          "date": "2026-04-28",
+          "mark": "ALRT"
+        },
+        {
+          "date": "2026-05-01",
+          "mark": "Out"
+        },
+        {
           "date": "2026-05-31",
           "mark": "YK"
         },
@@ -586,15 +738,11 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "KUG"
         },
         {
-          "date": "2026-06-02",
+          "date": "2026-06-03",
           "mark": "Out"
         },
         {
           "date": "2026-07-13",
-          "mark": "via ALRT"
-        },
-        {
-          "date": "2026-07-14",
           "mark": "ALRT"
         },
         {
@@ -604,6 +752,10 @@ export const CREW_SCHEDULE_DATA = {
         {
           "date": "2026-08-31",
           "mark": "IQA"
+        },
+        {
+          "date": "2026-09-01",
+          "mark": "Out"
         },
         {
           "date": "2026-09-02",
@@ -616,22 +768,63 @@ export const CREW_SCHEDULE_DATA = {
       ],
       "stints": [
         {
+          "site": "ALRT",
+          "sites": [
+            "ALRT"
+          ],
+          "from": "2026-04-27",
+          "out": "2026-05-01",
+          "arrival": "shading",
+          "departure": "shading-ended",
+          "tentative": false,
+          "unsure": true,
+          "segments": [
+            {
+              "from": "2026-04-27",
+              "out": "2026-04-28",
+              "kind": "travel",
+              "route": "ALRT"
+            },
+            {
+              "from": "2026-04-28",
+              "out": "2026-05-01",
+              "kind": "site",
+              "site": "ALRT"
+            }
+          ]
+        },
+        {
           "site": "KUG",
           "sites": [
             "KUG"
           ],
-          "from": "2026-06-01",
-          "out": "2026-06-02",
+          "from": "2026-05-31",
+          "out": "2026-06-03",
           "arrival": "marked",
           "departure": "marked",
-          "tentative": false
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-05-31",
+              "out": "2026-06-01",
+              "kind": "travel",
+              "label": "YK",
+              "route": "YK → KUG"
+            },
+            {
+              "from": "2026-06-01",
+              "out": "2026-06-03",
+              "kind": "site",
+              "site": "KUG"
+            }
+          ]
         },
         {
           "site": "ALRT",
           "sites": [
             "ALRT"
           ],
-          "from": "2026-07-14",
+          "from": "2026-07-13",
           "out": "2026-07-29",
           "arrival": "marked",
           "departure": "shading-ended",
@@ -640,17 +833,29 @@ export const CREW_SCHEDULE_DATA = {
         {
           "site": "IQA",
           "sites": [
-            "IQA",
-            "POND"
+            "IQA"
           ],
           "from": "2026-08-31",
+          "out": "2026-09-01",
+          "arrival": "marked",
+          "departure": "shading-ended",
+          "tentative": false
+        },
+        {
+          "site": "POND",
+          "sites": [
+            "POND"
+          ],
+          "from": "2026-09-02",
           "out": "2026-09-04",
           "arrival": "marked",
           "departure": "shading-ended",
           "tentative": false
         }
       ],
-      "warnings": []
+      "warnings": [
+        "shaded 2026-04-27 to 2026-04-30 with no site code, shown at ALRT (Location column); please confirm"
+      ]
     },
     {
       "id": "maegan-ellison-manager",
@@ -667,11 +872,15 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
           "date": "2026-06-08",
           "mark": "IQA"
         },
         {
-          "date": "2026-06-11",
+          "date": "2026-06-12",
           "mark": "Out"
         },
         {
@@ -679,7 +888,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "ALRT"
         },
         {
-          "date": "2026-08-19",
+          "date": "2026-08-21",
           "mark": "Out"
         }
       ],
@@ -690,7 +899,7 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-06-08",
-          "out": "2026-06-11",
+          "out": "2026-06-12",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -701,7 +910,7 @@ export const CREW_SCHEDULE_DATA = {
             "ALRT"
           ],
           "from": "2026-08-03",
-          "out": "2026-08-19",
+          "out": "2026-08-21",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -726,6 +935,10 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
+          "date": "2026-04-27",
+          "mark": "Travel"
+        },
+        {
           "date": "2026-04-28",
           "mark": "IQA"
         },
@@ -734,19 +947,27 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "Out"
         },
         {
+          "date": "2026-06-08",
+          "mark": "Travel"
+        },
+        {
+          "date": "2026-06-09",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-06-12",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-06-29",
+          "mark": "Travel"
+        },
+        {
           "date": "2026-07-01",
           "mark": "IQA"
         },
         {
-          "date": "2026-08-10",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-08-29",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-09-13",
+          "date": "2026-08-11",
           "mark": "Out"
         },
         {
@@ -754,7 +975,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "POND"
         },
         {
-          "date": "2026-09-21",
+          "date": "2026-09-22",
           "mark": "Out"
         },
         {
@@ -762,7 +983,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-10-20",
+          "date": "2026-10-21",
           "mark": "Out"
         }
       ],
@@ -772,33 +993,78 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "IQA"
           ],
-          "from": "2026-04-28",
+          "from": "2026-04-27",
           "out": "2026-05-17",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true,
+          "segments": [
+            {
+              "from": "2026-04-27",
+              "out": "2026-04-28",
+              "kind": "travel",
+              "route": "IQA"
+            },
+            {
+              "from": "2026-04-28",
+              "out": "2026-05-17",
+              "kind": "site",
+              "site": "IQA"
+            }
+          ]
+        },
+        {
+          "site": "POND",
+          "sites": [
+            "POND"
+          ],
+          "from": "2026-06-08",
+          "out": "2026-06-12",
+          "arrival": "shading",
+          "departure": "shading-ended",
+          "tentative": false,
+          "unsure": true,
+          "segments": [
+            {
+              "from": "2026-06-08",
+              "out": "2026-06-09",
+              "kind": "travel",
+              "route": "POND"
+            },
+            {
+              "from": "2026-06-09",
+              "out": "2026-06-12",
+              "kind": "site",
+              "site": "POND"
+            }
+          ]
         },
         {
           "site": "IQA",
           "sites": [
             "IQA"
           ],
-          "from": "2026-07-01",
-          "out": "2026-08-10",
+          "from": "2026-06-29",
+          "out": "2026-08-11",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
-        },
-        {
-          "site": "IQA",
-          "sites": [
-            "IQA"
-          ],
-          "from": "2026-08-29",
-          "out": "2026-09-13",
-          "arrival": "shading",
-          "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true,
+          "segments": [
+            {
+              "from": "2026-06-29",
+              "out": "2026-07-01",
+              "kind": "travel",
+              "route": "IQA"
+            },
+            {
+              "from": "2026-07-01",
+              "out": "2026-08-11",
+              "kind": "site",
+              "site": "IQA"
+            }
+          ]
         },
         {
           "site": "POND",
@@ -806,7 +1072,7 @@ export const CREW_SCHEDULE_DATA = {
             "POND"
           ],
           "from": "2026-09-14",
-          "out": "2026-09-21",
+          "out": "2026-09-22",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -817,16 +1083,17 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-10-13",
-          "out": "2026-10-20",
+          "out": "2026-10-21",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
         }
       ],
       "warnings": [
-        "shaded 2026-04-28 to 2026-05-16 had no typed IN/OUT — counted as on site at IQA from shading",
-        "shaded 2026-07-01 to 2026-08-09 had no typed IN/OUT — counted as on site at IQA from shading",
-        "shaded 2026-08-29 to 2026-09-12 had no typed IN/OUT — counted as on site at IQA from shading"
+        "shaded 2026-06-08 to 2026-06-11 with no site code, shown at POND (Location column); please confirm",
+        "shaded 2026-04-27 to 2026-05-16 with no site code, shown at IQA (Location column); please confirm",
+        "shaded 2026-06-29 to 2026-08-10 with no site code, shown at IQA (Location column); please confirm",
+        "shaded 2026-08-28 to 2026-09-27 with no site code, shown at IQA (Location column); please confirm"
       ],
       "note": "Merged sheet rows [7, 11]",
       "agreementSigned": true
@@ -846,11 +1113,15 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
           "date": "2026-04-27",
           "mark": "IQA"
         },
         {
-          "date": "2026-06-08",
+          "date": "2026-06-09",
           "mark": "Out"
         },
         {
@@ -858,7 +1129,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-08-20",
+          "date": "2026-08-21",
           "mark": "Out"
         },
         {
@@ -866,7 +1137,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-10-05",
+          "date": "2026-10-06",
           "mark": "Out"
         },
         {
@@ -874,7 +1145,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-12-29",
+          "date": "2026-12-01",
           "mark": "Out"
         }
       ],
@@ -885,7 +1156,7 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-04-27",
-          "out": "2026-06-08",
+          "out": "2026-06-09",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -896,7 +1167,7 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-06-22",
-          "out": "2026-08-20",
+          "out": "2026-08-21",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -907,17 +1178,24 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-08-31",
-          "out": "2026-12-29",
+          "out": "2026-10-06",
           "arrival": "marked",
-          "departure": "season",
+          "departure": "marked",
+          "tentative": false
+        },
+        {
+          "site": "IQA",
+          "sites": [
+            "IQA"
+          ],
+          "from": "2026-10-20",
+          "out": "2026-12-01",
+          "arrival": "marked",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
-      "warnings": [
-        "OUT typed on 2026-10-05 with IQA return 2026-10-20 — kept as one stay (short home break)",
-        "planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03",
-        "late-year stay from 2026-08-31 had no hard OUT — extended through 2026-12-29"
-      ],
+      "warnings": [],
       "fullName": "Bryan Hay",
       "flights": [
         {
@@ -956,24 +1234,12 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-06-29",
-          "mark": "via IQA"
-        },
-        {
-          "date": "2026-06-30",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-08-10",
+          "date": "2026-03-01",
           "mark": "Out"
         },
         {
-          "date": "2026-08-28",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-10-12",
-          "mark": "Out"
+          "date": "2026-04-27",
+          "mark": "Travel"
         },
         {
           "date": "2026-04-28",
@@ -981,6 +1247,22 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-05-17",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-06-29",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-11",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-28",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-13",
           "mark": "Out"
         }
       ],
@@ -990,19 +1272,34 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "IQA"
           ],
-          "from": "2026-04-28",
+          "from": "2026-04-27",
           "out": "2026-05-17",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true,
+          "segments": [
+            {
+              "from": "2026-04-27",
+              "out": "2026-04-28",
+              "kind": "travel",
+              "route": "IQA"
+            },
+            {
+              "from": "2026-04-28",
+              "out": "2026-05-17",
+              "kind": "site",
+              "site": "IQA"
+            }
+          ]
         },
         {
           "site": "IQA",
           "sites": [
             "IQA"
           ],
-          "from": "2026-06-30",
-          "out": "2026-08-10",
+          "from": "2026-06-29",
+          "out": "2026-08-11",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -1013,14 +1310,14 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-08-28",
-          "out": "2026-10-12",
+          "out": "2026-10-13",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
         }
       ],
       "warnings": [
-        "shaded 2026-04-28 to 2026-05-16 had no typed IN/OUT — counted as on site at IQA from shading"
+        "shaded 2026-04-27 to 2026-05-16 with no site code, shown at IQA (Location column); please confirm"
       ],
       "fullName": "Andrew Murphy",
       "flights": [
@@ -1051,7 +1348,35 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-03-30",
+          "date": "2025-12-08",
+          "mark": "IQA"
+        },
+        {
+          "date": "2025-12-16",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-01-13",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-02-16",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-03-02",
+          "mark": "Travel"
+        },
+        {
+          "date": "2026-03-03",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-03-31",
           "mark": "Out"
         },
         {
@@ -1059,7 +1384,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-05-25",
+          "date": "2026-05-26",
           "mark": "Out"
         },
         {
@@ -1067,7 +1392,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "KUG"
         },
         {
-          "date": "2026-07-20",
+          "date": "2026-07-21",
           "mark": "Out"
         },
         {
@@ -1079,7 +1404,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "POND"
         },
         {
-          "date": "2026-10-12",
+          "date": "2026-10-13",
           "mark": "Out"
         },
         {
@@ -1087,64 +1412,18 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-12-03",
-          "mark": "Out"
-        },
-        {
-          "date": "2025-12-08",
-          "mark": "POND"
-        },
-        {
-          "date": "2025-12-16",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-01-13",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-02-16",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-03-03",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-03-30",
+          "date": "2026-12-13",
           "mark": "Out"
         }
       ],
       "stints": [
         {
-          "site": "POND",
+          "site": "IQA",
           "sites": [
-            "POND"
+            "IQA"
           ],
           "from": "2025-12-08",
           "out": "2025-12-16",
-          "arrival": "shading",
-          "departure": "shading-ended",
-          "tentative": false
-        },
-        {
-          "site": "POND",
-          "sites": [
-            "POND"
-          ],
-          "from": "2026-01-13",
-          "out": "2026-02-16",
-          "arrival": "shading",
-          "departure": "shading-ended",
-          "tentative": false
-        },
-        {
-          "site": "POND",
-          "sites": [
-            "POND"
-          ],
-          "from": "2026-03-03",
-          "out": "2026-03-30",
           "arrival": "shading",
           "departure": "shading-ended",
           "tentative": false
@@ -1154,8 +1433,45 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "IQA"
           ],
+          "from": "2026-01-13",
+          "out": "2026-02-16",
+          "arrival": "shading",
+          "departure": "shading-ended",
+          "tentative": false
+        },
+        {
+          "site": "KUG",
+          "sites": [
+            "KUG"
+          ],
+          "from": "2026-03-02",
+          "out": "2026-03-31",
+          "arrival": "shading",
+          "departure": "marked",
+          "tentative": false,
+          "unsure": true,
+          "segments": [
+            {
+              "from": "2026-03-02",
+              "out": "2026-03-03",
+              "kind": "travel",
+              "route": "KUG"
+            },
+            {
+              "from": "2026-03-03",
+              "out": "2026-03-31",
+              "kind": "site",
+              "site": "KUG"
+            }
+          ]
+        },
+        {
+          "site": "IQA",
+          "sites": [
+            "IQA"
+          ],
           "from": "2026-04-13",
-          "out": "2026-05-25",
+          "out": "2026-05-26",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -1166,7 +1482,7 @@ export const CREW_SCHEDULE_DATA = {
             "KUG"
           ],
           "from": "2026-06-08",
-          "out": "2026-07-20",
+          "out": "2026-07-21",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -1178,10 +1494,24 @@ export const CREW_SCHEDULE_DATA = {
             "POND"
           ],
           "from": "2026-08-14",
-          "out": "2026-10-12",
+          "out": "2026-10-13",
           "arrival": "marked",
           "departure": "marked",
-          "tentative": false
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-08-14",
+              "out": "2026-08-17",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-08-17",
+              "out": "2026-10-13",
+              "kind": "site",
+              "site": "POND"
+            }
+          ]
         },
         {
           "site": "IQA",
@@ -1189,17 +1519,17 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-10-27",
-          "out": "2026-12-03",
+          "out": "2026-12-13",
           "arrival": "marked",
-          "departure": "homeward",
-          "tentative": false
+          "departure": "marked",
+          "tentative": false,
+          "note": "Linger for snow"
         }
       ],
       "warnings": [
-        "planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03",
-        "shaded 2025-12-08 to 2025-12-15 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-01-13 to 2026-02-15 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-03-03 to 2026-03-29 had no typed IN/OUT — counted as on site at POND from shading"
+        "shaded 2025-12-08 to 2025-12-15 had no typed IN/OUT, counted as on site at IQA from shading",
+        "shaded 2026-01-13 to 2026-02-15 had no typed IN/OUT, counted as on site at IQA from shading",
+        "shaded 2026-03-02 to 2026-03-30 with no site code, shown at KUG (Location column); please confirm"
       ],
       "fullName": "Clifford Kirk Anstey",
       "flights": [
@@ -1258,66 +1588,6 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-04-06",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-04-20",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-05-18",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-05-31",
-          "mark": "via IQA"
-        },
-        {
-          "date": "2026-06-01",
-          "mark": "YF"
-        },
-        {
-          "date": "2026-06-02",
-          "mark": "KUG"
-        },
-        {
-          "date": "2026-07-20",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-07-24",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-08-23",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-08-26",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-09-26",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-10-08",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-10-19",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-10-20",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-10-29",
-          "mark": "Out"
-        },
-        {
           "date": "2025-12-08",
           "mark": "IQA"
         },
@@ -1335,10 +1605,82 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-04-07",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-04-20",
           "mark": "IQA"
         },
         {
-          "date": "2026-04-06",
+          "date": "2026-05-19",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-05-31",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-06-01",
+          "mark": "YF"
+        },
+        {
+          "date": "2026-06-02",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-20",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-07-21",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-07-24",
+          "mark": "OUT"
+        },
+        {
+          "date": "2026-07-26",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-23",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-26",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-27",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-10-04",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-10-08",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-10-20",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-10-20",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-30",
           "mark": "Out"
         }
       ],
@@ -1366,15 +1708,16 @@ export const CREW_SCHEDULE_DATA = {
           "tentative": false
         },
         {
-          "site": "IQA",
+          "site": "KUG",
           "sites": [
-            "IQA"
+            "KUG"
           ],
           "from": "2026-03-01",
-          "out": "2026-04-06",
+          "out": "2026-04-07",
           "arrival": "shading",
-          "departure": "shading-ended",
-          "tentative": false
+          "departure": "marked",
+          "tentative": false,
+          "unsure": true
         },
         {
           "site": "IQA",
@@ -1382,19 +1725,7 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-04-20",
-          "out": "2026-05-18",
-          "arrival": "marked",
-          "departure": "marked",
-          "tentative": false
-        },
-        {
-          "site": "KUG",
-          "sites": [
-            "KUG",
-            "IQA"
-          ],
-          "from": "2026-06-02",
-          "out": "2026-07-24",
+          "out": "2026-05-19",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -1403,24 +1734,113 @@ export const CREW_SCHEDULE_DATA = {
           "site": "IQA",
           "sites": [
             "IQA",
+            "KUG"
+          ],
+          "from": "2026-05-31",
+          "out": "2026-07-21",
+          "arrival": "marked",
+          "departure": "shading-ended",
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-05-31",
+              "out": "2026-06-01",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-06-01",
+              "out": "2026-06-02",
+              "kind": "travel",
+              "label": "YF",
+              "route": "IQA → YF → KUG"
+            },
+            {
+              "from": "2026-06-02",
+              "out": "2026-07-20",
+              "kind": "site",
+              "site": "KUG"
+            },
+            {
+              "from": "2026-07-20",
+              "out": "2026-07-21",
+              "kind": "site",
+              "site": "IQA"
+            }
+          ]
+        },
+        {
+          "site": "TBC",
+          "sites": [
+            "TBC"
+          ],
+          "from": "2026-07-24",
+          "out": "2026-07-26",
+          "arrival": "shading",
+          "departure": "marked",
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-07-24",
+              "out": "2026-07-26",
+              "kind": "travel",
+              "label": "OUT",
+              "route": "OUT"
+            }
+          ]
+        },
+        {
+          "site": "IQA",
+          "sites": [
+            "IQA",
             "POND"
           ],
           "from": "2026-08-23",
-          "out": "2026-09-26",
+          "out": "2026-09-27",
           "arrival": "marked",
           "departure": "marked",
-          "tentative": false
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-08-23",
+              "out": "2026-08-26",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-08-26",
+              "out": "2026-09-27",
+              "kind": "site",
+              "site": "POND"
+            }
+          ]
         },
         {
-          "site": "POND",
+          "site": "KUG",
           "sites": [
+            "KUG",
             "POND"
           ],
-          "from": "2026-10-08",
-          "out": "2026-10-19",
-          "arrival": "marked",
+          "from": "2026-10-04",
+          "out": "2026-10-20",
+          "arrival": "shading",
           "departure": "marked",
-          "tentative": false
+          "tentative": false,
+          "unsure": true,
+          "segments": [
+            {
+              "from": "2026-10-04",
+              "out": "2026-10-08",
+              "kind": "site",
+              "site": "KUG"
+            },
+            {
+              "from": "2026-10-08",
+              "out": "2026-10-20",
+              "kind": "site",
+              "site": "POND"
+            }
+          ]
         },
         {
           "site": "IQA",
@@ -1428,17 +1848,17 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-10-20",
-          "out": "2026-10-29",
+          "out": "2026-10-30",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
         }
       ],
       "warnings": [
-        "OUT typed on 2026-07-25 while already off site",
-        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at IQA from shading",
-        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at IQA from shading",
-        "shaded 2026-03-01 to 2026-04-05 had no typed IN/OUT — counted as on site at IQA from shading"
+        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at IQA from shading",
+        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at IQA from shading",
+        "shaded 2026-03-01 to 2026-04-06 with no site code, shown at KUG (Location column); please confirm",
+        "shaded 2026-10-04 to 2026-10-19 with no site code, shown at KUG (Location column); please confirm"
       ],
       "fullName": "Sam Manniapik",
       "flights": [
@@ -1497,30 +1917,6 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-05-31",
-          "mark": "YK"
-        },
-        {
-          "date": "2026-06-01",
-          "mark": "KUG"
-        },
-        {
-          "date": "2026-07-20",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-08-15",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-08-17",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-09-26",
-          "mark": "Out"
-        },
-        {
           "date": "2025-12-08",
           "mark": "POND"
         },
@@ -1534,6 +1930,34 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-02-14",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-05-31",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-06-01",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-21",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-15",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-17",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-27",
           "mark": "Out"
         }
       ],
@@ -1565,11 +1989,26 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "KUG"
           ],
-          "from": "2026-06-01",
-          "out": "2026-07-20",
+          "from": "2026-05-31",
+          "out": "2026-07-21",
           "arrival": "marked",
           "departure": "marked",
-          "tentative": false
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-05-31",
+              "out": "2026-06-01",
+              "kind": "travel",
+              "label": "YK",
+              "route": "YK → KUG"
+            },
+            {
+              "from": "2026-06-01",
+              "out": "2026-07-21",
+              "kind": "site",
+              "site": "KUG"
+            }
+          ]
         },
         {
           "site": "IQA",
@@ -1578,15 +2017,29 @@ export const CREW_SCHEDULE_DATA = {
             "POND"
           ],
           "from": "2026-08-15",
-          "out": "2026-09-26",
+          "out": "2026-09-27",
           "arrival": "marked",
           "departure": "marked",
-          "tentative": false
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-08-15",
+              "out": "2026-08-17",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-08-17",
+              "out": "2026-09-27",
+              "kind": "site",
+              "site": "POND"
+            }
+          ]
         }
       ],
       "warnings": [
-        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at POND from shading"
+        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at POND from shading",
+        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at POND from shading"
       ],
       "fullName": "Elmer Gosse",
       "flights": [
@@ -1617,38 +2070,6 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-06-08",
-          "mark": "KUG"
-        },
-        {
-          "date": "2026-07-20",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-08-04",
-          "mark": "via KUG"
-        },
-        {
-          "date": "2026-08-05",
-          "mark": "KUG"
-        },
-        {
-          "date": "2026-08-17",
-          "mark": "YK"
-        },
-        {
-          "date": "2026-08-19",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-08-22",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-09-10",
-          "mark": "Out"
-        },
-        {
           "date": "2025-12-08",
           "mark": "POND"
         },
@@ -1665,8 +2086,40 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "Out"
         },
         {
-          "date": "2026-09-12",
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-06-08",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-21",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-04",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-17",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-08-19",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-22",
           "mark": "POND"
+        },
+        {
+          "date": "2026-09-12",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-09-12",
+          "mark": "KUG"
         },
         {
           "date": "2026-10-01",
@@ -1702,7 +2155,7 @@ export const CREW_SCHEDULE_DATA = {
             "KUG"
           ],
           "from": "2026-06-08",
-          "out": "2026-07-20",
+          "out": "2026-07-21",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -1714,28 +2167,56 @@ export const CREW_SCHEDULE_DATA = {
             "IQA",
             "POND"
           ],
-          "from": "2026-08-05",
-          "out": "2026-09-10",
+          "from": "2026-08-04",
+          "out": "2026-09-12",
           "arrival": "marked",
           "departure": "marked",
-          "tentative": false
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-08-04",
+              "out": "2026-08-17",
+              "kind": "site",
+              "site": "KUG"
+            },
+            {
+              "from": "2026-08-17",
+              "out": "2026-08-19",
+              "kind": "travel",
+              "label": "YK",
+              "route": "KUG → YK → IQA"
+            },
+            {
+              "from": "2026-08-19",
+              "out": "2026-08-22",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-08-22",
+              "out": "2026-09-12",
+              "kind": "site",
+              "site": "POND"
+            }
+          ]
         },
         {
-          "site": "POND",
+          "site": "KUG",
           "sites": [
-            "POND"
+            "KUG"
           ],
           "from": "2026-09-12",
           "out": "2026-10-01",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true
         }
       ],
       "warnings": [
-        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-09-12 to 2026-09-30 had no typed IN/OUT — counted as on site at POND from shading"
+        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at POND from shading",
+        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at POND from shading",
+        "shaded 2026-09-12 to 2026-09-30 with no site code, shown at KUG (Location column); please confirm"
       ],
       "fullName": "Stacey Turner",
       "flights": [
@@ -1766,38 +2247,6 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-06-08",
-          "mark": "KUG"
-        },
-        {
-          "date": "2026-07-20",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-08-04",
-          "mark": "via KUG"
-        },
-        {
-          "date": "2026-08-05",
-          "mark": "KUG"
-        },
-        {
-          "date": "2026-08-17",
-          "mark": "YK"
-        },
-        {
-          "date": "2026-08-19",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-08-22",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-09-10",
-          "mark": "Out"
-        },
-        {
           "date": "2025-12-08",
           "mark": "POND"
         },
@@ -1814,8 +2263,40 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "Out"
         },
         {
-          "date": "2026-09-12",
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-06-08",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-21",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-04",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-17",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-08-19",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-22",
           "mark": "POND"
+        },
+        {
+          "date": "2026-09-12",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-09-12",
+          "mark": "KUG"
         },
         {
           "date": "2026-10-01",
@@ -1851,7 +2332,7 @@ export const CREW_SCHEDULE_DATA = {
             "KUG"
           ],
           "from": "2026-06-08",
-          "out": "2026-07-20",
+          "out": "2026-07-21",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -1863,28 +2344,56 @@ export const CREW_SCHEDULE_DATA = {
             "IQA",
             "POND"
           ],
-          "from": "2026-08-05",
-          "out": "2026-09-10",
+          "from": "2026-08-04",
+          "out": "2026-09-12",
           "arrival": "marked",
           "departure": "marked",
-          "tentative": false
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-08-04",
+              "out": "2026-08-17",
+              "kind": "site",
+              "site": "KUG"
+            },
+            {
+              "from": "2026-08-17",
+              "out": "2026-08-19",
+              "kind": "travel",
+              "label": "YK",
+              "route": "KUG → YK → IQA"
+            },
+            {
+              "from": "2026-08-19",
+              "out": "2026-08-22",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-08-22",
+              "out": "2026-09-12",
+              "kind": "site",
+              "site": "POND"
+            }
+          ]
         },
         {
-          "site": "POND",
+          "site": "KUG",
           "sites": [
-            "POND"
+            "KUG"
           ],
           "from": "2026-09-12",
           "out": "2026-10-01",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true
         }
       ],
       "warnings": [
-        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-09-12 to 2026-09-30 had no typed IN/OUT — counted as on site at POND from shading"
+        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at POND from shading",
+        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at POND from shading",
+        "shaded 2026-09-12 to 2026-09-30 with no site code, shown at KUG (Location column); please confirm"
       ],
       "fullName": "Stephen Turner",
       "flights": [
@@ -1915,6 +2424,26 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
+          "date": "2025-12-08",
+          "mark": "POND"
+        },
+        {
+          "date": "2025-12-19",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-01-04",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-02-14",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
           "date": "2026-05-31",
           "mark": "YK"
         },
@@ -1923,15 +2452,11 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "KUG"
         },
         {
-          "date": "2026-07-20",
+          "date": "2026-07-21",
           "mark": "Out"
         },
         {
           "date": "2026-08-04",
-          "mark": "via KUG"
-        },
-        {
-          "date": "2026-08-05",
           "mark": "KUG"
         },
         {
@@ -1947,7 +2472,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "POND"
         },
         {
-          "date": "2026-09-12",
+          "date": "2026-09-13",
           "mark": "Out"
         },
         {
@@ -1955,23 +2480,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "POND"
         },
         {
-          "date": "2026-10-17",
-          "mark": "Out"
-        },
-        {
-          "date": "2025-12-08",
-          "mark": "POND"
-        },
-        {
-          "date": "2025-12-19",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-01-04",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-02-14",
+          "date": "2026-10-18",
           "mark": "Out"
         }
       ],
@@ -2003,11 +2512,26 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "KUG"
           ],
-          "from": "2026-06-01",
-          "out": "2026-07-20",
+          "from": "2026-05-31",
+          "out": "2026-07-21",
           "arrival": "marked",
           "departure": "marked",
-          "tentative": false
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-05-31",
+              "out": "2026-06-01",
+              "kind": "travel",
+              "label": "YK",
+              "route": "YK → KUG"
+            },
+            {
+              "from": "2026-06-01",
+              "out": "2026-07-21",
+              "kind": "site",
+              "site": "KUG"
+            }
+          ]
         },
         {
           "site": "KUG",
@@ -2016,11 +2540,38 @@ export const CREW_SCHEDULE_DATA = {
             "IQA",
             "POND"
           ],
-          "from": "2026-08-05",
-          "out": "2026-09-12",
+          "from": "2026-08-04",
+          "out": "2026-09-13",
           "arrival": "marked",
           "departure": "marked",
-          "tentative": false
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-08-04",
+              "out": "2026-08-17",
+              "kind": "site",
+              "site": "KUG"
+            },
+            {
+              "from": "2026-08-17",
+              "out": "2026-08-19",
+              "kind": "travel",
+              "label": "YK",
+              "route": "KUG → YK → IQA"
+            },
+            {
+              "from": "2026-08-19",
+              "out": "2026-08-21",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-08-21",
+              "out": "2026-09-13",
+              "kind": "site",
+              "site": "POND"
+            }
+          ]
         },
         {
           "site": "POND",
@@ -2028,15 +2579,15 @@ export const CREW_SCHEDULE_DATA = {
             "POND"
           ],
           "from": "2026-09-24",
-          "out": "2026-10-17",
+          "out": "2026-10-18",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
         }
       ],
       "warnings": [
-        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at POND from shading"
+        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at POND from shading",
+        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at POND from shading"
       ],
       "fullName": "Trevor Anstey",
       "flights": [
@@ -2066,18 +2617,6 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-07-14",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-08-28",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-09-25",
-          "mark": "Out"
-        },
-        {
           "date": "2025-12-08",
           "mark": "POND"
         },
@@ -2094,11 +2633,31 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "Out"
         },
         {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-06-19",
+          "mark": "Travel"
+        },
+        {
+          "date": "2026-06-21",
+          "mark": "Out"
+        },
+        {
           "date": "2026-06-22",
           "mark": "POND"
         },
         {
-          "date": "2026-07-14",
+          "date": "2026-07-15",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-28",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-09-27",
           "mark": "Out"
         }
       ],
@@ -2126,15 +2685,34 @@ export const CREW_SCHEDULE_DATA = {
           "tentative": false
         },
         {
+          "site": "TBC",
+          "sites": [
+            "TBC"
+          ],
+          "from": "2026-06-19",
+          "out": "2026-06-21",
+          "arrival": "shading",
+          "departure": "shading-ended",
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-06-19",
+              "out": "2026-06-21",
+              "kind": "travel"
+            }
+          ]
+        },
+        {
           "site": "POND",
           "sites": [
             "POND"
           ],
           "from": "2026-06-22",
-          "out": "2026-07-14",
+          "out": "2026-07-15",
           "arrival": "shading",
-          "departure": "shading-ended",
-          "tentative": false
+          "departure": "marked",
+          "tentative": false,
+          "unsure": true
         },
         {
           "site": "POND",
@@ -2142,16 +2720,16 @@ export const CREW_SCHEDULE_DATA = {
             "POND"
           ],
           "from": "2026-08-28",
-          "out": "2026-09-25",
+          "out": "2026-09-27",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
         }
       ],
       "warnings": [
-        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-06-22 to 2026-07-13 had no typed IN/OUT — counted as on site at POND from shading"
+        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at POND from shading",
+        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at POND from shading",
+        "shaded 2026-06-22 to 2026-07-14 with no site code, shown at POND (Location column); please confirm"
       ]
     },
     {
@@ -2169,14 +2747,6 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-09-25",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-10-14",
-          "mark": "Out"
-        },
-        {
           "date": "2025-12-08",
           "mark": "POND"
         },
@@ -2193,11 +2763,31 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "Out"
         },
         {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-06-19",
+          "mark": "Travel"
+        },
+        {
+          "date": "2026-06-21",
+          "mark": "Out"
+        },
+        {
           "date": "2026-06-22",
           "mark": "POND"
         },
         {
           "date": "2026-07-06",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-09-25",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-10-15",
           "mark": "Out"
         }
       ],
@@ -2225,6 +2815,24 @@ export const CREW_SCHEDULE_DATA = {
           "tentative": false
         },
         {
+          "site": "TBC",
+          "sites": [
+            "TBC"
+          ],
+          "from": "2026-06-19",
+          "out": "2026-06-21",
+          "arrival": "shading",
+          "departure": "shading-ended",
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-06-19",
+              "out": "2026-06-21",
+              "kind": "travel"
+            }
+          ]
+        },
+        {
           "site": "POND",
           "sites": [
             "POND"
@@ -2233,7 +2841,8 @@ export const CREW_SCHEDULE_DATA = {
           "out": "2026-07-06",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true
         },
         {
           "site": "POND",
@@ -2241,16 +2850,16 @@ export const CREW_SCHEDULE_DATA = {
             "POND"
           ],
           "from": "2026-09-25",
-          "out": "2026-10-14",
+          "out": "2026-10-15",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
         }
       ],
       "warnings": [
-        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at POND from shading",
-        "shaded 2026-06-22 to 2026-07-05 had no typed IN/OUT — counted as on site at POND from shading"
+        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at POND from shading",
+        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at POND from shading",
+        "shaded 2026-06-22 to 2026-07-05 with no site code, shown at POND (Location column); please confirm"
       ]
     },
     {
@@ -2269,11 +2878,43 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
+          "date": "2025-12-08",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-01-12",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-02-17",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-03-03",
+          "mark": "Out"
+        },
+        {
           "date": "2026-05-05",
           "mark": "IQA"
         },
         {
-          "date": "2026-07-26",
+          "date": "2026-06-17",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-07-01",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-07-27",
           "mark": "Out"
         },
         {
@@ -2289,23 +2930,15 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-11-29",
+          "date": "2026-11-24",
           "mark": "Out"
         },
         {
-          "date": "2025-12-08",
+          "date": "2026-12-14",
           "mark": "IQA"
         },
         {
-          "date": "2026-01-12",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-02-17",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-03-02",
+          "date": "2026-12-15",
           "mark": "Out"
         }
       ],
@@ -2327,7 +2960,7 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-02-17",
-          "out": "2026-03-02",
+          "out": "2026-03-03",
           "arrival": "shading",
           "departure": "shading-ended",
           "tentative": false
@@ -2338,30 +2971,71 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-05-05",
-          "out": "2026-07-26",
+          "out": "2026-06-17",
           "arrival": "marked",
-          "departure": "marked",
+          "departure": "shading-ended",
           "tentative": false
         },
         {
           "site": "IQA",
           "sites": [
-            "IQA",
-            "POND",
             "IQA"
           ],
+          "from": "2026-07-01",
+          "out": "2026-07-27",
+          "arrival": "shading",
+          "departure": "marked",
+          "tentative": false,
+          "unsure": true
+        },
+        {
+          "site": "IQA",
+          "sites": [
+            "IQA",
+            "POND"
+          ],
           "from": "2026-08-10",
-          "out": "2026-11-29",
+          "out": "2026-11-24",
           "arrival": "marked",
-          "departure": "homeward",
+          "departure": "marked",
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-08-10",
+              "out": "2026-08-26",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-08-26",
+              "out": "2026-10-06",
+              "kind": "site",
+              "site": "POND"
+            },
+            {
+              "from": "2026-10-06",
+              "out": "2026-11-24",
+              "kind": "site",
+              "site": "IQA"
+            }
+          ]
+        },
+        {
+          "site": "IQA",
+          "sites": [
+            "IQA"
+          ],
+          "from": "2026-12-14",
+          "out": "2026-12-15",
+          "arrival": "marked",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
       "warnings": [
-        "14 unshaded days (2026-06-17) inside a stint that only ends with OUT on 2026-07-26 - check whether they went home in between",
-        "planned shading ended 2026-11-27 — counted homeward OUT on 2026-11-29",
-        "shaded 2025-12-08 to 2026-01-11 had no typed IN/OUT — counted as on site at IQA from shading",
-        "shaded 2026-02-17 to 2026-03-01 had no typed IN/OUT — counted as on site at IQA from shading"
+        "shaded 2025-12-08 to 2026-01-11 had no typed IN/OUT, counted as on site at IQA from shading",
+        "shaded 2026-02-17 to 2026-03-01 had no typed IN/OUT, counted as on site at IQA from shading",
+        "shaded 2026-07-01 to 2026-07-26 with no site code, shown at IQA (Location column); please confirm"
       ],
       "fullName": "Robert French",
       "flights": [
@@ -2411,42 +3085,6 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-04-13",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-04-27",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-06-08",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-06-22",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-08-17",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-08-31",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-10-14",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-10-29",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-12-29",
-          "mark": "Out"
-        },
-        {
           "date": "2025-12-08",
           "mark": "IQA"
         },
@@ -2464,10 +3102,50 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-03-01",
           "mark": "IQA"
         },
         {
-          "date": "2026-04-13",
+          "date": "2026-04-14",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-04-27",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-06-09",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-06-22",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-18",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-31",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-09-30",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-10-15",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-10-29",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-12-15",
           "mark": "Out"
         }
       ],
@@ -2500,10 +3178,11 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-03-01",
-          "out": "2026-04-13",
+          "out": "2026-04-14",
           "arrival": "shading",
-          "departure": "shading-ended",
-          "tentative": false
+          "departure": "marked",
+          "tentative": false,
+          "unsure": true
         },
         {
           "site": "IQA",
@@ -2511,7 +3190,7 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-04-27",
-          "out": "2026-06-08",
+          "out": "2026-06-09",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -2522,7 +3201,7 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-06-22",
-          "out": "2026-08-17",
+          "out": "2026-08-18",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -2530,22 +3209,46 @@ export const CREW_SCHEDULE_DATA = {
         {
           "site": "IQA",
           "sites": [
-            "IQA"
+            "IQA",
+            "POND"
           ],
           "from": "2026-08-31",
-          "out": "2026-12-29",
+          "out": "2026-10-15",
           "arrival": "marked",
-          "departure": "season",
-          "tentative": false
+          "departure": "marked",
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-08-31",
+              "out": "2026-09-30",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-09-30",
+              "out": "2026-10-15",
+              "kind": "site",
+              "site": "POND"
+            }
+          ]
+        },
+        {
+          "site": "IQA",
+          "sites": [
+            "IQA"
+          ],
+          "from": "2026-10-29",
+          "out": "2026-12-15",
+          "arrival": "marked",
+          "departure": "marked",
+          "tentative": false,
+          "note": "Linger for snow"
         }
       ],
       "warnings": [
-        "OUT typed on 2026-10-14 with IQA return 2026-10-29 — kept as one stay (short home break)",
-        "planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03",
-        "late-year stay from 2026-08-31 had no hard OUT — extended through 2026-12-29",
-        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at IQA from shading",
-        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at IQA from shading",
-        "shaded 2026-03-01 to 2026-04-12 had no typed IN/OUT — counted as on site at IQA from shading"
+        "shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at IQA from shading",
+        "shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at IQA from shading",
+        "shaded 2026-03-01 to 2026-04-13 with no site code, shown at IQA (Location column); please confirm"
       ],
       "fullName": "Dean Melvin",
       "flights": [
@@ -2594,7 +3297,19 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-04-01",
+          "date": "2025-12-08",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-04-02",
           "mark": "Out"
         },
         {
@@ -2602,15 +3317,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-10-10",
-          "mark": "Out"
-        },
-        {
-          "date": "2025-12-08",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-04-01",
+          "date": "2026-10-11",
           "mark": "Out"
         }
       ],
@@ -2621,9 +3328,9 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2025-12-08",
-          "out": "2026-04-01",
+          "out": "2026-04-02",
           "arrival": "shading",
-          "departure": "shading-ended",
+          "departure": "marked",
           "tentative": false
         },
         {
@@ -2632,14 +3339,14 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-06-10",
-          "out": "2026-10-10",
+          "out": "2026-10-11",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
         }
       ],
       "warnings": [
-        "shaded 2025-12-08 to 2026-03-31 had no typed IN/OUT — counted as on site at IQA from shading"
+        "shaded 2025-12-08 to 2026-03-31 had no typed IN/OUT, counted as on site at IQA from shading"
       ],
       "fullName": "Louis Coloumbe",
       "flights": [
@@ -2679,28 +3386,24 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-05-12",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-07-02",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-08-12",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-10-05",
-          "mark": "Out"
-        },
-        {
           "date": "2025-12-08",
           "mark": "IQA"
         },
         {
-          "date": "2026-03-02",
+          "date": "2026-03-01",
           "mark": "Out"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-03-03",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-03-12",
+          "mark": "Travel"
         },
         {
           "date": "2026-03-13",
@@ -2708,6 +3411,22 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-04-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-05-12",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-07-03",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-12",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-06",
           "mark": "Out"
         }
       ],
@@ -2718,7 +3437,7 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2025-12-08",
-          "out": "2026-03-02",
+          "out": "2026-03-03",
           "arrival": "shading",
           "departure": "shading-ended",
           "tentative": false
@@ -2728,11 +3447,26 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "IQA"
           ],
-          "from": "2026-03-13",
+          "from": "2026-03-12",
           "out": "2026-04-01",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true,
+          "segments": [
+            {
+              "from": "2026-03-12",
+              "out": "2026-03-13",
+              "kind": "travel",
+              "route": "IQA"
+            },
+            {
+              "from": "2026-03-13",
+              "out": "2026-04-01",
+              "kind": "site",
+              "site": "IQA"
+            }
+          ]
         },
         {
           "site": "IQA",
@@ -2740,7 +3474,7 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-05-12",
-          "out": "2026-07-02",
+          "out": "2026-07-03",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -2751,15 +3485,15 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-08-12",
-          "out": "2026-10-05",
+          "out": "2026-10-06",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
         }
       ],
       "warnings": [
-        "shaded 2025-12-08 to 2026-03-01 had no typed IN/OUT — counted as on site at IQA from shading",
-        "shaded 2026-03-13 to 2026-03-31 had no typed IN/OUT — counted as on site at IQA from shading"
+        "shaded 2025-12-08 to 2026-03-01 had no typed IN/OUT, counted as on site at IQA from shading",
+        "shaded 2026-03-12 to 2026-03-31 with no site code, shown at IQA (Location column); please confirm"
       ],
       "fullName": "Jean Francois Marsolais",
       "flights": [
@@ -2791,23 +3525,23 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
           "date": "2026-04-27",
           "mark": "IQA"
         },
         {
-          "date": "2026-06-25",
+          "date": "2026-06-26",
           "mark": "Out"
         },
         {
           "date": "2026-07-13",
-          "mark": "via ALRT"
-        },
-        {
-          "date": "2026-07-14",
           "mark": "ALRT"
         },
         {
-          "date": "2026-08-18",
+          "date": "2026-08-19",
           "mark": "Out"
         },
         {
@@ -2815,7 +3549,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-12-03",
+          "date": "2026-12-01",
           "mark": "Out"
         }
       ],
@@ -2826,7 +3560,7 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-04-27",
-          "out": "2026-06-25",
+          "out": "2026-06-26",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -2836,8 +3570,8 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "ALRT"
           ],
-          "from": "2026-07-14",
-          "out": "2026-08-18",
+          "from": "2026-07-13",
+          "out": "2026-08-19",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -2848,15 +3582,13 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-08-30",
-          "out": "2026-12-03",
+          "out": "2026-12-01",
           "arrival": "marked",
-          "departure": "homeward",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
-      "warnings": [
-        "planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03"
-      ],
+      "warnings": [],
       "fullName": "Bernard Coutu",
       "flights": [
         {
@@ -2887,23 +3619,23 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
           "date": "2026-05-01",
           "mark": "IQA"
         },
         {
-          "date": "2026-06-25",
+          "date": "2026-06-26",
           "mark": "Out"
         },
         {
           "date": "2026-07-13",
-          "mark": "via ALRT"
-        },
-        {
-          "date": "2026-07-14",
           "mark": "ALRT"
         },
         {
-          "date": "2026-08-18",
+          "date": "2026-08-19",
           "mark": "Out"
         },
         {
@@ -2911,7 +3643,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-12-03",
+          "date": "2026-12-01",
           "mark": "Out"
         }
       ],
@@ -2922,7 +3654,7 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-05-01",
-          "out": "2026-06-25",
+          "out": "2026-06-26",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -2932,8 +3664,8 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "ALRT"
           ],
-          "from": "2026-07-14",
-          "out": "2026-08-18",
+          "from": "2026-07-13",
+          "out": "2026-08-19",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -2944,15 +3676,13 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-08-31",
-          "out": "2026-12-03",
+          "out": "2026-12-01",
           "arrival": "marked",
-          "departure": "homeward",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
-      "warnings": [
-        "planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03"
-      ],
+      "warnings": [],
       "fullName": "Javier Castano",
       "flights": [
         {
@@ -2983,23 +3713,23 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
           "date": "2026-06-15",
           "mark": "IQA"
         },
         {
-          "date": "2026-07-07",
+          "date": "2026-07-08",
           "mark": "Out"
         },
         {
           "date": "2026-07-13",
-          "mark": "via ALRT"
-        },
-        {
-          "date": "2026-07-14",
           "mark": "ALRT"
         },
         {
-          "date": "2026-08-21",
+          "date": "2026-08-22",
           "mark": "Out"
         },
         {
@@ -3007,7 +3737,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-12-03",
+          "date": "2026-12-01",
           "mark": "Out"
         }
       ],
@@ -3018,7 +3748,7 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-06-15",
-          "out": "2026-07-07",
+          "out": "2026-07-08",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -3028,8 +3758,8 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "ALRT"
           ],
-          "from": "2026-07-14",
-          "out": "2026-08-21",
+          "from": "2026-07-13",
+          "out": "2026-08-22",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -3040,15 +3770,13 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-08-31",
-          "out": "2026-12-03",
+          "out": "2026-12-01",
           "arrival": "marked",
-          "departure": "homeward",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
-      "warnings": [
-        "planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03"
-      ],
+      "warnings": [],
       "fullName": "Nicholas Arvanis",
       "flights": [
         {
@@ -3077,11 +3805,23 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
           "date": "2026-06-06",
           "mark": "IQA"
         },
         {
-          "date": "2026-08-25",
+          "date": "2026-06-07",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-07-27",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-08-26",
           "mark": "Out"
         },
         {
@@ -3089,7 +3829,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-12-03",
+          "date": "2026-12-04",
           "mark": "Out"
         }
       ],
@@ -3100,9 +3840,9 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-06-06",
-          "out": "2026-08-25",
+          "out": "2026-06-07",
           "arrival": "marked",
-          "departure": "marked",
+          "departure": "shading-ended",
           "tentative": false
         },
         {
@@ -3110,16 +3850,27 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "IQA"
           ],
+          "from": "2026-07-27",
+          "out": "2026-08-26",
+          "arrival": "shading",
+          "departure": "marked",
+          "tentative": false,
+          "unsure": true
+        },
+        {
+          "site": "IQA",
+          "sites": [
+            "IQA"
+          ],
           "from": "2026-09-13",
-          "out": "2026-12-03",
+          "out": "2026-12-04",
           "arrival": "marked",
-          "departure": "homeward",
+          "departure": "marked",
           "tentative": false
         }
       ],
       "warnings": [
-        "50 unshaded days (2026-06-07) inside a stint that only ends with OUT on 2026-08-25 - check whether they went home in between",
-        "planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03"
+        "shaded 2026-07-27 to 2026-08-25 with no site code, shown at IQA (Location column); please confirm"
       ]
     },
     {
@@ -3138,23 +3889,7 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-09-01",
-          "mark": "POND"
-        },
-        {
-          "date": "2026-10-17",
-          "mark": "via IQA"
-        },
-        {
-          "date": "2026-10-19",
-          "mark": "YK"
-        },
-        {
-          "date": "2026-10-20",
-          "mark": "KUG"
-        },
-        {
-          "date": "2026-10-21",
+          "date": "2026-03-01",
           "mark": "Out"
         },
         {
@@ -3171,6 +3906,30 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-09-01",
+          "mark": "POND"
+        },
+        {
+          "date": "2026-10-17",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-19",
+          "mark": "YK"
+        },
+        {
+          "date": "2026-10-20",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-10-21",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-11-01",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-12-01",
           "mark": "Out"
         }
       ],
@@ -3184,35 +3943,71 @@ export const CREW_SCHEDULE_DATA = {
           "out": "2026-07-21",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true
         },
         {
           "site": "KUG",
           "sites": [
-            "KUG"
+            "KUG",
+            "POND",
+            "IQA"
           ],
           "from": "2026-08-24",
-          "out": "2026-09-01",
+          "out": "2026-10-21",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true,
+          "segments": [
+            {
+              "from": "2026-08-24",
+              "out": "2026-09-01",
+              "kind": "site",
+              "site": "KUG"
+            },
+            {
+              "from": "2026-09-01",
+              "out": "2026-10-17",
+              "kind": "site",
+              "site": "POND"
+            },
+            {
+              "from": "2026-10-17",
+              "out": "2026-10-19",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-10-19",
+              "out": "2026-10-20",
+              "kind": "travel",
+              "label": "YK",
+              "route": "IQA → YK → KUG"
+            },
+            {
+              "from": "2026-10-20",
+              "out": "2026-10-21",
+              "kind": "site",
+              "site": "KUG"
+            }
+          ]
         },
         {
-          "site": "POND",
+          "site": "IQA",
           "sites": [
-            "POND",
-            "KUG"
+            "IQA"
           ],
-          "from": "2026-09-01",
-          "out": "2026-10-21",
-          "arrival": "marked",
+          "from": "2026-11-01",
+          "out": "2026-12-01",
+          "arrival": "shading",
           "departure": "shading-ended",
           "tentative": false
         }
       ],
       "warnings": [
-        "shaded 2026-06-22 to 2026-07-20 had no typed IN/OUT — counted as on site at KUG from shading",
-        "shaded 2026-08-24 to 2026-08-31 had no typed IN/OUT — counted as on site at KUG from shading"
+        "shaded 2026-06-22 to 2026-07-20 with no site code, shown at KUG (Location column); please confirm",
+        "shaded 2026-08-24 to 2026-10-20 with no site code, shown at KUG (Location column); please confirm"
       ]
     },
     {
@@ -3231,11 +4026,27 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-08-04",
-          "mark": "via KUG"
+          "date": "2026-03-01",
+          "mark": "Out"
         },
         {
-          "date": "2026-08-05",
+          "date": "2026-06-22",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-07-21",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-04",
+          "mark": "KUG"
+        },
+        {
+          "date": "2026-08-06",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-08-11",
           "mark": "KUG"
         },
         {
@@ -3247,31 +4058,47 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
+          "date": "2026-08-20",
+          "mark": "Out"
+        },
+        {
           "date": "2026-08-21",
           "mark": "POND"
         },
         {
-          "date": "2026-10-17",
+          "date": "2026-10-18",
           "mark": "Out"
         },
         {
-          "date": "2026-06-22",
-          "mark": "POND"
+          "date": "2026-11-01",
+          "mark": "IQA"
         },
         {
-          "date": "2026-07-21",
+          "date": "2026-12-01",
           "mark": "Out"
         }
       ],
       "stints": [
         {
-          "site": "POND",
+          "site": "KUG",
           "sites": [
-            "POND"
+            "KUG"
           ],
           "from": "2026-06-22",
           "out": "2026-07-21",
           "arrival": "shading",
+          "departure": "shading-ended",
+          "tentative": false,
+          "unsure": true
+        },
+        {
+          "site": "KUG",
+          "sites": [
+            "KUG"
+          ],
+          "from": "2026-08-04",
+          "out": "2026-08-06",
+          "arrival": "marked",
           "departure": "shading-ended",
           "tentative": false
         },
@@ -3279,18 +4106,62 @@ export const CREW_SCHEDULE_DATA = {
           "site": "KUG",
           "sites": [
             "KUG",
-            "IQA",
+            "IQA"
+          ],
+          "from": "2026-08-11",
+          "out": "2026-08-20",
+          "arrival": "shading",
+          "departure": "shading-ended",
+          "tentative": false,
+          "unsure": true,
+          "segments": [
+            {
+              "from": "2026-08-11",
+              "out": "2026-08-17",
+              "kind": "site",
+              "site": "KUG"
+            },
+            {
+              "from": "2026-08-17",
+              "out": "2026-08-19",
+              "kind": "travel",
+              "label": "YEG",
+              "route": "KUG → YEG → IQA"
+            },
+            {
+              "from": "2026-08-19",
+              "out": "2026-08-20",
+              "kind": "site",
+              "site": "IQA"
+            }
+          ]
+        },
+        {
+          "site": "POND",
+          "sites": [
             "POND"
           ],
-          "from": "2026-08-05",
-          "out": "2026-10-17",
+          "from": "2026-08-21",
+          "out": "2026-10-18",
           "arrival": "marked",
           "departure": "marked",
+          "tentative": false
+        },
+        {
+          "site": "IQA",
+          "sites": [
+            "IQA"
+          ],
+          "from": "2026-11-01",
+          "out": "2026-12-01",
+          "arrival": "shading",
+          "departure": "shading-ended",
           "tentative": false
         }
       ],
       "warnings": [
-        "shaded 2026-06-22 to 2026-07-20 had no typed IN/OUT — counted as on site at POND from shading"
+        "shaded 2026-06-22 to 2026-07-20 with no site code, shown at KUG (Location column); please confirm",
+        "shaded 2026-08-11 to 2026-08-19 with no site code, shown at KUG (Location column); please confirm"
       ]
     },
     {
@@ -3308,6 +4179,10 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
           "date": "2026-06-22",
           "mark": "IQA"
         },
@@ -3320,7 +4195,7 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-11-02",
+          "date": "2026-12-28",
           "mark": "Out"
         }
       ],
@@ -3334,7 +4209,8 @@ export const CREW_SCHEDULE_DATA = {
           "out": "2026-07-21",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true
         },
         {
           "site": "IQA",
@@ -3342,15 +4218,16 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-08-01",
-          "out": "2026-11-02",
+          "out": "2026-12-28",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true
         }
       ],
       "warnings": [
-        "shaded 2026-06-22 to 2026-07-20 had no typed IN/OUT — counted as on site at IQA from shading",
-        "shaded 2026-08-01 to 2026-11-01 had no typed IN/OUT — counted as on site at IQA from shading"
+        "shaded 2026-06-22 to 2026-07-20 with no site code, shown at IQA (Location column); please confirm",
+        "shaded 2026-08-01 to 2026-12-27 with no site code, shown at IQA (Location column); please confirm"
       ]
     },
     {
@@ -3368,19 +4245,7 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-10-16",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-10-24",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-11-06",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-11-08",
+          "date": "2026-03-01",
           "mark": "Out"
         },
         {
@@ -3398,6 +4263,22 @@ export const CREW_SCHEDULE_DATA = {
         {
           "date": "2026-08-27",
           "mark": "Out"
+        },
+        {
+          "date": "2026-10-16",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-25",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-11-06",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-11-09",
+          "mark": "Out"
         }
       ],
       "stints": [
@@ -3410,7 +4291,8 @@ export const CREW_SCHEDULE_DATA = {
           "out": "2026-07-21",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true
         },
         {
           "site": "IQA",
@@ -3421,7 +4303,8 @@ export const CREW_SCHEDULE_DATA = {
           "out": "2026-08-27",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true
         },
         {
           "site": "IQA",
@@ -3429,16 +4312,26 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-10-16",
-          "out": "2026-11-08",
+          "out": "2026-10-25",
+          "arrival": "marked",
+          "departure": "marked",
+          "tentative": false
+        },
+        {
+          "site": "IQA",
+          "sites": [
+            "IQA"
+          ],
+          "from": "2026-11-06",
+          "out": "2026-11-09",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
         }
       ],
       "warnings": [
-        "OUT typed on 2026-10-24 with IQA return 2026-11-06 — kept as one stay (short home break)",
-        "shaded 2026-06-22 to 2026-07-20 had no typed IN/OUT — counted as on site at IQA from shading",
-        "shaded 2026-08-01 to 2026-08-26 had no typed IN/OUT — counted as on site at IQA from shading"
+        "shaded 2026-06-22 to 2026-07-20 with no site code, shown at IQA (Location column); please confirm",
+        "shaded 2026-08-01 to 2026-08-26 with no site code, shown at IQA (Location column); please confirm"
       ]
     },
     {
@@ -3456,11 +4349,7 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 42,
       "events": [
         {
-          "date": "2026-10-16",
-          "mark": "IQA"
-        },
-        {
-          "date": "2026-10-24",
+          "date": "2026-03-01",
           "mark": "Out"
         },
         {
@@ -3478,6 +4367,14 @@ export const CREW_SCHEDULE_DATA = {
         {
           "date": "2026-08-27",
           "mark": "Out"
+        },
+        {
+          "date": "2026-10-16",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-10-25",
+          "mark": "Out"
         }
       ],
       "stints": [
@@ -3490,7 +4387,8 @@ export const CREW_SCHEDULE_DATA = {
           "out": "2026-07-21",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true
         },
         {
           "site": "IQA",
@@ -3501,7 +4399,8 @@ export const CREW_SCHEDULE_DATA = {
           "out": "2026-08-27",
           "arrival": "shading",
           "departure": "shading-ended",
-          "tentative": false
+          "tentative": false,
+          "unsure": true
         },
         {
           "site": "IQA",
@@ -3509,15 +4408,15 @@ export const CREW_SCHEDULE_DATA = {
             "IQA"
           ],
           "from": "2026-10-16",
-          "out": "2026-10-24",
+          "out": "2026-10-25",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
         }
       ],
       "warnings": [
-        "shaded 2026-06-22 to 2026-07-20 had no typed IN/OUT — counted as on site at IQA from shading",
-        "shaded 2026-08-01 to 2026-08-26 had no typed IN/OUT — counted as on site at IQA from shading"
+        "shaded 2026-06-22 to 2026-07-20 with no site code, shown at IQA (Location column); please confirm",
+        "shaded 2026-08-01 to 2026-08-26 with no site code, shown at IQA (Location column); please confirm"
       ]
     },
     {
@@ -3535,7 +4434,31 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 28,
       "events": [
         {
-          "date": "2026-05-09",
+          "date": "2026-01-06",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-03-01",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-03-03",
+          "mark": "Out"
+        },
+        {
+          "date": "2026-03-16",
+          "mark": "Travel"
+        },
+        {
+          "date": "2026-03-17",
+          "mark": "IQA"
+        },
+        {
+          "date": "2026-05-10",
           "mark": "Out"
         },
         {
@@ -3545,10 +4468,6 @@ export const CREW_SCHEDULE_DATA = {
         {
           "date": "2026-06-02",
           "mark": "KUG"
-        },
-        {
-          "date": "2026-06-23",
-          "mark": "via KUG"
         },
         {
           "date": "2026-06-24",
@@ -3563,7 +4482,19 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "KUG"
         },
         {
+          "date": "2026-08-28",
+          "mark": "Out"
+        },
+        {
           "date": "2026-09-01",
+          "mark": "OUT"
+        },
+        {
+          "date": "2026-09-02",
+          "mark": "Travel"
+        },
+        {
+          "date": "2026-09-04",
           "mark": "Out"
         },
         {
@@ -3572,10 +4503,6 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-09-15",
-          "mark": "via POND"
-        },
-        {
-          "date": "2026-09-16",
           "mark": "POND"
         },
         {
@@ -3583,45 +4510,18 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "IQA"
         },
         {
-          "date": "2026-12-03",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-01-06",
-          "mark": "KUG"
-        },
-        {
-          "date": "2026-03-02",
-          "mark": "Out"
-        },
-        {
-          "date": "2026-03-17",
-          "mark": "KUG"
-        },
-        {
-          "date": "2026-05-09",
+          "date": "2026-12-04",
           "mark": "Out"
         }
       ],
       "stints": [
         {
-          "site": "KUG",
+          "site": "IQA",
           "sites": [
-            "KUG"
+            "IQA"
           ],
           "from": "2026-01-06",
-          "out": "2026-03-02",
-          "arrival": "shading",
-          "departure": "shading-ended",
-          "tentative": false
-        },
-        {
-          "site": "KUG",
-          "sites": [
-            "KUG"
-          ],
-          "from": "2026-03-17",
-          "out": "2026-05-09",
+          "out": "2026-03-03",
           "arrival": "shading",
           "departure": "shading-ended",
           "tentative": false
@@ -3629,34 +4529,136 @@ export const CREW_SCHEDULE_DATA = {
         {
           "site": "IQA",
           "sites": [
-            "IQA",
-            "KUG",
+            "IQA"
+          ],
+          "from": "2026-03-16",
+          "out": "2026-05-10",
+          "arrival": "shading",
+          "departure": "marked",
+          "tentative": false,
+          "unsure": true,
+          "segments": [
+            {
+              "from": "2026-03-16",
+              "out": "2026-03-17",
+              "kind": "travel",
+              "route": "IQA"
+            },
+            {
+              "from": "2026-03-17",
+              "out": "2026-05-10",
+              "kind": "site",
+              "site": "IQA"
+            }
+          ]
+        },
+        {
+          "site": "IQA",
+          "sites": [
             "IQA",
             "KUG"
           ],
           "from": "2026-05-25",
-          "out": "2026-09-01",
+          "out": "2026-08-28",
           "arrival": "marked",
+          "departure": "shading-ended",
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-05-25",
+              "out": "2026-06-02",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-06-02",
+              "out": "2026-06-24",
+              "kind": "site",
+              "site": "KUG"
+            },
+            {
+              "from": "2026-06-24",
+              "out": "2026-08-26",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-08-26",
+              "out": "2026-08-27",
+              "kind": "travel",
+              "label": "YK",
+              "route": "IQA → YK → KUG"
+            },
+            {
+              "from": "2026-08-27",
+              "out": "2026-08-28",
+              "kind": "site",
+              "site": "KUG"
+            }
+          ]
+        },
+        {
+          "site": "TBC",
+          "sites": [
+            "TBC"
+          ],
+          "from": "2026-09-01",
+          "out": "2026-09-04",
+          "arrival": "shading",
           "departure": "marked",
-          "tentative": false
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-09-01",
+              "out": "2026-09-02",
+              "kind": "travel",
+              "label": "OUT",
+              "route": "OUT"
+            },
+            {
+              "from": "2026-09-02",
+              "out": "2026-09-04",
+              "kind": "travel",
+              "route": "OUT"
+            }
+          ]
         },
         {
           "site": "IQA",
           "sites": [
             "IQA",
-            "POND",
-            "IQA"
+            "POND"
           ],
           "from": "2026-09-13",
-          "out": "2026-12-03",
+          "out": "2026-12-04",
           "arrival": "marked",
-          "departure": "travel-cell",
-          "tentative": false
+          "departure": "marked",
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-09-13",
+              "out": "2026-09-15",
+              "kind": "site",
+              "site": "IQA"
+            },
+            {
+              "from": "2026-09-15",
+              "out": "2026-09-22",
+              "kind": "site",
+              "site": "POND"
+            },
+            {
+              "from": "2026-09-22",
+              "out": "2026-12-04",
+              "kind": "site",
+              "site": "IQA"
+            }
+          ]
         }
       ],
       "warnings": [
-        "shaded 2026-01-06 to 2026-03-01 had no typed IN/OUT — counted as on site at KUG from shading",
-        "shaded 2026-03-17 to 2026-05-08 had no typed IN/OUT — counted as on site at KUG from shading"
+        "shaded 2026-01-06 to 2026-03-01 had no typed IN/OUT, counted as on site at IQA from shading",
+        "shaded 2026-03-16 to 2026-05-09 with no site code, shown at IQA (Location column); please confirm"
       ],
       "fullName": "Shannon King",
       "flights": [
@@ -3733,23 +4735,19 @@ export const CREW_SCHEDULE_DATA = {
       "rotationDays": 28,
       "events": [
         {
-          "date": "2026-06-19",
-          "mark": "via KUG"
+          "date": "2026-03-01",
+          "mark": "Out"
         },
         {
-          "date": "2026-06-20",
+          "date": "2026-06-19",
           "mark": "KUG"
         },
         {
-          "date": "2026-07-20",
+          "date": "2026-07-21",
           "mark": "Out"
         },
         {
           "date": "2026-08-04",
-          "mark": "via KUG"
-        },
-        {
-          "date": "2026-08-05",
           "mark": "KUG"
         },
         {
@@ -3761,24 +4759,28 @@ export const CREW_SCHEDULE_DATA = {
           "mark": "POND"
         },
         {
-          "date": "2026-09-14",
+          "date": "2026-09-16",
           "mark": "Out"
+        },
+        {
+          "date": "2026-09-16",
+          "mark": "KUG"
         },
         {
           "date": "2026-09-22",
           "mark": "POND"
         },
         {
-          "date": "2026-10-19",
+          "date": "2026-10-20",
           "mark": "Out"
         },
         {
           "date": "2026-11-09",
-          "mark": "POND"
+          "mark": "IN"
         },
         {
-          "date": "2026-11-25",
-          "mark": "Out"
+          "date": "2026-11-10",
+          "mark": "TBC"
         }
       ],
       "stints": [
@@ -3787,8 +4789,8 @@ export const CREW_SCHEDULE_DATA = {
           "sites": [
             "KUG"
           ],
-          "from": "2026-06-20",
-          "out": "2026-07-20",
+          "from": "2026-06-19",
+          "out": "2026-07-21",
           "arrival": "marked",
           "departure": "marked",
           "tentative": false
@@ -3799,27 +4801,90 @@ export const CREW_SCHEDULE_DATA = {
             "KUG",
             "POND"
           ],
-          "from": "2026-08-05",
-          "out": "2026-09-14",
+          "from": "2026-08-04",
+          "out": "2026-09-16",
           "arrival": "marked",
           "departure": "marked",
-          "tentative": false
+          "tentative": false,
+          "segments": [
+            {
+              "from": "2026-08-04",
+              "out": "2026-08-17",
+              "kind": "site",
+              "site": "KUG"
+            },
+            {
+              "from": "2026-08-17",
+              "out": "2026-08-21",
+              "kind": "travel",
+              "label": "YK",
+              "route": "KUG → YK → POND"
+            },
+            {
+              "from": "2026-08-21",
+              "out": "2026-09-16",
+              "kind": "site",
+              "site": "POND"
+            }
+          ]
         },
         {
-          "site": "POND",
+          "site": "KUG",
           "sites": [
+            "KUG",
             "POND"
           ],
-          "from": "2026-09-22",
-          "out": "2026-11-25",
+          "from": "2026-09-16",
+          "out": "2026-10-20",
+          "arrival": "shading",
+          "departure": "marked",
+          "tentative": false,
+          "unsure": true,
+          "segments": [
+            {
+              "from": "2026-09-16",
+              "out": "2026-09-22",
+              "kind": "site",
+              "site": "KUG"
+            },
+            {
+              "from": "2026-09-22",
+              "out": "2026-10-20",
+              "kind": "site",
+              "site": "POND"
+            }
+          ]
+        },
+        {
+          "site": "TBC",
+          "sites": [
+            "TBC"
+          ],
+          "from": "2026-11-09",
+          "out": null,
           "arrival": "marked",
-          "departure": "homeward",
-          "tentative": false
+          "departure": "shading-ended",
+          "tentative": true,
+          "segments": [
+            {
+              "from": "2026-11-09",
+              "out": "2026-11-10",
+              "kind": "travel",
+              "label": "IN",
+              "route": "IN → TBC"
+            },
+            {
+              "from": "2026-11-10",
+              "out": "2027-01-01",
+              "kind": "travel",
+              "label": "TBC",
+              "route": "IN → TBC"
+            }
+          ]
         }
       ],
       "warnings": [
-        "OUT typed on 2026-10-19 with POND return 2026-11-09 — kept as one stay (short home break)",
-        "planned shading ended 2026-11-23 — counted homeward OUT on 2026-11-25"
+        "shaded 2026-09-16 to 2026-10-19 with no site code, shown at KUG (Location column); please confirm"
       ]
     }
   ],
@@ -3904,80 +4969,65 @@ export const CREW_SCHEDULE_DATA = {
     }
   ],
   "warnings": [
-    "Eric Jacobsen: OUT typed on 2026-06-04 while already off site",
-    "Eric Jacobsen: planned shading ended 2026-10-07 — counted homeward OUT on 2026-10-09",
-    "Eric Jacobsen: shaded 2025-12-08 to 2026-01-28 had no typed IN/OUT — counted as on site at POND from shading",
-    "Eric Jacobsen: shaded 2026-02-09 to 2026-04-29 had no typed IN/OUT — counted as on site at POND from shading",
-    "Eric Jacobsen: shaded 2026-06-05 to 2026-07-05 had no typed IN/OUT — counted as on site at POND from shading",
-    "Eric Jacobsen: shaded 2026-08-29 to 2026-09-16 had no typed IN/OUT — counted as on site at POND from shading",
-    "William Matthews: shaded 2026-04-28 to 2026-05-16 had no typed IN/OUT — counted as on site at IQA from shading",
-    "William Matthews: shaded 2026-07-01 to 2026-08-09 had no typed IN/OUT — counted as on site at IQA from shading",
-    "William Matthews: shaded 2026-08-29 to 2026-09-12 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Bryan Hay: OUT typed on 2026-10-05 with IQA return 2026-10-20 — kept as one stay (short home break)",
-    "Bryan Hay: planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03",
-    "Bryan Hay: late-year stay from 2026-08-31 had no hard OUT — extended through 2026-12-29",
-    "Andrew Murphy: shaded 2026-04-28 to 2026-05-16 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Kirk: planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03",
-    "Kirk: shaded 2025-12-08 to 2025-12-15 had no typed IN/OUT — counted as on site at POND from shading",
-    "Kirk: shaded 2026-01-13 to 2026-02-15 had no typed IN/OUT — counted as on site at POND from shading",
-    "Kirk: shaded 2026-03-03 to 2026-03-29 had no typed IN/OUT — counted as on site at POND from shading",
-    "Sam M: OUT typed on 2026-07-25 while already off site",
-    "Sam M: shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Sam M: shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Sam M: shaded 2026-03-01 to 2026-04-05 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Elmer Gosse: shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at POND from shading",
-    "Elmer Gosse: shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at POND from shading",
-    "Stacey Turner: shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at POND from shading",
-    "Stacey Turner: shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at POND from shading",
-    "Stacey Turner: shaded 2026-09-12 to 2026-09-30 had no typed IN/OUT — counted as on site at POND from shading",
-    "Stephen Turner: shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at POND from shading",
-    "Stephen Turner: shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at POND from shading",
-    "Stephen Turner: shaded 2026-09-12 to 2026-09-30 had no typed IN/OUT — counted as on site at POND from shading",
-    "Trevor Anstey: shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at POND from shading",
-    "Trevor Anstey: shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at POND from shading",
-    "Thomas (Gemtec): shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at POND from shading",
-    "Thomas (Gemtec): shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at POND from shading",
-    "Thomas (Gemtec): shaded 2026-06-22 to 2026-07-13 had no typed IN/OUT — counted as on site at POND from shading",
-    "Carson (Gemtec): shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at POND from shading",
-    "Carson (Gemtec): shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at POND from shading",
-    "Carson (Gemtec): shaded 2026-06-22 to 2026-07-05 had no typed IN/OUT — counted as on site at POND from shading",
-    "Rob: 14 unshaded days (2026-06-17) inside a stint that only ends with OUT on 2026-07-26 - check whether they went home in between",
-    "Rob: planned shading ended 2026-11-27 — counted homeward OUT on 2026-11-29",
-    "Rob: shaded 2025-12-08 to 2026-01-11 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Rob: shaded 2026-02-17 to 2026-03-01 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Dean Melvin: OUT typed on 2026-10-14 with IQA return 2026-10-29 — kept as one stay (short home break)",
-    "Dean Melvin: planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03",
-    "Dean Melvin: late-year stay from 2026-08-31 had no hard OUT — extended through 2026-12-29",
-    "Dean Melvin: shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Dean Melvin: shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Dean Melvin: shaded 2026-03-01 to 2026-04-12 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Louis: shaded 2025-12-08 to 2026-03-31 had no typed IN/OUT — counted as on site at IQA from shading",
-    "JF: shaded 2025-12-08 to 2026-03-01 had no typed IN/OUT — counted as on site at IQA from shading",
-    "JF: shaded 2026-03-13 to 2026-03-31 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Bernie: planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03",
-    "Javi: planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03",
-    "Nicholas: planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03",
-    "Marjorie: 50 unshaded days (2026-06-07) inside a stint that only ends with OUT on 2026-08-25 - check whether they went home in between",
-    "Marjorie: planned shading ended 2026-12-01 — counted homeward OUT on 2026-12-03",
-    "Shakira: shaded 2026-06-22 to 2026-07-20 had no typed IN/OUT — counted as on site at KUG from shading",
-    "Shakira: shaded 2026-08-24 to 2026-08-31 had no typed IN/OUT — counted as on site at KUG from shading",
-    "Brad Rubia: shaded 2026-06-22 to 2026-07-20 had no typed IN/OUT — counted as on site at POND from shading",
-    "Kevin Barrieau: shaded 2026-06-22 to 2026-07-20 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Kevin Barrieau: shaded 2026-08-01 to 2026-11-01 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Natanael Lachance: OUT typed on 2026-10-24 with IQA return 2026-11-06 — kept as one stay (short home break)",
-    "Natanael Lachance: shaded 2026-06-22 to 2026-07-20 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Natanael Lachance: shaded 2026-08-01 to 2026-08-26 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Marc Olivier: shaded 2026-06-22 to 2026-07-20 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Marc Olivier: shaded 2026-08-01 to 2026-08-26 had no typed IN/OUT — counted as on site at IQA from shading",
-    "Shannon: shaded 2026-01-06 to 2026-03-01 had no typed IN/OUT — counted as on site at KUG from shading",
-    "Shannon: shaded 2026-03-17 to 2026-05-08 had no typed IN/OUT — counted as on site at KUG from shading",
-    "Mike Reid: OUT typed on 2026-10-19 with POND return 2026-11-09 — kept as one stay (short home break)",
-    "Mike Reid: planned shading ended 2026-11-23 — counted homeward OUT on 2026-11-25"
+    "Eric Jacobsen: shaded 2025-12-08 to 2026-01-28 had no typed IN/OUT, counted as on site at IQA from shading",
+    "Eric Jacobsen: shaded 2026-02-09 to 2026-04-29 had no typed IN/OUT, counted as on site at IQA from shading",
+    "Simon Plourde: shaded 2026-04-27 to 2026-04-30 with no site code, shown at ALRT (Location column); please confirm",
+    "William Matthews: shaded 2026-06-08 to 2026-06-11 with no site code, shown at POND (Location column); please confirm",
+    "William Matthews: shaded 2026-04-27 to 2026-05-16 with no site code, shown at IQA (Location column); please confirm",
+    "William Matthews: shaded 2026-06-29 to 2026-08-10 with no site code, shown at IQA (Location column); please confirm",
+    "William Matthews: shaded 2026-08-28 to 2026-09-27 with no site code, shown at IQA (Location column); please confirm",
+    "Andrew Murphy: shaded 2026-04-27 to 2026-05-16 with no site code, shown at IQA (Location column); please confirm",
+    "Kirk: shaded 2025-12-08 to 2025-12-15 had no typed IN/OUT, counted as on site at IQA from shading",
+    "Kirk: shaded 2026-01-13 to 2026-02-15 had no typed IN/OUT, counted as on site at IQA from shading",
+    "Kirk: shaded 2026-03-02 to 2026-03-30 with no site code, shown at KUG (Location column); please confirm",
+    "Sam M: shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at IQA from shading",
+    "Sam M: shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at IQA from shading",
+    "Sam M: shaded 2026-03-01 to 2026-04-06 with no site code, shown at KUG (Location column); please confirm",
+    "Sam M: shaded 2026-10-04 to 2026-10-19 with no site code, shown at KUG (Location column); please confirm",
+    "Elmer Gosse: shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at POND from shading",
+    "Elmer Gosse: shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at POND from shading",
+    "Stacey Turner: shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at POND from shading",
+    "Stacey Turner: shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at POND from shading",
+    "Stacey Turner: shaded 2026-09-12 to 2026-09-30 with no site code, shown at KUG (Location column); please confirm",
+    "Stephen Turner: shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at POND from shading",
+    "Stephen Turner: shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at POND from shading",
+    "Stephen Turner: shaded 2026-09-12 to 2026-09-30 with no site code, shown at KUG (Location column); please confirm",
+    "Trevor Anstey: shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at POND from shading",
+    "Trevor Anstey: shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at POND from shading",
+    "Thomas (Gemtec): shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at POND from shading",
+    "Thomas (Gemtec): shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at POND from shading",
+    "Thomas (Gemtec): shaded 2026-06-22 to 2026-07-14 with no site code, shown at POND (Location column); please confirm",
+    "Carson (Gemtec): shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at POND from shading",
+    "Carson (Gemtec): shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at POND from shading",
+    "Carson (Gemtec): shaded 2026-06-22 to 2026-07-05 with no site code, shown at POND (Location column); please confirm",
+    "Rob: shaded 2025-12-08 to 2026-01-11 had no typed IN/OUT, counted as on site at IQA from shading",
+    "Rob: shaded 2026-02-17 to 2026-03-01 had no typed IN/OUT, counted as on site at IQA from shading",
+    "Rob: shaded 2026-07-01 to 2026-07-26 with no site code, shown at IQA (Location column); please confirm",
+    "Dean Melvin: shaded 2025-12-08 to 2025-12-18 had no typed IN/OUT, counted as on site at IQA from shading",
+    "Dean Melvin: shaded 2026-01-04 to 2026-02-13 had no typed IN/OUT, counted as on site at IQA from shading",
+    "Dean Melvin: shaded 2026-03-01 to 2026-04-13 with no site code, shown at IQA (Location column); please confirm",
+    "Louis: shaded 2025-12-08 to 2026-03-31 had no typed IN/OUT, counted as on site at IQA from shading",
+    "JF: shaded 2025-12-08 to 2026-03-01 had no typed IN/OUT, counted as on site at IQA from shading",
+    "JF: shaded 2026-03-12 to 2026-03-31 with no site code, shown at IQA (Location column); please confirm",
+    "Marjorie: shaded 2026-07-27 to 2026-08-25 with no site code, shown at IQA (Location column); please confirm",
+    "Shakira: shaded 2026-06-22 to 2026-07-20 with no site code, shown at KUG (Location column); please confirm",
+    "Shakira: shaded 2026-08-24 to 2026-10-20 with no site code, shown at KUG (Location column); please confirm",
+    "Brad Rubia: shaded 2026-06-22 to 2026-07-20 with no site code, shown at KUG (Location column); please confirm",
+    "Brad Rubia: shaded 2026-08-11 to 2026-08-19 with no site code, shown at KUG (Location column); please confirm",
+    "Kevin Barrieau: shaded 2026-06-22 to 2026-07-20 with no site code, shown at IQA (Location column); please confirm",
+    "Kevin Barrieau: shaded 2026-08-01 to 2026-12-27 with no site code, shown at IQA (Location column); please confirm",
+    "Natanael Lachance: shaded 2026-06-22 to 2026-07-20 with no site code, shown at IQA (Location column); please confirm",
+    "Natanael Lachance: shaded 2026-08-01 to 2026-08-26 with no site code, shown at IQA (Location column); please confirm",
+    "Marc Olivier: shaded 2026-06-22 to 2026-07-20 with no site code, shown at IQA (Location column); please confirm",
+    "Marc Olivier: shaded 2026-08-01 to 2026-08-26 with no site code, shown at IQA (Location column); please confirm",
+    "Shannon: shaded 2026-01-06 to 2026-03-01 had no typed IN/OUT, counted as on site at IQA from shading",
+    "Shannon: shaded 2026-03-16 to 2026-05-09 with no site code, shown at IQA (Location column); please confirm",
+    "Mike Reid: shaded 2026-09-16 to 2026-10-19 with no site code, shown at KUG (Location column); please confirm"
   ],
   "stats": {
     "people": 29,
     "activePeople": 29,
-    "projects": 17,
+    "projects": 23,
     "datedColumns": 389,
     "bridgedColumns": [
       "2026-07-28"
@@ -3987,18 +5037,19 @@ export const CREW_SCHEDULE_DATA = {
       "2026-12-31"
     ],
     "markValues": {
-      "Out": 122,
-      "IQA": 70,
-      "POND": 46,
-      "KUG": 20,
+      "Out": 153,
+      "IQA": 88,
+      "POND": 37,
+      "KUG": 26,
+      "Travel": 11,
       "YK": 9,
-      "via KUG": 7,
-      "ALRT": 5,
-      "via ALRT": 4,
-      "via IQA": 3,
+      "ALRT": 6,
+      "OUT": 2,
+      "YOW": 1,
       "YF": 1,
       "YEG": 1,
-      "via POND": 1
+      "IN": 1,
+      "TBC": 1
     },
     "flightNamesNotOnSchedule": [
       "AKZIZ ABDENOUR (MEQUALTECH)",

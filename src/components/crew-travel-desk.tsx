@@ -1,184 +1,380 @@
 "use client";
 
-import { bookingLabel, bookingNeedsAttention, opsFor, type CrewOpsBook } from "@/lib/crew-ops";
-import {
-  activeBookingFor,
-  flightIsArranged,
-  flightStatusLabel,
-  type FlightBook,
-} from "@/lib/crew-flights";
-import { RETURN_SOON_DAYS, siteLabel, type CrewSnapshot } from "@/lib/crew-schedule";
-import { addDays, formatMedium } from "@/lib/dates";
+import { useMemo, useState } from "react";
+import { BedDouble, Car, Plane, PlaneLanding, PlaneTakeoff, Repeat } from "lucide-react";
+import type { CrewOpsBook } from "@/lib/crew-ops";
+import { flightStatusLabel, type FlightBook, type FlightBooking, type FlightDirection } from "@/lib/crew-flights";
+import { lastStartAirport, loadRoutes, routeAirports } from "@/lib/crew-routes";
+import { ASSUMED_PNR, travelIsBooked, type RotationBook, type RotationTravel } from "@/lib/crew-rotations";
+import { siteLabel, type CrewPerson, type CrewSnapshot } from "@/lib/crew-schedule";
+import { formatJourneyPath } from "@/lib/crew-travel-hubs";
+import { addDays, daysBetween, formatMedium } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
-function withinSoon(date: string | null, today: string) {
-  return Boolean(date && date >= today && date <= addDays(today, RETURN_SOON_DAYS));
+type TripKind = "to_site" | "home" | "transfer";
+
+type Trip = {
+  key: string;
+  person: CrewPerson;
+  kind: TripKind;
+  date: string;
+  site: string;
+  /** Transfers only: the camp they leave. */
+  fromSite?: string;
+  booking: FlightBooking | null;
+};
+
+const WINDOWS = [
+  { days: 14, label: "2 weeks" },
+  { days: 28, label: "4 weeks" },
+  { days: 56, label: "8 weeks" },
+] as const;
+
+const CAMPS = new Set(["IQA", "POND", "KUG", "ALRT"]);
+
+function tripDates(booking: FlightBooking) {
+  const legs = booking.segments.filter((row) => row.departDate);
+  if (!legs.length) return { first: booking.rotationDate, last: booking.rotationDate };
+  return {
+    first: legs[0]!.departDate,
+    last: legs[legs.length - 1]!.arriveDate || legs[legs.length - 1]!.departDate,
+  };
+}
+
+/** A trip typed on the stay drawer, as a booking row (assumed placeholders count as not booked). */
+function bookingFromTravel(travel: RotationTravel, personId: string, date: string): FlightBooking | null {
+  const real = travelIsBooked(travel);
+  if (!real && !travel.segments.length && !travel.hotels.length && !travel.carService) return null;
+  return {
+    id: `trip:${personId}:${travel.direction}:${date}`,
+    personId,
+    direction: travel.direction,
+    rotationDate: date,
+    airline: travel.airline,
+    pnr: travel.pnr === ASSUMED_PNR ? "" : travel.pnr,
+    ticketNumber: "",
+    segments: travel.segments,
+    status: real ? (travel.confirmed ? "confirmed" : "booked") : "pending_booking",
+    bookedOn: travel.bookedOn,
+    enteredBy: "",
+    enteredAt: "",
+    confirmationName: "",
+    confirmationDataUrl: "",
+    notes: travel.notes,
+    hotels: travel.hotels,
+    carService: travel.carService,
+    history: [],
+  };
+}
+
+/** The trip on the stay itself (drawer → Travel), for the stay that starts or ends on this day. */
+function matchRotation(rotationBook: RotationBook | undefined, personId: string, direction: FlightDirection, date: string) {
+  if (!rotationBook) return null;
+  const rotation = rotationBook.rotations.find(
+    (row) =>
+      row.personId === personId &&
+      (direction === "outbound" ? row.plannedIn === date : addDays(row.plannedOut, -1) === date),
+  );
+  if (!rotation) return null;
+  return bookingFromTravel(direction === "outbound" ? rotation.outbound : rotation.returnTravel, personId, date);
+}
+
+/** The booking for this trip: same direction, within 3 days of the travel day. */
+function matchBooking(flightBook: FlightBook, personId: string, direction: FlightDirection, date: string) {
+  const near = (iso: string | null | undefined) => Boolean(iso) && Math.abs(daysBetween(date, iso!)) <= 3;
+  return (
+    flightBook.bookings.find((row) => {
+      if (row.personId !== personId || row.direction !== direction || row.status === "cancelled") return false;
+      const { first, last } = tripDates(row);
+      return near(row.rotationDate) || near(direction === "outbound" ? last : first);
+    }) ?? null
+  );
+}
+
+/** Every flight someone needs between `from` and `to`: going in, coming home, and camp-to-camp moves. */
+function tripsBetween(
+  people: CrewPerson[],
+  flightBook: FlightBook,
+  rotationBook: RotationBook | undefined,
+  from: string,
+  to: string,
+) {
+  const find = (personId: string, direction: FlightDirection, date: string) => {
+    const onStay = matchRotation(rotationBook, personId, direction, date);
+    const record = matchBooking(flightBook, personId, direction, date);
+    // A real ticket wins over a half-filled trip.
+    if (onStay && onStay.status !== "pending_booking") return onStay;
+    return record || onStay;
+  };
+  const trips: Trip[] = [];
+  const inWindow = (iso: string) => iso >= from && iso <= to;
+  for (const person of people) {
+    for (const stint of person.stints || []) {
+      const firstSite =
+        stint.segments?.find((row) => row.kind === "site")?.site || stint.site || person.homeSites?.[0] || "";
+      if (inWindow(stint.from)) {
+        trips.push({
+          key: `${person.id}|in|${stint.from}`,
+          person,
+          kind: "to_site",
+          date: stint.from,
+          site: firstSite,
+          booking: find(person.id, "outbound", stint.from),
+        });
+      }
+      // OUT is the last coloured day, the day they fly home.
+      const outDay = stint.out ? addDays(stint.out, -1) : null;
+      if (outDay && inWindow(outDay)) {
+        const sites = (stint.segments || []).filter((row) => row.kind === "site");
+        const lastSite = sites[sites.length - 1]?.site || firstSite;
+        trips.push({
+          key: `${person.id}|out|${outDay}`,
+          person,
+          kind: "home",
+          date: outDay,
+          site: lastSite,
+          booking: find(person.id, "return", outDay),
+        });
+      }
+      // Camp to camp inside one stay (e.g. KUG → YK → IQA).
+      const campLegs = (stint.segments || []).filter((row) => row.kind === "site" && row.site && CAMPS.has(row.site));
+      for (let i = 1; i < campLegs.length; i += 1) {
+        const prev = campLegs[i - 1]!;
+        const next = campLegs[i]!;
+        if (prev.site === next.site) continue;
+        const leave = prev.out ? addDays(prev.out, 0) : next.from;
+        if (!inWindow(leave)) continue;
+        trips.push({
+          key: `${person.id}|move|${leave}`,
+          person,
+          kind: "transfer",
+          date: leave,
+          site: next.site!,
+          fromSite: prev.site!,
+          booking: null,
+        });
+      }
+    }
+  }
+  return trips.sort((a, b) => a.date.localeCompare(b.date) || a.person.name.localeCompare(b.person.name));
+}
+
+function statusTone(trip: Trip, today: string) {
+  const status = trip.booking?.status;
+  if (status === "confirmed" || status === "completed") return "bg-emerald-100 text-emerald-900";
+  if (status === "booked" || status === "changed") return "bg-sky-100 text-sky-900";
+  if (status === "pending_booking") return "bg-amber-100 text-amber-950";
+  return daysBetween(today, trip.date) <= 14 ? "bg-rose-100 text-rose-900" : "bg-amber-100 text-amber-950";
 }
 
 export function CrewTravelDesk({
   rows,
-  opsBook,
   flightBook,
+  rotationBook,
   today,
   onOpen,
 }: {
   rows: CrewSnapshot[];
-  opsBook: CrewOpsBook;
+  opsBook?: CrewOpsBook;
   flightBook: FlightBook;
+  rotationBook?: RotationBook;
   today: string;
-  onOpen: (personId: string) => void;
+  /** Opens the stay on the trip's day, on the Travel tab for that direction. */
+  onOpen: (personId: string, iso?: string, travel?: "outbound" | "return" | null) => void;
 }) {
-  const byTravelDate = (a: CrewSnapshot, b: CrewSnapshot, direction: "outbound" | "return") => {
-    const dateA = (direction === "outbound" ? a.plannedIn : a.plannedOut) || "9999-12-31";
-    const dateB = (direction === "outbound" ? b.plannedIn : b.plannedOut) || "9999-12-31";
-    return dateA.localeCompare(dateB) || a.person.name.localeCompare(b.person.name);
-  };
+  const [windowDays, setWindowDays] = useState<number>(28);
+  const [onlyOpen, setOnlyOpen] = useState(false);
+  const routes = useMemo(() => loadRoutes(), []);
+  const people = useMemo(() => rows.map((row) => row.person), [rows]);
 
-  const outbound = rows
-    .filter((row) => {
-      const live = row.duty === "in_transit" || withinSoon(row.plannedIn, today);
-      if (!live) return false;
-      if (flightIsArranged(activeBookingFor(flightBook, row.person.id, "outbound"))) return false;
-      const ops = opsFor(opsBook, row.person.id);
-      return bookingNeedsAttention(ops.outboundFlight);
-    })
-    .sort((a, b) => byTravelDate(a, b, "outbound"));
-
-  const inbound = rows
-    .filter((row) => {
-      const live =
-        row.duty === "on_site" && (row.dueSoon || row.overdue || withinSoon(row.plannedOut, today));
-      if (!live) return false;
-      if (flightIsArranged(activeBookingFor(flightBook, row.person.id, "return"))) return false;
-      const ops = opsFor(opsBook, row.person.id);
-      return bookingNeedsAttention(ops.returnFlight) || row.dueSoon || row.overdue;
-    })
-    .sort((a, b) => byTravelDate(a, b, "return"));
-
-  const booked = rows
-    .filter((row) => {
-      const live =
-        row.duty === "on_site" ||
-        row.duty === "in_transit" ||
-        withinSoon(row.plannedIn, today) ||
-        withinSoon(row.plannedOut, today);
-      if (!live) return false;
-      const out = flightIsArranged(activeBookingFor(flightBook, row.person.id, "outbound"));
-      const ret = flightIsArranged(activeBookingFor(flightBook, row.person.id, "return"));
-      return out || ret;
-    })
-    .sort(
-      (a, b) =>
-        (a.plannedIn || a.plannedOut || "9999-12-31").localeCompare(b.plannedIn || b.plannedOut || "9999-12-31") ||
-        a.person.name.localeCompare(b.person.name),
+  const trips = useMemo(
+    () => tripsBetween(people, flightBook, rotationBook, addDays(today, -2), addDays(today, windowDays)),
+    [people, flightBook, rotationBook, today, windowDays],
+  );
+  const notBooked = trips.filter((trip) => !trip.booking || trip.booking.status === "pending_booking");
+  const shown = onlyOpen ? notBooked : trips;
+  const openTrip = (trip: Trip) =>
+    onOpen(
+      trip.person.id,
+      trip.kind === "home" ? trip.date : trip.kind === "to_site" ? trip.date : addDays(trip.date, -1),
+      trip.kind === "to_site" ? "outbound" : trip.kind === "home" ? "return" : null,
     );
+  const urgent = notBooked.filter((trip) => daysBetween(today, trip.date) <= 14).length;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">Travel</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Current moves only: arrivals and returns in the next 2 weeks. Arrange on Canadian North, then add the confirmation on the crew profile.
-        </p>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+            <Plane className="size-5 text-primary" /> Flights to book
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Everyone flying in, home or between sites, in date order. Open a name to add the booking, hotel and car service.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5" role="group" aria-label="How far ahead">
+            {WINDOWS.map((option) => (
+              <button
+                key={option.days}
+                type="button"
+                onClick={() => setWindowDays(option.days)}
+                aria-pressed={windowDays === option.days}
+                className={cn(
+                  "rounded-md px-3 py-1 text-sm font-medium transition",
+                  windowDays === option.days ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <label className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm">
+            <input type="checkbox" checked={onlyOpen} onChange={(event) => setOnlyOpen(event.target.checked)} />
+            Not booked yet only
+          </label>
+        </div>
       </div>
 
-      <Queue
-        title={`Outbound to site (${outbound.length})`}
-        empty="None right now."
-        rows={outbound}
-        opsBook={opsBook}
-        flightBook={flightBook}
-        onOpen={onOpen}
-        direction="outbound"
-      />
-      <Queue
-        title={`Return home (${inbound.length})`}
-        empty="None right now."
-        rows={inbound}
-        opsBook={opsBook}
-        flightBook={flightBook}
-        onOpen={onOpen}
-        direction="return"
-        urgent
-      />
-      <Queue
-        title={`On file now (${booked.length})`}
-        empty="No live bookings on file."
-        rows={booked}
-        opsBook={opsBook}
-        flightBook={flightBook}
-        onOpen={onOpen}
-        direction="either"
-      />
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Stat label="Trips" value={trips.length} />
+        <Stat label="Not booked yet" value={notBooked.length} tone={notBooked.length ? "amber" : undefined} />
+        <Stat label="Within 2 weeks, not booked" value={urgent} tone={urgent ? "rose" : undefined} />
+      </div>
+
+      {shown.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          {onlyOpen ? "Everything in this window is booked." : "No one travels in this window."}
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+          <table className="w-full min-w-[52rem] text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">
+                <th className="px-4 py-2.5">Date</th>
+                <th className="px-3 py-2.5">Name</th>
+                <th className="px-3 py-2.5">Trip</th>
+                <th className="px-3 py-2.5">Route</th>
+                <th className="px-3 py-2.5">Flight</th>
+                <th className="px-3 py-2.5">Hotel · car</th>
+                <th className="px-4 py-2.5" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {shown.map((trip) => {
+                const home = lastStartAirport(flightBook, trip.person.id);
+                const booked = trip.booking?.segments.length
+                  ? formatJourneyPath(trip.booking.segments.flatMap((row) => [row.fromAirport, row.toAirport]).filter(Boolean))
+                  : "";
+                const usual =
+                  trip.kind === "transfer"
+                    ? `${trip.fromSite} → ${trip.site}`
+                    : routeAirports(routes, trip.site, home || "HOME", trip.kind === "to_site" ? "outbound" : "return")
+                        .join(" → ")
+                        .replace("HOME", "home");
+                const away = daysBetween(today, trip.date);
+                return (
+                  <tr key={trip.key} className="align-top hover:bg-muted/30">
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <p className="font-semibold tabular-nums">{formatMedium(trip.date)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {away === 0 ? "Today" : away === 1 ? "Tomorrow" : away < 0 ? `${-away} days ago` : `in ${away} days`}
+                      </p>
+                    </td>
+                    <td className="px-3 py-3">
+                      <button type="button" onClick={() => openTrip(trip)} className="text-left font-semibold hover:text-primary">
+                        {trip.person.name}
+                      </button>
+                      <p className="text-xs text-muted-foreground">{trip.person.role}</p>
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5 font-medium">
+                        {trip.kind === "to_site" ? (
+                          <PlaneLanding className="size-4 text-emerald-700" />
+                        ) : trip.kind === "home" ? (
+                          <PlaneTakeoff className="size-4 text-sky-700" />
+                        ) : (
+                          <Repeat className="size-4 text-violet-700" />
+                        )}
+                        {trip.kind === "to_site"
+                          ? `IN to ${trip.site}`
+                          : trip.kind === "home"
+                            ? `OUT from ${trip.site}`
+                            : `Move ${trip.fromSite} → ${trip.site}`}
+                      </span>
+                      <p className="text-xs text-muted-foreground">{trip.site ? siteLabel(trip.site) : ""}</p>
+                    </td>
+                    <td className="px-3 py-3">
+                      {booked ? (
+                        <p className="font-medium">{booked}</p>
+                      ) : (
+                        <p className="text-muted-foreground">
+                          <span className="text-xs">Usual </span>
+                          {usual}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", statusTone(trip, today))}>
+                        {trip.booking ? flightStatusLabel(trip.booking.status) : "Not booked"}
+                      </span>
+                      {trip.booking?.pnr ? <p className="mt-1 text-xs tabular-nums text-muted-foreground">{trip.booking.pnr}</p> : null}
+                    </td>
+                    <td className="px-3 py-3 text-xs">
+                      {trip.booking?.hotels?.length ? (
+                        trip.booking.hotels.map((hotel, index) => (
+                          <p key={index} className="flex items-center gap-1">
+                            <BedDouble className="size-3.5 shrink-0 text-muted-foreground" />
+                            {hotel.name || "Hotel"}
+                            {hotel.place ? ` · ${hotel.place}` : ""}
+                          </p>
+                        ))
+                      ) : null}
+                      {trip.booking?.carService ? (
+                        <p className="flex items-center gap-1">
+                          <Car className="size-3.5 shrink-0 text-muted-foreground" />
+                          {trip.booking.carService}
+                        </p>
+                      ) : null}
+                      {!trip.booking?.hotels?.length && !trip.booking?.carService ? (
+                        <span className="text-muted-foreground">-</span>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => openTrip(trip)}
+                        className={cn(
+                          "h-8 rounded-lg px-3 text-xs font-semibold",
+                          trip.booking
+                            ? "border border-input hover:bg-muted"
+                            : "bg-primary text-primary-foreground hover:opacity-90",
+                        )}
+                      >
+                        {trip.booking ? "Open" : "Book"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
-function Queue({
-  title,
-  empty,
-  rows,
-  opsBook,
-  flightBook,
-  onOpen,
-  direction,
-  urgent,
-}: {
-  title: string;
-  empty: string;
-  rows: CrewSnapshot[];
-  opsBook: CrewOpsBook;
-  flightBook: FlightBook;
-  onOpen: (personId: string) => void;
-  direction: "outbound" | "return" | "either";
-  urgent?: boolean;
-}) {
+function Stat({ label, value, tone }: { label: string; value: number; tone?: "amber" | "rose" }) {
   return (
-    <section className={cn("overflow-hidden rounded-2xl border bg-card", urgent ? "border-amber-300" : "border-border")}>
-      <div className="border-b border-border px-4 py-3">
-        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
-      </div>
-      {rows.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-muted-foreground">{empty}</p>
-      ) : (
-        <ul className="max-h-[min(40vh,20rem)] divide-y divide-border overflow-y-auto">
-          {rows.map((row) => {
-            const ops = opsFor(opsBook, row.person.id);
-            const outBooking = activeBookingFor(flightBook, row.person.id, "outbound");
-            const retBooking = activeBookingFor(flightBook, row.person.id, "return");
-            const booking =
-              direction === "outbound" ? outBooking : direction === "return" ? retBooking : outBooking || retBooking;
-            const status = booking
-              ? `${flightStatusLabel(booking.status)}${booking.pnr ? ` · ${booking.pnr}` : ""}`
-              : direction === "outbound"
-                ? bookingLabel(ops.outboundFlight)
-                : direction === "return"
-                  ? bookingLabel(ops.returnFlight)
-                  : "On file";
-            return (
-              <li key={row.person.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                <button type="button" onClick={() => onOpen(row.person.id)} className="min-w-0 text-left hover:text-primary">
-                  <p className="font-semibold">{row.person.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {row.site ? siteLabel(row.site) : "-"}
-                    {direction === "outbound" && row.plannedIn ? ` · in ${formatMedium(row.plannedIn)}` : ""}
-                    {direction === "return" && row.plannedOut ? ` · out ${formatMedium(row.plannedOut)}` : ""}
-                    {direction === "either" && row.plannedIn ? ` · in ${formatMedium(row.plannedIn)}` : ""}
-                    {` · ${status}`}
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onOpen(row.person.id)}
-                  className="rounded-lg border border-input px-3 py-1.5 text-sm font-medium hover:bg-muted"
-                >
-                  Open
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+    <div
+      className={cn(
+        "rounded-xl border px-4 py-3",
+        tone === "rose" ? "border-rose-200 bg-rose-50" : tone === "amber" ? "border-amber-200 bg-amber-50" : "border-border bg-card",
       )}
-    </section>
+    >
+      <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+    </div>
   );
 }

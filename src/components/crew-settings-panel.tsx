@@ -30,6 +30,7 @@ import {
 } from "@/lib/crew-notify-settings";
 import { addScheduleYear } from "@/lib/crew-years";
 import { cn } from "@/lib/cn";
+import { CrewRoutesSettings } from "@/components/crew-routes-settings";
 
 export function CrewSettingsPanel({
   sitesBook,
@@ -100,7 +101,7 @@ export function CrewSettingsPanel({
       return;
     }
     if (WORK_SITE_CODES.has(code)) {
-      setMessage(`${code} is a worksite — use the Sites list above, not travel places.`);
+      setMessage(`${code} is a worksite, use the Sites list above, not travel places.`);
       return;
     }
     onTravelHubsChange(upsertTravelHub(travelHubsBook, { code, name: hubDraft.name.trim() || code }));
@@ -230,7 +231,7 @@ export function CrewSettingsPanel({
           <h3 className="text-base font-semibold">Travel places</h3>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Short codes for stopovers (Ottawa, Toronto, Yellowknife, …). Shown on stay hover and in the
-            right-click Add travel menu — not in the Month colour legend.
+            right-click Add travel menu, not in the Month colour legend.
           </p>
         </div>
         <ul className="divide-y divide-border border border-border">
@@ -288,6 +289,8 @@ export function CrewSettingsPanel({
           </button>
         </div>
       </section>
+
+      <CrewRoutesSettings hubs={travelHubsBook.hubs} />
 
       <section className="space-y-3">
         <div>

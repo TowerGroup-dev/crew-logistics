@@ -18,7 +18,7 @@ function snap(label: string): CrewScheduleSnapshot {
   };
 }
 
-/** NAV-09 — Excel-style undo stack helpers. */
+/** NAV-09, Excel-style undo stack helpers. */
 describe("crew-undo stack", () => {
   it("NAV-09 pushUndoSnapshot clones and caps at limit", () => {
     let stack: CrewScheduleSnapshot[] = [];

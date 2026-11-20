@@ -41,7 +41,7 @@ export type CrewSitesBook = {
 
 const STORAGE_KEY = "tower-arctic-crew-sites-v1";
 
-/** Legend / toolbar order — IQA first, then the other camps. */
+/** Legend / toolbar order, IQA first, then the other camps. */
 export const DEFAULT_SITES: CrewSite[] = [
   { code: "IQA", name: "Iqaluit", colourId: "sky", camp: true },
   { code: "POND", name: "Pond Inlet", colourId: "emerald" },
@@ -62,7 +62,7 @@ export function sortSitesForDisplay(sites: CrewSite[]): CrewSite[] {
   });
 }
 
-/** Sheet marks / airports — pass-through only, never worksite legend entries. */
+/** Sheet marks / airports, pass-through only, never worksite legend entries. */
 const NOT_WORKSITES = new Set([
   "IN",
   "OUT",
@@ -191,7 +191,7 @@ export function ensureDefaultSites(book: CrewSitesBook): CrewSitesBook {
   const byCode = new Map(
     book.sites.filter((row) => isWorksiteCode(row.code)).map((row) => [row.code, row]),
   );
-  // Sheet fills vary (light/dark greens, planned blues) — camp codes always use the legend colours.
+  // Sheet fills vary (light/dark greens, planned blues), camp codes always use the legend colours.
   for (const site of DEFAULT_SITES) {
     const existing = byCode.get(site.code);
     byCode.set(site.code, existing ? { ...existing, colourId: site.colourId, camp: site.camp } : site);

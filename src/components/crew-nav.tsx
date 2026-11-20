@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ListChecks,
   Menu,
+  Plane,
 } from "lucide-react";
 import { CREW_SCHEDULE } from "@/lib/crew-schedule";
 import { loadScheduleYears } from "@/lib/crew-years";
@@ -23,7 +24,7 @@ type Section = {
   match: (path: string) => boolean;
 };
 
-/** Primary work tabs — stay on the top bar. */
+/** Primary work tabs, stay on the top bar. */
 const PRIMARY: Section[] = [
   { key: "overview", href: "/", label: "Overview", icon: ListChecks, match: (path) => path === "/" },
   {
@@ -33,9 +34,10 @@ const PRIMARY: Section[] = [
     icon: CalendarDays,
     match: (path) => path.startsWith("/month") || path.startsWith("/year") || path.startsWith("/list"),
   },
+  { key: "flights", href: "/travel", label: "Flights", icon: Plane, match: (path) => path.startsWith("/travel") },
 ];
 
-/** Right ☰ dropdown — plain list like B2W. */
+/** Right ☰ dropdown, plain list like B2W. */
 const MENU_ITEMS: { key: string; href: string; label: string; match: (path: string) => boolean }[] = [
   { key: "employees", href: "/employees", label: "Employees", match: (path) => path.startsWith("/employees") },
   { key: "reports", href: "/reports", label: "Reports", match: (path) => path.startsWith("/reports") },
@@ -49,7 +51,7 @@ const CALENDAR_VIEWS = [
 ] as const;
 
 function basePath(pathname: string) {
-  for (const prefix of ["/month", "/year", "/list", "/employees", "/reports", "/settings"]) {
+  for (const prefix of ["/month", "/year", "/list", "/travel", "/employees", "/reports", "/settings"]) {
     if (pathname.startsWith(prefix)) return prefix;
   }
   return "/";

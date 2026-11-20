@@ -77,6 +77,26 @@ export type CrewStint = {
   note?: string;
   /** Role for this stretch only, can differ from the person's usual roles. */
   role?: string;
+  /**
+   * Day-by-day detail inside the stay, read from the sheet: where they are each day
+   * and which days are travel (e.g. KUG to 16 Aug, YK 17-18, IQA 19-21, POND from 22).
+   * Missing when the whole stay is one site.
+   */
+  segments?: readonly CrewStintSegment[];
+  /** Shaded on the sheet with no site code: site taken from the Location column, needs confirming. */
+  unsure?: boolean;
+};
+
+export type CrewStintSegment = {
+  from: string;
+  /** Exclusive. */
+  out: string;
+  kind: "site" | "travel";
+  site?: string;
+  /** Code shown in the box on travel days (YK, IQA, YEG ...). */
+  label?: string;
+  /** Whole journey for hover, e.g. "KUG → YK → IQA". */
+  route?: string;
 };
 
 /** Historical booking row from the "Crew - Flights - 2026" sheet. */
@@ -106,7 +126,7 @@ export type CrewPerson = {
   events: CrewEvent[];
   /** True when added in the app rather than imported from the sheet. */
   manual?: boolean;
-  /** What-if hire — not committed until Save. */
+  /** What-if hire, not committed until Save. */
   provisional?: boolean;
   /** False when the person's row is hidden on the sheet (not on the current schedule). */
   active?: boolean;
@@ -846,7 +866,7 @@ function primarySite(mark: string | null) {
 
 /**
  * Season end / last day on site when no Out is marked.
- * 2026 crew finishes 18 Dec — Out is that day for everyone still open.
+ * 2026 crew finishes 18 Dec, Out is that day for everyone still open.
  */
 export function scheduleYearLastDay(year = CREW_SCHEDULE.year) {
   const rules = "rules" in CREW_SCHEDULE_DATA ? CREW_SCHEDULE_DATA.rules : null;

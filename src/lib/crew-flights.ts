@@ -17,6 +17,15 @@ export type FlightSegment = {
   flightNumber: string;
 };
 
+/** Overnight stop on the way (e.g. a night in Ottawa or Yellowknife). */
+export type FlightHotel = {
+  place: string;
+  name: string;
+  confirmation: string;
+  checkIn: string;
+  checkOut: string;
+};
+
 export type FlightRecordStatus =
   | "pending_booking"
   | "booked"
@@ -43,6 +52,10 @@ export type FlightBooking = {
   /** data: URL for PDF/image stored locally, keep small. */
   confirmationDataUrl: string;
   notes: string;
+  /** Hotels for overnight stopovers on this trip. */
+  hotels: FlightHotel[];
+  /** Car service: who picks up, where and when (blank when not needed). */
+  carService: string;
   history: { at: string; by: string; text: string }[];
 };
 
@@ -85,6 +98,23 @@ function readSegment(value: unknown): FlightSegment | null {
   };
 }
 
+function readHotel(value: unknown): FlightHotel | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Partial<FlightHotel>;
+  const text = (item: unknown) => (typeof item === "string" ? item : "");
+  return {
+    place: text(row.place).toUpperCase(),
+    name: text(row.name),
+    confirmation: text(row.confirmation),
+    checkIn: text(row.checkIn).slice(0, 10),
+    checkOut: text(row.checkOut).slice(0, 10),
+  };
+}
+
+export function emptyHotel(place = "", checkIn = ""): FlightHotel {
+  return { place, name: "", confirmation: "", checkIn, checkOut: "" };
+}
+
 function readBooking(value: unknown): FlightBooking | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Partial<FlightBooking>;
@@ -108,6 +138,10 @@ function readBooking(value: unknown): FlightBooking | null {
     confirmationName: typeof row.confirmationName === "string" ? row.confirmationName : "",
     confirmationDataUrl: typeof row.confirmationDataUrl === "string" ? row.confirmationDataUrl : "",
     notes: typeof row.notes === "string" ? row.notes : "",
+    hotels: Array.isArray(row.hotels)
+      ? row.hotels.map(readHotel).filter((item): item is FlightHotel => Boolean(item))
+      : [],
+    carService: typeof row.carService === "string" ? row.carService : "",
     history: Array.isArray(row.history)
       ? row.history
           .map((entry) => {

@@ -20,7 +20,7 @@ export function CrewScheduleHiddenBar({
       <div className="flex flex-wrap items-center gap-2">
         <Eye className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <p className="font-medium">
-          {hidden.length} hidden — click a name to show that row
+          {hidden.length} hidden, click a name to show that row
         </p>
         <button
           type="button"

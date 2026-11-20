@@ -17,7 +17,6 @@ import {
 } from "@/lib/crew-schedule";
 import { CrewRoleHeader } from "@/components/crew-role-header";
 import { CrewPlaceDialog, type PlaceRotationInput } from "@/components/crew-place-dialog";
-import { CrewScheduleHiddenBar } from "@/components/crew-schedule-hidden-bar";
 import { DEFAULT_ROTATION_DAYS, MAX_ROTATION_DAYS } from "@/lib/crew-roster";
 import { DEFAULT_SITES, siteColour, worksiteFromMark, type CrewSite } from "@/lib/crew-sites";
 import { addDays, formatMedium } from "@/lib/dates";
@@ -165,15 +164,6 @@ export function CrewYearTape({
           Click a month on a person to place them (standard 6 weeks; can extend past). Header months open Month view.
         </p>
       </div>
-      {hiddenPeople?.length && onShowPerson && onShowAllHidden ? (
-        <div className="border-b border-border px-4 py-2">
-          <CrewScheduleHiddenBar
-            hidden={hiddenPeople}
-            onShow={onShowPerson}
-            onShowAll={onShowAllHidden}
-          />
-        </div>
-      ) : null}
 
       <div className="overflow-x-auto">
         <div className="min-w-[72rem]">

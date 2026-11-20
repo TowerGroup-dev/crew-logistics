@@ -19,7 +19,7 @@ import {
 } from "@/lib/crew-roster";
 import type { CrewPerson } from "@/lib/crew-schedule";
 
-/** NAV-01 / NAV-07 / NAV-08 — rotation plan CRUD (Excel place / clear / note). */
+/** NAV-01 / NAV-07 / NAV-08, rotation plan CRUD (Excel place / clear / note). */
 describe("crew-roster rotation plans", () => {
   it("NAV-01 addNextRotation appends an active placement with optional note", () => {
     const roster = addNextRotation(emptyRoster(), "p1", {

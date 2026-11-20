@@ -5,7 +5,7 @@
  */
 
 import { addDays, daysBetween } from "@/lib/dates";
-import type { FlightBook, FlightBooking, FlightSegment } from "@/lib/crew-flights";
+import type { FlightBook, FlightBooking, FlightHotel, FlightSegment } from "@/lib/crew-flights";
 import type { CrewOpsBook } from "@/lib/crew-ops";
 import { opsFor } from "@/lib/crew-ops";
 import {
@@ -36,11 +36,24 @@ export type RotationTravel = {
   segments: FlightSegment[];
   /** Explicit confirmation, PNR alone is not enough. */
   confirmed: boolean;
-  /** When the flight was booked (ISO date). Hypothetical if assumed. */
+  /** When the flight was booked (ISO date). */
   bookedOn: string | null;
   document: RotationDoc | null;
   notes: string;
+  /** Hotels for overnight stopovers on this trip. */
+  hotels: FlightHotel[];
+  /** Car service: who picks up, where and when (blank when not needed). */
+  carService: string;
 };
+
+/** Placeholder PNR used when a flight is assumed booked, not a real ticket. */
+export const ASSUMED_PNR = "ASSUMED";
+
+/** True once real booking details are on file (not the "assumed booked" placeholder). */
+export function travelIsBooked(travel: RotationTravel) {
+  if (travel.pnr && travel.pnr !== ASSUMED_PNR) return true;
+  return travel.segments.some((row) => row.flightNumber || row.departTime);
+}
 
 export type RotationStay = {
   site: string;
@@ -117,6 +130,8 @@ export function emptyTravel(direction: TravelDirection): RotationTravel {
     bookedOn: null,
     document: null,
     notes: "",
+    hotels: [],
+    carService: "",
   };
 }
 
@@ -169,6 +184,18 @@ function readTravel(value: unknown, direction: TravelDirection): RotationTravel 
           }
         : null,
     notes: typeof row.notes === "string" ? row.notes : "",
+    hotels: Array.isArray(row.hotels)
+      ? row.hotels
+          .filter((item): item is FlightHotel => Boolean(item) && typeof item === "object")
+          .map((item) => ({
+            place: String(item.place || ""),
+            name: String(item.name || ""),
+            confirmation: String(item.confirmation || ""),
+            checkIn: String(item.checkIn || "").slice(0, 10),
+            checkOut: String(item.checkOut || "").slice(0, 10),
+          }))
+      : [],
+    carService: typeof row.carService === "string" ? row.carService : "",
   };
 }
 
@@ -441,72 +468,78 @@ function travelFromFlight(booking: FlightBooking, direction: TravelDirection): R
       ? { name: booking.confirmationName || "flight-confirmation", dataUrl: booking.confirmationDataUrl }
       : null,
     notes: booking.notes,
+    hotels: booking.hotels ?? [],
+    carService: booking.carService ?? "",
   };
 }
 
 /**
- * Treat missing flight confirmations as already booked with hypothetical dates
- * so the schedule is usable while real tickets are entered later.
+ * Real trips typed on rotations, as flight records, so the Month calendar can draw them
+ * (assumed placeholders with no legs are skipped).
  */
-export function assumeFlightsBooked(book: RotationBook): RotationBook {
+export function bookingsFromRotations(book: RotationBook): FlightBooking[] {
+  const rows: FlightBooking[] = [];
+  for (const rotation of book.rotations) {
+    for (const travel of [rotation.outbound, rotation.returnTravel]) {
+      const legs = travel.segments.filter((row) => row.departDate && (row.fromAirport || row.toAirport));
+      if (!legs.length) continue;
+      rows.push({
+        id: `rotation:${rotation.id}:${travel.direction}`,
+        personId: rotation.personId,
+        direction: travel.direction,
+        rotationDate: travel.direction === "outbound" ? rotation.plannedIn : addDays(rotation.plannedOut, -1),
+        airline: travel.airline,
+        pnr: travel.pnr === ASSUMED_PNR ? "" : travel.pnr,
+        ticketNumber: "",
+        segments: legs,
+        status: travel.confirmed && travelIsBooked(travel) ? "confirmed" : travelIsBooked(travel) ? "booked" : "pending_booking",
+        bookedOn: travel.bookedOn,
+        enteredBy: "",
+        enteredAt: "",
+        confirmationName: travel.document?.name || "",
+        confirmationDataUrl: "",
+        notes: travel.notes,
+        hotels: travel.hotels,
+        carService: travel.carService,
+        history: [],
+      });
+    }
+  }
+  return rows;
+}
+
+/**
+ * No assumptions: a flight is only booked when real details are on file.
+ * Clears the old "assumed booked" placeholders (PNR ASSUMED) that earlier versions saved.
+ */
+export function dropAssumedFlights(book: RotationBook): RotationBook {
+  let changed = false;
+  const clean = (travel: RotationTravel): RotationTravel => {
+    const placeholderNote = travel.notes.startsWith("Assumed booked");
+    if (travel.pnr !== ASSUMED_PNR && !placeholderNote) return travel;
+    changed = true;
+    if (travel.pnr === ASSUMED_PNR && !travelIsBooked(travel)) {
+      const legs = travel.segments;
+      return {
+        ...travel,
+        pnr: "",
+        confirmed: false,
+        bookedOn: null,
+        departDate: legs[0]?.departDate || null,
+        arriveDate: legs[legs.length - 1]?.arriveDate || null,
+        notes: placeholderNote ? "" : travel.notes,
+      };
+    }
+    return { ...travel, pnr: travel.pnr === ASSUMED_PNR ? "" : travel.pnr, notes: placeholderNote ? "" : travel.notes };
+  };
   const rotations = book.rotations.map((rotation) => {
-    const outInclusive = addDays(rotation.plannedOut, -1);
-    let next = rotation;
-
-    if (!next.outbound.confirmed) {
-      const bookedOn = addDays(rotation.plannedIn, -14);
-      next = {
-        ...next,
-        outbound: {
-          ...next.outbound,
-          confirmed: true,
-          bookedOn: next.outbound.bookedOn || bookedOn,
-          departDate: next.outbound.departDate || rotation.plannedIn,
-          arriveDate: next.outbound.arriveDate || rotation.plannedIn,
-          pnr: next.outbound.pnr || "ASSUMED",
-          airline: next.outbound.airline || "Canadian North",
-          notes: next.outbound.notes || "Assumed booked — replace with real confirmation when available.",
-        },
-      };
-    } else if (!next.outbound.bookedOn) {
-      next = {
-        ...next,
-        outbound: {
-          ...next.outbound,
-          bookedOn: addDays(next.outbound.departDate || rotation.plannedIn, -14),
-        },
-      };
-    }
-
-    if (!next.returnTravel.confirmed) {
-      const bookedOn = addDays(rotation.plannedIn, 28);
-      next = {
-        ...next,
-        returnTravel: {
-          ...next.returnTravel,
-          confirmed: true,
-          bookedOn: next.returnTravel.bookedOn || (bookedOn < outInclusive ? bookedOn : addDays(outInclusive, -14)),
-          departDate: next.returnTravel.departDate || outInclusive,
-          arriveDate: next.returnTravel.arriveDate || outInclusive,
-          pnr: next.returnTravel.pnr || "ASSUMED",
-          airline: next.returnTravel.airline || "Canadian North",
-          notes: next.returnTravel.notes || "Assumed booked — replace with real confirmation when available.",
-        },
-      };
-    } else if (!next.returnTravel.bookedOn) {
-      next = {
-        ...next,
-        returnTravel: {
-          ...next.returnTravel,
-          bookedOn: addDays(next.returnTravel.departDate || outInclusive, -14),
-        },
-      };
-    }
-
-    return next;
+    const outbound = clean(rotation.outbound);
+    const returnTravel = clean(rotation.returnTravel);
+    return outbound === rotation.outbound && returnTravel === rotation.returnTravel
+      ? rotation
+      : { ...rotation, outbound, returnTravel };
   });
-
-  return { version: 1, rotations };
+  return changed ? { ...book, rotations } : book;
 }
 
 export function upsertRotation(book: RotationBook, rotation: CrewRotation): RotationBook {
@@ -681,6 +714,8 @@ export function evaluateReadiness(
     overall = "at_risk";
   }
   if (!onOrUpcoming && gaps === 0) overall = "ready";
+  // A stay that has already ended can't be "at risk"; at most it has gaps on record.
+  if (!onOrUpcoming && overall === "at_risk") overall = "incomplete";
 
   return { travelOutbound, travelReturn, stay, replacement, handover, overall };
 }
@@ -847,7 +882,8 @@ export function buildKatrinaChecklist(
 
 export function inclusiveOut(rotation: CrewRotation) {
   const last = addDays(rotation.plannedOut, -1);
-  // Never show past season end (2026 → 18 Dec).
-  const seasonEnd = scheduleYearLastDay(Number(rotation.plannedIn.slice(0, 4)));
+  // Never show past the season end of the year the stay ENDS in. (Using the start
+  // year cut Dec→Jan stays off at 18 Dec of the old year.)
+  const seasonEnd = scheduleYearLastDay(Number(last.slice(0, 4)));
   return last > seasonEnd ? seasonEnd : last;
 }

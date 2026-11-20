@@ -5,11 +5,11 @@ export function toISODate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-/** Tower Arctic ops day — same on server and browser (avoids SSR hydration mismatches). */
+/** Tower Arctic ops day, same on server and browser (avoids SSR hydration mismatches). */
 export const CREW_TIME_ZONE = "America/Iqaluit";
 
 export function todayInZone(timeZone = CREW_TIME_ZONE, at = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
+  const parts = formatterFor("en-CA", {
     timeZone,
     year: "numeric",
     month: "2-digit",
@@ -35,8 +35,42 @@ export function daysBetween(from: string, to: string) {
   return Math.round(ms / 86_400_000);
 }
 
+/**
+ * Building an Intl date formatter is slow (toLocaleDateString builds a new one on
+ * every call), and the calendar formats thousands of dates per screen. Keep one
+ * formatter per style and remember each date's text.
+ */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+const formatted = new Map<string, string>();
+
+function formatterFor(locale: string, options: Intl.DateTimeFormatOptions) {
+  const key = `${locale}|${JSON.stringify(options)}`;
+  let formatter = formatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, options);
+    formatters.set(key, formatter);
+  }
+  return formatter;
+}
+
+function formatCached(style: string, iso: string, locale: string, options: Intl.DateTimeFormatOptions) {
+  const key = `${style}|${iso}`;
+  let text = formatted.get(key);
+  if (text === undefined) {
+    text = formatterFor(locale, options).format(parseISODate(iso));
+    if (formatted.size > 20_000) formatted.clear();
+    formatted.set(key, text);
+  }
+  return text;
+}
+
+/** Format any Date with a shared, cached formatter (same output as toLocaleDateString). */
+export function formatDate(date: Date, locale: string, options: Intl.DateTimeFormatOptions) {
+  return formatterFor(locale, options).format(date);
+}
+
 export function formatLong(iso: string) {
-  return parseISODate(iso).toLocaleDateString("en-GB", {
+  return formatCached("long", iso, "en-GB", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -45,11 +79,21 @@ export function formatLong(iso: string) {
 }
 
 export function formatMedium(iso: string) {
-  return parseISODate(iso).toLocaleDateString("en-GB", {
+  return formatCached("medium", iso, "en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
   });
+}
+
+/** "6 Nov" */
+export function formatShort(iso: string) {
+  return formatCached("short", iso, "en-GB", { day: "numeric", month: "short" });
+}
+
+/** "M", "T", ... */
+export function formatWeekdayNarrow(iso: string) {
+  return formatCached("weekday", iso, "en-US", { weekday: "narrow" });
 }
 
 /** Monday–Sunday week containing `iso` (local). */

@@ -37,6 +37,7 @@ import {
   dutyLabel,
   isCampSite,
   isOffRotation,
+  normalizeRole,
   personSegments,
   roleLabel,
   rotationFor,
@@ -50,7 +51,6 @@ import {
   addProvisionalEmployee,
   commitProvisionalEmployee,
   discardProvisionalEmployee,
-  isManualEmployee,
   loadRoster,
   mergePeople,
   mergeProjects,
@@ -68,6 +68,7 @@ import {
 } from "@/lib/crew-roster";
 import { CrewFlightPanel } from "@/components/crew-flight-panel";
 import { CrewMonthGrid, monthStartFromIso } from "@/components/crew-month-grid";
+import { KeepAlive } from "@/components/crew-keep-alive";
 import { CrewNextRotationForm } from "@/components/crew-next-rotation";
 import { CrewOverview, CrewReminders } from "@/components/crew-overview";
 import { buildSituationReminders } from "@/lib/crew-situation-reminders";
@@ -89,7 +90,8 @@ import {
   extendRotationOut,
   loadRotations,
   mergeRotationBook,
-  assumeFlightsBooked,
+  dropAssumedFlights,
+  bookingsFromRotations,
   migrateOpsIntoRotations,
   rotationForPersonOnDay,
   saveRotations,
@@ -122,6 +124,7 @@ import {
   isRoleRowHidden,
   loadScheduleViewPrefs,
   membershipsForPerson,
+  resetPersonRoleSections,
   saveScheduleViewPrefs,
   setCalendarMode,
   showAllPeople,
@@ -149,7 +152,7 @@ import {
   type CrewTravelHubsBook,
 } from "@/lib/crew-travel-hubs";
 import { CrewSettingsPanel } from "@/components/crew-settings-panel";
-import { addDays, formatLong, formatMedium, todayInZone } from "@/lib/dates";
+import { addDays, daysBetween, formatLong, formatMedium, todayInZone } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 export type CrewBoardView =
@@ -188,6 +191,14 @@ function markTone(mark: string | null) {
   return siteTone(mark.split(" / ")[0]?.trim() || mark);
 }
 
+/** Length of the current stay in days (In to Out), falling back to the standard rotation. */
+function stayLength(row: CrewSnapshot) {
+  if (row.plannedIn && row.expectedOut && row.expectedOut > row.plannedIn) {
+    return Math.max(1, daysBetween(row.plannedIn, row.expectedOut));
+  }
+  return row.rotationDays;
+}
+
 function departureLabel(row: CrewSnapshot) {
   if (row.daysUntilOut == null) return "-";
   if (row.daysUntilOut < 0) return `${Math.abs(row.daysUntilOut)}d overdue`;
@@ -222,7 +233,7 @@ export function CrewBoard({
   const searchParams = useSearchParams();
   const today = todayInZone();
   const boardView = view;
-  /** Eager client load — board is dynamic(ssr:false), so first paint already has local data. */
+  /** Eager client load, board is dynamic(ssr:false), so first paint already has local data. */
   const [opsBook, setOpsBook] = useState<CrewOpsBook>(() => loadCrewOps());
   const [flightBook, setFlightBook] = useState<FlightBook>(() => loadFlights());
   const [stopoverBook, setStopoverBook] = useState<CrewStopoverBook>(() => loadStopovers());
@@ -233,12 +244,19 @@ export function CrewBoard({
   const [scheduleYear, setScheduleYear] = useState<number>(CREW_SCHEDULE.year);
   const [scheduleYears, setScheduleYears] = useState<number[]>(() => [...loadScheduleYears()]);
   const [monthCursor, setMonthCursor] = useState(() => `${CREW_SCHEDULE.year || new Date().getFullYear()}-01-01`);
-  /** Only set when jumping from Year tape — keeps Month free-scroll starting at January. */
+  /** Only set when jumping from Year tape, keeps Month free-scroll starting at January. */
   const [monthScrollTo, setMonthScrollTo] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedRotationId, setSelectedRotationId] = useState<string | null>(null);
   const [rotationBook, setRotationBook] = useState<RotationBook>(() => loadRotations());
+  /** Which trip to open on the Travel tab when a stay drawer opens from the Flights list. */
+  const [openTravelFor, setOpenTravelFor] = useState<"outbound" | "return" | null>(null);
+  // Calendar draws both flight records and trips typed on stays (route, legs, overnight stops).
+  const calendarFlightBook = useMemo<FlightBook>(
+    () => ({ bookings: [...flightBook.bookings, ...bookingsFromRotations(rotationBook)] }),
+    [flightBook, rotationBook],
+  );
   const [staffName, setStaffName] = useState("Crew coordinator");
   const [showAddEmployee, setShowAddEmployee] = useState(false);
   const [notify, setNotify] = useState<CrewNotifySettings>(() => loadNotifySettings());
@@ -254,7 +272,7 @@ export function CrewBoard({
     name: "",
     role: "",
     notes: "",
-    category: "Regular" as "Regular" | "Local" | "Subcontractor",
+    category: "" as "" | "Regular" | "Local" | "Subcontractor",
   });
   const [sitesBook, setSitesBook] = useState<CrewSitesBook>(() => loadSitesBook());
   const [travelHubsBook, setTravelHubsBook] = useState<CrewTravelHubsBook>(() => loadTravelHubs());
@@ -341,7 +359,7 @@ export function CrewBoard({
       const mergedPeople = mergePeople(CREW_SCHEDULE.people, loadedRoster);
       const merged = mergeRotationBook(mergedPeople, rotationBook);
       const migrated = migrateOpsIntoRotations(merged, seededOps, flights);
-      const withFlights = assumeFlightsBooked(migrated);
+      const withFlights = dropAssumedFlights(migrated);
       setRotationBook(withFlights);
       saveRotations(withFlights);
     });
@@ -492,8 +510,9 @@ export function CrewBoard({
     return `${scheduleYear}-01-01`;
   }, [scheduleYear, today]);
 
-  function openPersonRotation(personId: string, iso = asOf) {
-    // Prefer the stay covering the clicked day, else current/next from today — never a past rotation.
+  function openPersonRotation(personId: string, iso = asOf, travel: "outbound" | "return" | null = null) {
+    setOpenTravelFor(travel);
+    // Prefer the stay covering the clicked day, else current/next from today, never a past rotation.
     const hit =
       rotationForPersonOnDay(rotationBook, personId, iso) ||
       currentRotationForPerson(rotationBook, personId, asOf) ||
@@ -515,7 +534,7 @@ export function CrewBoard({
   useEffect(() => {
     if (!hydrated) return;
     setRotationBook((prev) => {
-      const merged = assumeFlightsBooked(mergeRotationBook(people, prev));
+      const merged = dropAssumedFlights(mergeRotationBook(people, prev));
       const same =
         merged.rotations.length === prev.rotations.length &&
         merged.rotations.every((row, index) => {
@@ -704,9 +723,11 @@ export function CrewBoard({
       role: person.role,
       notes: overlay?.notes || "",
       category:
-        person.category === "Local" || person.category === "Subcontractor"
+        person.category === "Regular" ||
+        person.category === "Local" ||
+        person.category === "Subcontractor"
           ? person.category
-          : "Regular",
+          : "",
     });
   }
 
@@ -897,6 +918,7 @@ export function CrewBoard({
         ) : null}
 
         {seenViews.overview ? (
+          <KeepAlive active={boardView === "overview"}>
           <div className={cn(boardView !== "overview" && "hidden")}>
             <CrewOverview
               rows={overview.rows.filter((row) => row.person.active !== false)}
@@ -915,21 +937,26 @@ export function CrewBoard({
               }}
             />
           </div>
+          </KeepAlive>
         ) : null}
 
         {seenViews.travel ? (
+          <KeepAlive active={boardView === "travel"}>
           <div className={cn("border-t border-border p-3 sm:p-4", boardView !== "travel" && "hidden")}>
             <CrewTravelDesk
               rows={rows}
               opsBook={opsBook}
               flightBook={flightBook}
+              rotationBook={rotationBook}
               today={asOf}
               onOpen={openPersonRotation}
             />
           </div>
+          </KeepAlive>
         ) : null}
 
         {seenViews.accommodation ? (
+          <KeepAlive active={boardView === "accommodation"}>
           <div className={cn("border-t border-border p-3 sm:p-4", boardView !== "accommodation" && "hidden")}>
             <CrewAccommodationDesk
               rows={rows}
@@ -941,9 +968,11 @@ export function CrewBoard({
               }
             />
           </div>
+          </KeepAlive>
         ) : null}
 
         {seenViews.year ? (
+          <KeepAlive active={boardView === "year"}>
           <div
             className={cn(
               "overflow-auto border-t border-border p-3 sm:p-4",
@@ -999,9 +1028,11 @@ export function CrewBoard({
               onAddUnderRole={(sectionRole) => setRoleAddSection(sectionRole)}
             />
           </div>
+          </KeepAlive>
         ) : null}
 
         {seenViews.month ? (
+          <KeepAlive active={boardView === "month"}>
           <div
             className={cn(
               "flex min-w-0 flex-col gap-4 overflow-x-hidden border-t border-border p-3 sm:p-4",
@@ -1014,7 +1045,7 @@ export function CrewBoard({
               scrollToIso={monthScrollTo}
               rows={calendarRows}
               opsBook={opsBook}
-              flightBook={flightBook}
+              flightBook={calendarFlightBook}
               stopoverBook={stopoverBook}
               roster={roster}
               sites={sitesBook.sites}
@@ -1132,9 +1163,11 @@ export function CrewBoard({
               }}
             />
           </div>
+          </KeepAlive>
         ) : null}
 
         {seenViews.reports ? (
+          <KeepAlive active={boardView === "reports"}>
           <div className={cn(boardView !== "reports" && "hidden")}>
             <CrewMonthlyReportPanel
               year={scheduleYear}
@@ -1145,12 +1178,16 @@ export function CrewBoard({
               stopoverBook={stopoverBook}
               activityLog={activityLog}
               travelHubs={travelHubsBook.hubs}
+              rotationBook={rotationBook}
+              sites={sitesBook.sites}
               onOpen={openPersonRotation}
             />
           </div>
+          </KeepAlive>
         ) : null}
 
         {seenViews.settings ? (
+          <KeepAlive active={boardView === "settings"}>
           <div className={cn(boardView !== "settings" && "hidden")}>
             <CrewSettingsPanel
               sitesBook={sitesBook}
@@ -1174,9 +1211,11 @@ export function CrewBoard({
               onYearsChange={setScheduleYears}
             />
           </div>
+          </KeepAlive>
         ) : null}
 
         {seenViews.employees ? (
+          <KeepAlive active={boardView === "employees"}>
           <div
             className={cn(
               "overflow-y-auto border-t border-border",
@@ -1230,11 +1269,12 @@ export function CrewBoard({
                       onChange={(event) =>
                         setEmployeeEditDraft((current) => ({
                           ...current,
-                          category: event.target.value as "Regular" | "Local" | "Subcontractor",
+                          category: event.target.value as "" | "Regular" | "Local" | "Subcontractor",
                         }))
                       }
                       className="h-9 rounded-lg border border-input bg-card px-2"
                     >
+                      <option value="">-</option>
                       <option value="Regular">Regular</option>
                       <option value="Local">Local</option>
                       <option value="Subcontractor">Subcontractor</option>
@@ -1259,6 +1299,10 @@ export function CrewBoard({
                     onClick={() => {
                       const personId = employeeEditId;
                       const seed = overview.rows.find((row) => row.person.id === personId)?.person;
+                      const nextRole = employeeEditDraft.role.trim();
+                      const roleChanged =
+                        Boolean(seed?.role) &&
+                        normalizeRole(seed!.role) !== normalizeRole(nextRole || seed!.role);
                       patchRoster(
                         (current) =>
                           upsertEmployeeProfile(
@@ -1268,7 +1312,7 @@ export function CrewBoard({
                               name: employeeEditDraft.name,
                               role: employeeEditDraft.role,
                               notes: employeeEditDraft.notes,
-                              category: employeeEditDraft.category,
+                              category: employeeEditDraft.category || null,
                             },
                             seed
                               ? { name: seed.name, role: seed.role }
@@ -1276,11 +1320,15 @@ export function CrewBoard({
                           ),
                         { history: true },
                       );
+                      // Home role is the single calendar section, drop leftover multi-section rows.
+                      if (roleChanged) {
+                        patchScheduleView((current) => resetPersonRoleSections(current, personId));
+                      }
                       logActivity({
                         kind: "employee_edit",
                         personId,
                         personName: employeeEditDraft.name.trim(),
-                        text: `Updated ${employeeEditDraft.name.trim()} · ${employeeEditDraft.role} · ${employeeEditDraft.category}`,
+                        text: `Updated ${employeeEditDraft.name.trim()} · ${employeeEditDraft.role}`,
                       });
                       setEmployeeEditId(null);
                     }}
@@ -1297,7 +1345,8 @@ export function CrewBoard({
               <ul className="divide-y divide-border">
                 {rows.map((row) => {
                   const isActive = row.person.active !== false;
-                  const canDelete = isManualEmployee(roster, row.person.id);
+                  // Only true hires (not sheet people with a profile overlay) can be deleted.
+                  const canDelete = row.person.manual === true;
                   return (
                     <li key={row.person.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                       <button
@@ -1313,11 +1362,7 @@ export function CrewBoard({
                             </span>
                           ) : null}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          {roleLabel(row.person)}
-                          {row.person.category ? ` · ${row.person.category}` : ""}
-                          {row.person.manual ? " · Manual" : ""}
-                        </p>
+                        <p className="text-xs text-muted-foreground">{roleLabel(row.person)}</p>
                       </button>
                       <span
                         className={cn(
@@ -1376,6 +1421,7 @@ export function CrewBoard({
               </ul>
             )}
           </div>
+          </KeepAlive>
         ) : null}
 
         <div
@@ -1400,7 +1446,7 @@ export function CrewBoard({
               {rows.map((row, index) => {
                 const ops = opsFor(opsBook, row.person.id);
                 const progress =
-                  row.daysOnSite == null ? null : Math.min(100, Math.round((row.daysOnSite / row.rotationDays) * 100));
+                  row.daysOnSite == null ? null : Math.min(100, Math.round((row.daysOnSite / stayLength(row)) * 100));
                 const previous = index > 0 ? rows[index - 1] : null;
                 const showRoleHeader = !previous || previous.person.role !== row.person.role;
                 return (
@@ -1445,7 +1491,7 @@ export function CrewBoard({
                         {row.plannedOut ? formatMedium(row.plannedOut) : "-"}
                       </span>
                       <span className="text-sm tabular-nums text-muted-foreground">
-                        {row.rotationDay == null ? "-" : `Day ${row.rotationDay} of ${row.rotationDays}`}
+                        {row.rotationDay == null ? "-" : `Day ${row.rotationDay} of ${stayLength(row)}`}
                         {progress != null ? <span className="mt-0.5 block text-[0.8125rem]">{progress}%</span> : null}
                       </span>
                       <span
@@ -1481,6 +1527,7 @@ export function CrewBoard({
           onPickExisting={(personId) => {
             const person = overview.rows.find((row) => row.person.id === personId)?.person;
             if (!person) return;
+            // Calendar-only move: their home role (Employees page) stays as it is.
             patchScheduleView((current) =>
               addPersonUnderRole(current, personId, person.role, roleAddSection),
             );
@@ -1488,7 +1535,7 @@ export function CrewBoard({
               kind: "role_section_move",
               personId,
               personName: person.name,
-              text: `${person.name} moved under ${roleAddSection} (prior section hidden)`,
+              text: `${person.name} moved under ${roleAddSection}`,
             });
             setRoleAddSection(null);
           }}
@@ -1576,7 +1623,9 @@ export function CrewBoard({
           onClose={() => setSelectedRotationId(null)}
           onSaveBook={saveRotationBook}
           onSaveRoster={patchRoster}
+          roster={roster}
           onPatchOps={(recipe) => patchOps(selectedRotationPerson.id, recipe)}
+          openTravel={openTravelFor}
         />
       ) : null}
 
@@ -1633,7 +1682,7 @@ function PersonProfile({
   const [note, setNote] = useState("");
   const segments = personSegments(snap.person);
   const progress =
-    snap.daysOnSite == null ? null : Math.min(100, Math.round((snap.daysOnSite / snap.rotationDays) * 100));
+    snap.daysOnSite == null ? null : Math.min(100, Math.round((snap.daysOnSite / stayLength(snap)) * 100));
   const cameIn = snap.plannedIn;
   const goingOut = snap.expectedOut || snap.plannedOut;
   const isActive = snap.person.active !== false;
@@ -1758,13 +1807,13 @@ function PersonProfile({
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <Fact label="Site" value={snap.site ? siteLabel(snap.site) : "No current assignment"} />
           <Fact label="Status" value={dutyLabel(snap.duty)} />
-          <Fact label="Planned rotation" value={`${snap.rotationDays} days`} />
+          <Fact label="Planned stay" value={`${stayLength(snap)} days`} />
           <Fact
             label="Days on site"
             value={
               snap.rotationDay == null
                 ? "-"
-                : `Day ${snap.rotationDay} of ${snap.rotationDays}${progress != null ? ` · ${progress}%` : ""}`
+                : `Day ${snap.rotationDay} of ${stayLength(snap)}${progress != null ? ` · ${progress}%` : ""}`
             }
           />
           <Fact label="IN" value={snap.plannedIn ? formatMedium(snap.plannedIn) : "-"} />

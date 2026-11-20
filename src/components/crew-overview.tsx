@@ -41,7 +41,7 @@ import {
   unmarkChecklistDone,
   type ChecklistDoneBook,
 } from "@/lib/crew-checklist-done";
-import { daysBetween, formatMedium, parseISODate } from "@/lib/dates";
+import { daysBetween, formatMedium, formatShort, parseISODate } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 function emptyDoneSafe() {
@@ -51,7 +51,7 @@ function emptyDoneSafe() {
 
 function shortDate(iso: string | null) {
   if (!iso) return "";
-  return parseISODate(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return formatShort(iso);
 }
 
 function plural(n: number, word: string) {
@@ -393,7 +393,7 @@ function Panel({
 
 /* ---------- Reminders ---------- */
 
-/** Flat sheet for the popup — one scroll, no nested expanders. */
+/** Flat sheet for the popup, one scroll, no nested expanders. */
 function RemindersSheet({
   board,
   onOpen,
@@ -605,7 +605,7 @@ function WeekStoryList({
   if (!lines.length) {
     return (
       <p className="px-4 py-7 text-sm text-muted-foreground">
-        Quiet week so far — nothing on the move and nobody flagged as still on site.
+        Quiet week so far, nothing on the move and nobody flagged as still on site.
       </p>
     );
   }
@@ -863,7 +863,7 @@ function OnSiteTable({ rows, onOpen }: { rows: OnSiteRow[]; onOpen: (rotationId:
                     {row.site}
                   </span>
                 ) : (
-                  <span className="text-xs text-muted-foreground">—</span>
+                  <span className="text-xs text-muted-foreground">-</span>
                 )}
               </Labelled>
               <TimeIn row={row} />
@@ -932,7 +932,7 @@ function ToGo({ row }: { row: OnSiteRow }) {
 }
 
 function Mark({ state }: { state: BookingState }) {
-  if (state === "none") return <span className="text-xs text-muted-foreground">—</span>;
+  if (state === "none") return <span className="text-xs text-muted-foreground">-</span>;
   if (state === "confirmed" || state === "booked") {
     return (
       <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-foreground">

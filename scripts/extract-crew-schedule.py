@@ -33,7 +33,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "src" / "lib" / "crew-schedule-data.ts"
 DEFAULT_XLSM_CANDIDATES = [
-    # Prefer the repo copy — AutoRecovered / "(2)" sheets are often stale snapshots.
+    # Prefer the repo copy, AutoRecovered / "(2)" sheets are often stale snapshots.
     ROOT / "data" / "2026_ Crew Schedules (Master).xlsm",
     Path(r"C:\Users\OyeyimikaAdeoye\Downloads\2026_ Crew Schedules (Master).xlsm"),
     Path(r"C:\Users\OyeyimikaAdeoye\Downloads\2026_ Crew Schedules (Master) 2.xlsx"),
@@ -129,7 +129,7 @@ TRANSIT_ALIASES = {
     "YDF": "YDF",
     "TRANSFER": "Transfer",
 }
-# Worksite legend only — pass-through hubs live in the app travel-hubs list, not here.
+# Worksite legend only, pass-through hubs live in the app travel-hubs list, not here.
 SITE_NAMES = {
     "IQA": "Iqaluit",
     "POND": "Pond Inlet",
@@ -333,7 +333,7 @@ def as_date(value: object) -> date | None:
 
 
 def _sheet_mark_score(ws) -> tuple[int, int]:
-    """(dated_columns, typed_travel_marks) — higher is the livelier schedule copy."""
+    """(dated_columns, typed_travel_marks), higher is the livelier schedule copy."""
     layout = detect_layout(ws)
     dates, _ = build_calendar(ws, layout["first_day_col"])
     if not dates:
@@ -429,7 +429,7 @@ def _day_header_number(value: object, previous_day: int | None) -> int | None:
         text = value.strip()
         if text.isdigit():
             return int(text)
-        # Uncached formula chain after a known day — step forward one.
+        # Uncached formula chain after a known day, step forward one.
         if previous_day is not None and text.startswith("=") and re.search(r"\+1\s*$", text):
             return previous_day + 1
     return None
@@ -581,7 +581,7 @@ def build_timeline(
                     if nxt["mark"]:
                         break
                     if nxt["shaded"] and not nxt["travel"]:
-                        # Internal hop — keep the stint open through the green days.
+                        # Internal hop, keep the stint open through the green days.
                         i = j
                         break
                     if not nxt["shaded"]:
@@ -657,14 +657,14 @@ def build_timeline(
                 k += 1
                 continue
             if kind == "transit":
-                # Connecting day only (YF / YK / IQA on the way) — wait for the camp arrival.
+                # Connecting day only (YF / YK / IQA on the way), wait for the camp arrival.
                 emit(d_iso, transit_mark(code))
                 k += 1
                 continue
             site = mark_site_code(code) if kind == "site" else None
             tentative = kind == "arrive"
             if tentative:
-                # "In" with no site code — keep last camp when we know it (e.g. Mike Reid Nov).
+                # "In" with no site code, keep last camp when we know it (e.g. Mike Reid Nov).
                 site = last_site or "TBC"
             stint = {
                 "site": site,
@@ -686,7 +686,7 @@ def build_timeline(
             continue
 
         # Site moves only from typed marks (IQA / PND / KU …). Lavender fill alone is often
-        # day-count formatting on an IQA row — do not flip the stay to Pond from colour.
+        # day-count formatting on an IQA row, do not flip the stay to Pond from colour.
         if kind == "out":
             camp = stint["sites"][-1] if stint["sites"] else stint.get("site")
             ret = same_camp_return_after(i, camp)
@@ -701,7 +701,7 @@ def build_timeline(
             if soft_ok:
                 warnings.append(
                     f"{who}: OUT typed on {d_iso} with {camp} return "
-                    f"{days[ret]['date']} — kept as one stay (short home break)"
+                    f"{days[ret]['date']}, kept as one stay (short home break)"
                 )
                 emit(d_iso, "Out")
                 stint["_last"] = i
@@ -785,7 +785,7 @@ def build_timeline(
                     how = "homeward"
                     warnings.append(
                         f"{who}: planned shading ended {days[end_index]['date']} "
-                        f"— counted homeward OUT on {out_iso}"
+                        f"- counted homeward OUT on {out_iso}"
                     )
             # Typed "In" with no OUT is often only partly shaded (Mike Reid Nov→Dec).
             # Stretch to the standard rotation block when shading stops early.
@@ -796,7 +796,7 @@ def build_timeline(
                     warnings.append(
                         f"{who}: typed In on {stint['from']} with shading only to "
                         f"{(date.fromisoformat(out_iso) - timedelta(days=1)).isoformat()} "
-                        f"— extended to {planned_out.isoformat()} ({planned_block_days}-day block)"
+                        f"- extended to {planned_out.isoformat()} ({planned_block_days}-day block)"
                     )
                     out_iso = planned_out.isoformat()
                     how = "rotation"
@@ -810,13 +810,13 @@ def build_timeline(
             ):
                 warnings.append(
                     f"{who}: late-year stay from {stint['from']} had no hard OUT "
-                    f"— extended through {SEASON_OUT_ISO}"
+                    f"- extended through {SEASON_OUT_ISO}"
                 )
                 out_iso = SEASON_OUT_ISO
                 how = "season"
             close(stint, out_iso, how, stints, emit)
 
-    # Long shaded runs with no typed IN/OUT used to be warnings only — that skipped real stays
+    # Long shaded runs with no typed IN/OUT used to be warnings only, that skipped real stays
     # (e.g. Mike Reid Nov–Dec, Eric POND early Sep). Promote them to stints when we can infer site.
     covered = set()
     for item in stints:
@@ -863,7 +863,7 @@ def build_timeline(
         last_site = site
         warnings.append(
             f"{who}: shaded {days[indexes[0]]['date']} to {days[indexes[-1]]['date']} "
-            f"had no typed IN/OUT — counted as on site at {site} from shading"
+            f"had no typed IN/OUT, counted as on site at {site} from shading"
         )
 
     for j, day in enumerate(days + [{"shaded": False, "mark": None, "date": None, "travel": False}]):
@@ -885,6 +885,392 @@ def build_timeline(
         item.pop("_last", None)
         item.pop("_soft_home", None)
     return events, stints
+
+
+
+
+# From this date the sheet is read literally, cell by cell, with no guessing:
+#   * a site code (IQA / PND / KU / ALRT ...) puts the person on that site from that day;
+#   * any other code (YK, YEG, YF ...) is a stopover on the way (travel box);
+#   * OUT ends the stay; coloured boxes straight after the OUT cell still belong to the
+#     trip, and the last of them is the OUT day;
+#   * white cells are days away; lavender shading is Pond; other shading continues the
+#     current place; text that is not a code (e.g. "linger for snow") is a note on the stay.
+LITERAL_FROM = date(2026, 3, 1)
+# Shade the sheet uses for Iqaluit days (theme 6, +60% tint); lavender POND_FILL is Pond.
+IQA_SHADE = "t6+0.60"
+CORRECTIONS: dict[str, dict[str, str]] = {}
+
+
+def literal_day_states(
+    days: list[dict], start: int, *, location: str | None = None, home_site: str | None = None
+) -> list[dict]:
+    """One state per day from `start`: {kind: site|travel|away, place, label, out, note, code}."""
+    states: list[dict] = []
+    after_out = False  # inside the coloured run straight after an OUT cell
+    previous: dict | None = None
+    for j in range(start, len(days)):
+        day = days[j]
+        if day.get("bridged") and previous is not None:
+            states.append({**previous, "out": False, "code": None, "note": None})
+            continue
+        text = day.get("text") or ""
+        fill = day.get("fill")
+        coloured = bool(fill) and fill not in WHITE
+        mark = parse_mark(text) if text else None
+        state = {"kind": "away", "place": None, "label": None, "out": False, "note": None, "code": None}
+        if mark and mark[0] == "site":
+            location = mark_site_code(mark[1])
+            after_out = False
+            state.update(kind="site" if location in CAMP_SITES else "travel", place=location,
+                         label=None if location in CAMP_SITES else location, code=mark[1])
+        elif mark and mark[0] == "transit" and mark[1] != "Transfer":
+            hub = mark[1].split("→")[-1].strip()
+            location = hub
+            after_out = False
+            state.update(kind="travel", place=hub, label=hub, code=mark[1])
+        elif mark and mark[0] == "arrive":
+            location = "TBC"
+            after_out = False
+            state.update(kind="travel", place="TBC", label="IN", code="IN")
+        elif mark and mark[0] == "out":
+            if location:
+                state.update(kind="site" if location in CAMP_SITES else "travel", place=location,
+                             label=None if location in CAMP_SITES else location, out=True)
+            else:
+                state.update(kind="travel", label="OUT", out=True)
+            after_out = True
+        else:
+            note = text if (mark and mark[0] == "unknown") else None
+            if coloured and fill == POND_FILL:
+                location = "POND"
+                state.update(kind="site", place="POND")
+            elif coloured and after_out:
+                if is_travel_fill(fill):
+                    # Green box straight after OUT: the flight home, part of the trip.
+                    state.update(kind="site" if location in CAMP_SITES else "travel", place=location,
+                                 label=None if location in CAMP_SITES else location)
+                else:
+                    # Shading resumes after an OUT with no new code: a new stay, place unknown.
+                    after_out = False
+                    location = home_site if home_site in CAMP_SITES else None
+                    if location:
+                        state.update(kind="site", place=location, unsure=True)
+                    else:
+                        state.update(kind="travel", label=None, unsure=True)
+            elif coloured and location:
+                state.update(kind="site" if location in CAMP_SITES else "travel", place=location,
+                             label=None if location in CAMP_SITES else location)
+            elif coloured and fill == IQA_SHADE:
+                # No code, but the sheet's Iqaluit shade (used on ~95% of coded IQA days).
+                location = "IQA"
+                state.update(kind="site", place="IQA")
+            elif coloured:
+                location = home_site if home_site in CAMP_SITES and not is_travel_fill(fill) else None
+                if location:
+                    state.update(kind="site", place=location, unsure=True)
+                else:
+                    state.update(kind="travel", label=None)
+            elif location and location not in CAMP_SITES and not after_out:
+                # White day at a stopover town: still there (YK 17 and 18).
+                state.update(kind="travel", place=location, label=location)
+            else:
+                # White day: away. The next stay starts fresh (its own code or shade says where).
+                location = None
+                after_out = False
+            if note and state["kind"] != "away":
+                state["note"] = note
+            if after_out and state["kind"] != "away":
+                # Coloured box straight after OUT: the trip home; it becomes the OUT day.
+                state["out"] = True
+        if state["kind"] == "away" and after_out:
+            after_out = False
+            location = None
+        states.append(state)
+        previous = state
+    return states
+
+
+# Kept beside this script (data/ is not committed; this file holds only names and dates).
+CORRECTIONS_FILE = Path(__file__).resolve().parent / "schedule-corrections.json"
+
+
+def load_corrections() -> dict[str, dict[str, str]]:
+    """{person name: {iso day: place}} from scripts/schedule-corrections.json (facts that beat the sheet)."""
+    if not CORRECTIONS_FILE.exists():
+        return {}
+    raw = json.loads(CORRECTIONS_FILE.read_text(encoding="utf-8"))
+    out: dict[str, dict[str, str]] = {}
+    for name, rows in (raw.get("people") or {}).items():
+        days: dict[str, str] = {}
+        for row in rows:
+            d = date.fromisoformat(row["from"])
+            # "to": "open" = still there, no OUT date yet (runs to the end of the calendar).
+            end = date(d.year, 12, 31) if str(row["to"]).lower() == "open" else date.fromisoformat(row["to"])
+            note = str(row.get("note") or "").strip()
+            while d <= end:
+                days[d.isoformat()] = str(row["place"]).strip() + (f"|{note}" if note else "")
+                d += timedelta(days=1)
+        out[clean(name).lower()] = days
+    return out
+
+
+def apply_corrections(states: list[dict], days: list[dict], start: int, fixes: dict[str, str]) -> None:
+    for k, state in enumerate(states):
+        place = fixes.get(days[start + k]["date"].isoformat())
+        if not place:
+            continue
+        place, _, note = place.partition("|")
+        code = SITE_ALIASES.get(place.upper(), place.upper())
+        if place.lower() == "away":
+            state.update(kind="away", place=None, label=None, out=False, code=None, unsure=False)
+        elif code in CAMP_SITES:
+            state.update(kind="site", place=code, label=None, out=False, code=code, unsure=False)
+        else:
+            state.update(kind="travel", place=code, label=code, out=False, code=code, unsure=False)
+        if note and place.lower() != "away":
+            state["note"] = note
+    # A stay that a correction ends (next day away) closes there.
+
+
+def literal_stints(
+    days: list[dict],
+    start: int,
+    *,
+    location: str | None = None,
+    home_site: str | None = None,
+    fixes: dict[str, str] | None = None,
+):
+    """Stays (with day segments) and events from `start`, read literally."""
+    states = literal_day_states(days, start, location=location, home_site=home_site)
+    if fixes:
+        apply_corrections(states, days, start, fixes)
+    stints: list[dict] = []
+    events: list[dict] = []
+    k = 0
+    n = len(states)
+    while k < n:
+        if states[k]["kind"] == "away":
+            k += 1
+            continue
+        m = k
+        # A stay is a run of non-away days; it ends after the last box of an OUT run.
+        while m < n and states[m]["kind"] != "away":
+            if states[m]["out"] and (m + 1 >= n or not states[m + 1]["out"]):
+                m += 1
+                break
+            m += 1
+        run = states[k:m]
+        first_day = days[start + k]["date"]
+        out_day = days[start + m - 1]["date"] + timedelta(days=1)
+        sites = []
+        for st in run:
+            if st["kind"] == "site" and st["place"] not in sites:
+                sites.append(st["place"])
+        segments: list[dict] = []
+        for idx, st in enumerate(run):
+            d0 = (first_day + timedelta(days=idx)).isoformat()
+            d1 = (first_day + timedelta(days=idx + 1)).isoformat()
+            seg_kind = "site" if st["kind"] == "site" else "travel"
+            site = st["place"] if seg_kind == "site" else None
+            label = st["label"] if seg_kind == "travel" else None
+            last = segments[-1] if segments else None
+            if last and last["kind"] == seg_kind and last.get("site") == site and last.get("label") == label:
+                last["out"] = d1
+                continue
+            seg = {"from": d0, "out": d1, "kind": seg_kind}
+            if site:
+                seg["site"] = site
+            if label:
+                seg["label"] = label
+            segments.append(seg)
+        notes = []
+        for st in run:
+            if st.get("note") and st["note"] not in notes:
+                notes.append(st["note"])
+        ended_by_out = any(st["out"] for st in run)
+        stint = {
+            "site": sites[0] if sites else "TBC",
+            "sites": sites or ["TBC"],
+            "from": first_day.isoformat(),
+            "out": out_day.isoformat() if (ended_by_out or start + m < len(days)) else None,
+            "arrival": "marked" if run[0]["code"] else "shading",
+            "departure": "marked" if ended_by_out else "shading-ended",
+            "tentative": any(st["place"] == "TBC" for st in run),
+        }
+        if notes:
+            stint["note"] = " · ".join(notes)
+        if any(st.get("unsure") for st in run):
+            stint["unsure"] = True  # shading with no code: site taken from the Location column
+        if len(segments) > 1 or (segments and segments[0]["kind"] != "site"):
+            # route for each travel run
+            for i, seg in enumerate(segments):
+                if seg["kind"] != "travel":
+                    continue
+                j = i
+                while j > 0 and segments[j - 1]["kind"] == "travel":
+                    j -= 1
+                e = i
+                while e + 1 < len(segments) and segments[e + 1]["kind"] == "travel":
+                    e += 1
+                stops = []
+                if j > 0 and segments[j - 1].get("site"):
+                    stops.append(segments[j - 1]["site"])
+                for t in segments[j : e + 1]:
+                    if t.get("label") and (not stops or stops[-1] != t["label"]):
+                        stops.append(t["label"])
+                if e + 1 < len(segments) and segments[e + 1].get("site") and (not stops or stops[-1] != segments[e + 1]["site"]):
+                    stops.append(segments[e + 1]["site"])
+                if stops:
+                    seg["route"] = " → ".join(stops)
+            stint["segments"] = segments
+        stints.append(stint)
+        for seg in segments:
+            events.append({"date": seg["from"], "mark": seg.get("site") or seg.get("label") or "Travel"})
+        if stint["out"]:
+            events.append({"date": stint["out"], "mark": "Out"})
+        k = m
+    return stints, events
+
+
+def apply_literal(
+    days: list[dict],
+    stints: list[dict],
+    events: list[dict],
+    home_sites: list[str] | None = None,
+    fixes: dict[str, str] | None = None,
+):
+    """Keep the old reading before LITERAL_FROM, the literal one from it on."""
+    start = next((i for i, d in enumerate(days) if d["date"] >= LITERAL_FROM), None)
+    if start is None:
+        return stints, events
+    cut = LITERAL_FROM.isoformat()
+    kept: list[dict] = []
+    carry: dict | None = None
+    for stint in stints:
+        if stint["from"] >= cut:
+            continue
+        if stint.get("out") and stint["out"] <= cut:
+            kept.append(stint)
+            continue
+        carry = dict(stint)  # stay running into March: re-read from 1 March
+        carry.pop("segments", None)
+        carry["out"] = cut
+        kept.append(carry)
+    seed = None
+    if carry:
+        prior = [g for g in (carry.get("segments") or []) if g["from"] < cut]
+        seed = (prior[-1].get("site") if prior and prior[-1]["kind"] == "site" else None) or mark_site_code(carry["site"])
+    lit_stints, lit_events = literal_stints(
+        days, start, location=seed, home_site=(home_sites or [None])[0], fixes=fixes
+    )
+    if carry and lit_stints and lit_stints[0]["from"] == cut:
+        first = lit_stints.pop(0)
+        carry["out"] = first["out"]
+        carry["departure"] = first["departure"]
+        for site in first["sites"]:
+            if site not in carry["sites"]:
+                carry["sites"].append(site)
+        if first.get("segments"):
+            carry["segments"] = [{"from": carry["from"], "out": cut, "kind": "site", "site": carry["site"]}] + first["segments"]
+        elif first["site"] != carry["site"]:
+            carry["segments"] = [
+                {"from": carry["from"], "out": cut, "kind": "site", "site": carry["site"]},
+                {"from": cut, "out": first["out"] or (days[-1]["date"] + timedelta(days=1)).isoformat(), "kind": "site", "site": first["site"]},
+            ]
+        if first.get("note"):
+            carry["note"] = " · ".join(x for x in [carry.get("note"), first["note"]] if x)
+    kept_events = [e for e in events if e["date"] < cut]
+    kept_events.append({"date": cut, "mark": "Out"})
+    return kept + lit_stints, kept_events + lit_events
+
+
+def stint_day_segments(days: list[dict], stint: dict, *, today_index: dict[str, int]) -> list[dict]:
+    """Day-by-day place and travel inside one stay, the way the sheet reads.
+
+    A typed code puts the person at that place from that day until the next code
+    (YK 17-18, IQA 19-21, PND 22 ...). The four sites (IQA, POND, KUG, ALRT) are on
+    site; every other place is a stopover on the journey (a travel day). Returns compressed segments
+    [{from, out, kind: "site"|"travel", site?, label?, route?}] or [] when the whole
+    stay is simply one site.
+    """
+    start = today_index.get(stint["from"])
+    if start is None:
+        return []
+    end = today_index.get(stint["out"]) if stint.get("out") else len(days)
+    if end is None:
+        end = len(days)
+    home = mark_site_code(stint["site"]) if stint.get("site") else None
+    location = home
+    per_day: list[tuple[str, str | None, str | None]] = []  # (kind, site, label)
+    locations: list[str | None] = []
+    greens: list[bool] = []
+    for j in range(start, end):
+        day = days[j]
+        mark = day.get("mark")
+        label = None
+        if mark and mark[0] in {"site", "transit", "arrive"}:
+            kind, code = mark
+            if kind == "site":
+                location = mark_site_code(code)
+                label = code if "→" in code else location
+            elif kind == "transit" and code != "Transfer":
+                location = code.split("→")[-1].strip() if "→" in code else code
+                label = code
+        locations.append(location)
+        greens.append(bool(is_travel_fill(day.get("fill")) or (mark and mark[0] == "transit")))
+        per_day.append(("?", location, label or location))
+
+    # Only the four sites count as being on site (IQA, POND, KUG, ALRT). Anywhere else
+    # (YK, YEG, YF ...) is a stopover on the way: a travel day labelled with that place.
+    resolved: list[tuple[str, str | None, str | None]] = []
+    for _, place, label in per_day:
+        if place in CAMP_SITES:
+            resolved.append(("site", place, None))
+        else:
+            resolved.append(("travel", None, label))
+
+    if all(kind == "site" and site == home for kind, site, _ in resolved):
+        return []
+
+    # Compress into runs and attach the full route to each travel run.
+    dates = [days[j]["date"].isoformat() for j in range(start, end)]
+    segments: list[dict] = []
+    for k, (kind, site, label) in enumerate(resolved):
+        prev = segments[-1] if segments else None
+        if prev and prev["kind"] == kind and prev.get("site") == site and prev.get("label") == label:
+            prev["out"] = (days[start + k]["date"] + timedelta(days=1)).isoformat()
+            continue
+        seg = {"from": dates[k], "out": (days[start + k]["date"] + timedelta(days=1)).isoformat(), "kind": kind}
+        if site:
+            seg["site"] = site
+        if label:
+            seg["label"] = label
+        segments.append(seg)
+    i = 0
+    while i < len(segments):
+        if segments[i]["kind"] != "travel":
+            i += 1
+            continue
+        j = i
+        stops: list[str] = []
+        before = segments[i - 1].get("site") if i > 0 else None
+        if before:
+            stops.append(before)
+        while j < len(segments) and segments[j]["kind"] == "travel":
+            for part in (segments[j].get("label") or "").split("→"):
+                part = part.strip()
+                if part and (not stops or stops[-1] != part):
+                    stops.append(part)
+            j += 1
+        after = segments[j].get("site") if j < len(segments) else None
+        if after and (not stops or stops[-1] != after):
+            stops.append(after)
+        route = " → ".join(stops)
+        for seg in segments[i:j]:
+            seg["route"] = route
+        i = j
+    return segments
 
 
 def longest_white_gap(days: list[dict], after: int, before: int):
@@ -1030,7 +1416,7 @@ def _events_for_stints(events: list[dict], stints: list[dict]) -> list[dict]:
 
 def _warning_stint_dropped(warning: str, stints: list[dict]) -> bool:
     """True when a shaded-run warning no longer matches any kept stint."""
-    # "shaded 2026-09-21 to 2026-09-27 had no typed IN/OUT — counted as on site at POND …"
+    # "shaded 2026-09-21 to 2026-09-27 had no typed IN/OUT, counted as on site at POND …"
     m = re.search(r"shaded (\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})", warning)
     if not m:
         return False
@@ -1246,7 +1632,8 @@ def read_day_notes(path: Path, dates: dict[int, date]) -> list[dict]:
 def extract(path: Path) -> dict:
     import openpyxl
 
-    global SCHEDULE_SHEET
+    global SCHEDULE_SHEET, CORRECTIONS
+    CORRECTIONS = load_corrections()
     wb = openpyxl.load_workbook(path, data_only=True)
     SCHEDULE_SHEET = pick_schedule_sheet(wb)
     ws = wb[SCHEDULE_SHEET]
@@ -1260,7 +1647,7 @@ def extract(path: Path) -> dict:
     dates, last_col = build_calendar(ws, first_day_col)
     cols = sorted(dates)
     if not cols:
-        raise SystemExit("No dated columns found — check month/day header rows.")
+        raise SystemExit("No dated columns found, check month/day header rows.")
 
     last_person = LAST_PERSON_ROW
     # Walk further if more crew rows exist before the project block.
@@ -1301,7 +1688,7 @@ def extract(path: Path) -> dict:
         days = classify_days(ws, row, cols, dates, bridged)
         typed_marks = sum(1 for d in days if d["mark"] and d["mark"][0] != "unknown")
         shaded_days = sum(1 for d in days if d["shaded"] and not d["travel"])
-        # Hidden rows are often "finished" — still import when they have real schedule ink
+        # Hidden rows are often "finished", still import when they have real schedule ink
         # (William Matthews PND→OUT sits on a hidden Managers row).
         if hidden and typed_marks == 0 and shaded_days < 7:
             continue
@@ -1311,6 +1698,29 @@ def extract(path: Path) -> dict:
         )
         if hidden and not stints and not events:
             continue
+        day_index = {d["date"].isoformat(): i for i, d in enumerate(days)}
+        for stint in stints:
+            if stint["from"] >= LITERAL_FROM.isoformat():
+                continue
+            segments = stint_day_segments(days, stint, today_index=day_index)
+            if segments:
+                stint["segments"] = segments
+        stints, events = apply_literal(
+            days, stints, events, home_sites, CORRECTIONS.get(clean(name).lower())
+        )
+        # Old-style guesses no longer apply from LITERAL_FROM; say plainly where the sheet
+        # has shading but no code instead.
+        cut = LITERAL_FROM.isoformat()
+        person_warnings[:] = [
+            w for w in person_warnings
+            if not (re.findall(r"\d{4}-\d{2}-\d{2}", w) and re.findall(r"\d{4}-\d{2}-\d{2}", w)[0] >= cut)
+        ]
+        for stint in stints:
+            if stint.get("unsure"):
+                last = (date.fromisoformat(stint["out"]) - timedelta(days=1)).isoformat() if stint.get("out") else "year end"
+                person_warnings.append(
+                    f"{name}: shaded {stint['from']} to {last} with no site code, shown at {stint['site']} (Location column); please confirm"
+                )
         warnings.extend(person_warnings)
         in_date = iso(as_date(ws.cell(row, in_col).value))
         out_date = iso(as_date(ws.cell(row, out_col).value))
@@ -1319,7 +1729,7 @@ def extract(path: Path) -> dict:
             "name": name,
             "role": role,
             "sheetRow": row,
-            # Excel often hides rows that still have future trips — keep them on the board
+            # Excel often hides rows that still have future trips, keep them on the board
             # whenever we extracted stints/events.
             "active": (not hidden) or bool(stints or events),
             "homeSites": home_sites,
@@ -1350,12 +1760,12 @@ def extract(path: Path) -> dict:
             member["personName"] = schedule_name
             if not member["assignment"]:
                 continue
-            # Housing table is assignment logistics, not a schedule project — skip linking.
+            # Housing table is assignment logistics, not a schedule project, skip linking.
 
     for project in read_project_timeline(ws, dates, bridged, cols):
         projects.setdefault(project["id"], project)
 
-    # Required Staff sheet is a separate planning list — keep schedule projects only.
+    # Required Staff sheet is a separate planning list, keep schedule projects only.
     staffing: list = []
 
     flights = read_flights(wb)

@@ -1,8 +1,9 @@
 "use client";
 
+import { CrewTripForm } from "@/components/crew-trip-form";
 import { useEffect, useMemo, useState } from "react";
 import { BedDouble, PlaneLanding, PlaneTakeoff, X } from "lucide-react";
-import { roleLabel, type CrewPerson } from "@/lib/crew-schedule";
+import { roleLabel, scheduleYearOutExclusive, type CrewPerson } from "@/lib/crew-schedule";
 import {
   daysLeftOnRotation,
   emptyStay,
@@ -19,6 +20,8 @@ import {
   type RotationStay,
   type RotationTravel,
   type TravelDirection,
+  ASSUMED_PNR,
+  travelIsBooked,
 } from "@/lib/crew-rotations";
 import {
   DEFAULT_ROTATION_DAYS,
@@ -26,6 +29,9 @@ import {
   STANDARD_ROTATION_DAYS,
   addNextRotation,
   extendStay,
+  getStayNote,
+  MAX_STAY_NOTE_CHARS,
+  setStayNote,
   type CrewRosterBook,
 } from "@/lib/crew-roster";
 import { type CrewPersonOps } from "@/lib/crew-ops";
@@ -45,7 +51,12 @@ export function CrewRotationDrawer({
   onSaveBook,
   onSaveRoster,
   onPatchOps,
+  roster,
+  openTravel,
 }: {
+  roster?: CrewRosterBook;
+  /** Open straight on the Travel tab for this trip (from the Flights list). */
+  openTravel?: TravelDirection | null;
   rotation: CrewRotation;
   person: CrewPerson;
   people: CrewPerson[];
@@ -62,8 +73,10 @@ export function CrewRotationDrawer({
 }) {
   const siteOptions = sites?.length ? sites.map((row) => row.code) : ["IQA", "POND", "ALRT", "KUG"];
   const [draft, setDraft] = useState(rotation);
-  const [section, setSection] = useState<"overview" | "travel" | "stay" | "replacement">("overview");
-  const [travelDir, setTravelDir] = useState<TravelDirection>("outbound");
+  const [section, setSection] = useState<"overview" | "travel" | "stay" | "replacement">(
+    openTravel ? "travel" : "overview",
+  );
+  const [travelDir, setTravelDir] = useState<TravelDirection>(openTravel || "outbound");
   const [replaceOpen, setReplaceOpen] = useState(false);
   const [extendOut, setExtendOut] = useState(() => inclusiveOut(rotation));
 
@@ -87,7 +100,7 @@ export function CrewRotationDrawer({
   }
 
   function patchStay(patch: Partial<RotationStay>) {
-    // Out is always the place end — check-in/out follow the rotation, change via Extend.
+    // Out is always the place end, check-in/out follow the rotation, change via Extend.
     const { checkIn: _in, checkOut: _out, ...rest } = patch;
     commit({
       ...draft,
@@ -110,7 +123,7 @@ export function CrewRotationDrawer({
               <p className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">Rotation</p>
               <h2 className="mt-1 truncate text-lg font-semibold text-foreground">{person.name}</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                {draft.role} · {draft.site || "—"} · {formatMedium(draft.plannedIn)} → {formatMedium(outInclusive)}
+                {draft.role} · {draft.site || "-"} · {formatMedium(draft.plannedIn)} → {formatMedium(outInclusive)}
               </p>
             </div>
             <button
@@ -155,7 +168,7 @@ export function CrewRotationDrawer({
               <ReadinessStrip readiness={readiness} />
               <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
                 <Fact label="Role" value={draft.role} />
-                <Fact label="Site" value={draft.site || "—"} />
+                <Fact label="Site" value={draft.site || "-"} />
                 <Fact label="Planned IN" value={formatMedium(draft.plannedIn)} />
                 <Fact label="OUT" value={`${formatMedium(outInclusive)} · end of stay`} />
                 <Fact label="Duration" value={`${draft.rotationDays} days`} />
@@ -164,6 +177,13 @@ export function CrewRotationDrawer({
                   value={day > 0 && left >= 0 ? `Day ${day}/${draft.rotationDays} · ${left}d left` : left < 0 ? "Ended" : "Not started"}
                 />
               </dl>
+              <StayNoteField
+                person={person}
+                rotation={draft}
+                asOf={asOf}
+                roster={roster}
+                onSaveRoster={onSaveRoster}
+              />
               <ChecklistHints readiness={readiness} day={day} personOps={personOps} />
             </div>
           ) : null}
@@ -185,7 +205,7 @@ export function CrewRotationDrawer({
                   <span className="min-w-0">
                     <span className="block">Outbound</span>
                     <span className={cn("block text-xs font-normal", travelDir === "outbound" ? "text-primary-foreground/80" : "text-muted-foreground")}>
-                      {draft.outbound.confirmed ? "Booked" : "Not booked"}
+                      {tripLabel(draft.outbound)}
                     </span>
                   </span>
                 </button>
@@ -203,17 +223,17 @@ export function CrewRotationDrawer({
                   <span className="min-w-0">
                     <span className="block">Inbound</span>
                     <span className={cn("block text-xs font-normal", travelDir === "return" ? "text-primary-foreground/80" : "text-muted-foreground")}>
-                      {draft.returnTravel.confirmed ? "Booked" : "Not booked"}
+                      {tripLabel(draft.returnTravel)}
                     </span>
                   </span>
                 </button>
               </div>
               <p className="text-sm text-muted-foreground">
                 {travelDir === "outbound"
-                  ? draft.outbound.bookedOn
+                  ? draft.outbound.bookedOn && travelIsBooked(draft.outbound)
                     ? `Outbound booked on ${formatMedium(draft.outbound.bookedOn)}.`
                     : "Book departure to camp before the stay starts."
-                  : draft.returnTravel.bookedOn
+                  : draft.returnTravel.bookedOn && travelIsBooked(draft.returnTravel)
                     ? `Inbound booked on ${formatMedium(draft.returnTravel.bookedOn)}.`
                     : "Book the return around 4 weeks into the stay."}
               </p>
@@ -241,8 +261,14 @@ export function CrewRotationDrawer({
                   }
                 />
               ) : null}
-              <TravelForm
+              <CrewTripForm
+                key={`${draft.id}-${travelDir}`}
                 value={travelDir === "outbound" ? draft.outbound : draft.returnTravel}
+                direction={travelDir}
+                site={draft.site}
+                travelDate={travelDir === "outbound" ? draft.plannedIn : outInclusive}
+                personId={draft.personId}
+                book={book}
                 onChange={(patch) => patchTravel(travelDir, patch)}
               />
             </div>
@@ -351,7 +377,7 @@ export function CrewRotationDrawer({
                     onClick={() => commit({ ...draft, replacementNeeded: true })}
                     className="mt-3 h-9 rounded-lg border border-input px-3 text-sm font-medium"
                   >
-                    Change — add another person
+                    Change, add another person
                   </button>
                 </div>
               ) : (
@@ -621,91 +647,11 @@ function ReturnWindowEditor({
   );
 }
 
-function TravelForm({
-  value,
-  onChange,
-}: {
-  value: RotationTravel;
-  onChange: (patch: Partial<RotationTravel>) => void;
-}) {
-  return (
-    <div className="grid gap-3">
-      <label className="grid gap-1">
-        <span className="text-muted-foreground">Airline</span>
-        <input
-          value={value.airline}
-          onChange={(event) => onChange({ airline: event.target.value })}
-          className="h-9 rounded-lg border border-input px-2"
-        />
-      </label>
-      <label className="grid gap-1">
-        <span className="text-muted-foreground">Booking reference (PNR)</span>
-        <input
-          value={value.pnr}
-          onChange={(event) => onChange({ pnr: event.target.value })}
-          className="h-9 rounded-lg border border-input px-2"
-          placeholder="ABC123"
-        />
-      </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="grid gap-1">
-          <span className="text-muted-foreground">From</span>
-          <input
-            value={value.fromAirport}
-            onChange={(event) => onChange({ fromAirport: event.target.value.toUpperCase() })}
-            className="h-9 rounded-lg border border-input px-2"
-            placeholder="YEG"
-          />
-        </label>
-        <label className="grid gap-1">
-          <span className="text-muted-foreground">To</span>
-          <input
-            value={value.toAirport}
-            onChange={(event) => onChange({ toAirport: event.target.value.toUpperCase() })}
-            className="h-9 rounded-lg border border-input px-2"
-            placeholder="YFB"
-          />
-        </label>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="grid gap-1">
-          <span className="text-muted-foreground">Depart date</span>
-          <input
-            type="date"
-            value={value.departDate || ""}
-            onChange={(event) => onChange({ departDate: event.target.value || null })}
-            className="h-9 rounded-lg border border-input px-2"
-          />
-        </label>
-        <label className="grid gap-1">
-          <span className="text-muted-foreground">Depart time</span>
-          <input
-            type="time"
-            value={value.departTime}
-            onChange={(event) => onChange({ departTime: event.target.value })}
-            className="h-9 rounded-lg border border-input px-2"
-          />
-        </label>
-      </div>
-      <label className="grid gap-1">
-        <span className="text-muted-foreground">Booked on</span>
-        <input
-          type="date"
-          value={value.bookedOn || ""}
-          onChange={(event) => onChange({ bookedOn: event.target.value || null })}
-          className="h-9 rounded-lg border border-input px-2"
-        />
-      </label>
-      <label className="inline-flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={value.confirmed}
-          onChange={(event) => onChange({ confirmed: event.target.checked })}
-        />
-        <span>Mark flight confirmed</span>
-      </label>
-    </div>
-  );
+/** Short status for a trip: assumed placeholders are not real bookings. */
+function tripLabel(travel: RotationTravel) {
+  if (travel.pnr === ASSUMED_PNR && !travelIsBooked(travel)) return "Not booked (assumed)";
+  if (travel.confirmed) return "Confirmed";
+  return travelIsBooked(travel) ? "Booked" : "Not booked";
 }
 
 function StayForm({
@@ -836,7 +782,7 @@ function ReplacementForm({
         <div className="grid gap-1">
           <span className="text-muted-foreground">Role</span>
           <p className="flex h-9 items-center rounded-lg border border-border bg-muted/40 px-2 text-sm font-medium">
-            {role || "—"}
+            {role || "-"}
           </p>
         </div>
         <label className="grid gap-1">
@@ -894,6 +840,81 @@ function ReplacementForm({
           Create next rotation
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Note on this stay (e.g. "Lingering for snow"). Same note the Month calendar shows across the stay. */
+function StayNoteField({
+  person,
+  rotation,
+  asOf,
+  roster,
+  onSaveRoster,
+}: {
+  person: CrewPerson;
+  rotation: CrewRotation;
+  asOf: string;
+  roster?: CrewRosterBook;
+  onSaveRoster: (recipe: (current: CrewRosterBook) => CrewRosterBook) => void;
+}) {
+  const stint = (person.stints || []).find((row) => row.from === rotation.plannedIn);
+  const from = rotation.plannedIn;
+  const out = stint ? stint.out || scheduleYearOutExclusive(Number(asOf.slice(0, 4))) : rotation.plannedOut;
+  const saved = getStayNote(roster, person.id, from, out);
+  const [text, setText] = useState(saved);
+  const [status, setStatus] = useState<"" | "saved">("");
+
+  useEffect(() => {
+    setText(saved);
+  }, [saved]);
+
+  const dirty = text.trim() !== saved;
+
+  function save() {
+    onSaveRoster((current) => setStayNote(current, person.id, from, out, text));
+    setStatus("saved");
+  }
+
+  return (
+    <div className="space-y-2">
+      <label htmlFor={`stay-note-${rotation.id}`} className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        Note on this stay
+      </label>
+      <div className="flex gap-2">
+        <input
+          id={`stay-note-${rotation.id}`}
+          value={text}
+          maxLength={MAX_STAY_NOTE_CHARS}
+          onChange={(event) => {
+            setText(event.target.value);
+            setStatus("");
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && dirty) {
+              event.preventDefault();
+              save();
+            }
+          }}
+          placeholder="e.g. Lingering for snow"
+          className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-card px-2 text-sm"
+        />
+        <button
+          type="button"
+          onClick={save}
+          disabled={!dirty}
+          className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-40"
+        >
+          Save
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {status === "saved"
+          ? text.trim()
+            ? "Saved. It shows across this stay on the Month calendar."
+            : "Note removed."
+          : "Shows across this stay on the Month calendar."}
+      </p>
     </div>
   );
 }
