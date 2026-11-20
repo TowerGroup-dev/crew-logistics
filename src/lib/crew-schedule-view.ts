@@ -49,8 +49,8 @@ function readPrefs(raw: unknown): CrewScheduleViewPrefs {
   const ids = Array.isArray(data.hiddenPersonIds)
     ? data.hiddenPersonIds.filter((id): id is string => typeof id === "string" && id.length > 0)
     : [];
-  const calendarMode: CalendarInteractionMode =
-    data.calendarMode === "edit" || data.calendarMode === "view" ? data.calendarMode : "view";
+  // The calendar always opens in View (no accidental edits); Edit lasts until the page is reloaded.
+  const calendarMode: CalendarInteractionMode = "view";
   const roleMemberships: Record<string, string[]> = {};
   if (data.roleMemberships && typeof data.roleMemberships === "object") {
     for (const [personId, roles] of Object.entries(data.roleMemberships as Record<string, unknown>)) {

@@ -244,10 +244,10 @@ export function CrewRotationDrawer({
                 >
                   <Repeat className="size-4 shrink-0" />
                   <span className="min-w-0">
-                    <span className="block">Moves</span>
+                    <span className="block">Site transfers</span>
                     <span className={cn("block text-xs font-normal", travelDir === "moves" ? "text-primary-foreground/80" : "text-muted-foreground")}>
                       {(draft.moves?.length ?? 0) + suggestedMoves.length
-                        ? `${(draft.moves?.length ?? 0) + suggestedMoves.length} between sites`
+                        ? `${(draft.moves?.length ?? 0) + suggestedMoves.length} planned`
                         : "None"}
                     </span>
                   </span>
@@ -768,7 +768,7 @@ function MovesPanel({
   return (
     <div className="space-y-3 text-sm">
       <p className="text-muted-foreground">
-        Flights between sites up north during this stay, like Iqaluit to Pond. Book each one like any trip.
+        Travel from one site to another during this stay, like Iqaluit to Pond. Book each one like any trip.
       </p>
 
       {suggested.map((row) => (
@@ -841,7 +841,7 @@ function MovesPanel({
                   onClick={() => onChange(moves.filter((row) => row.id !== move.id))}
                   className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-input text-xs text-rose-700 hover:bg-rose-50"
                 >
-                  <Trash2 className="size-3.5" /> Remove this move
+                  <Trash2 className="size-3.5" /> Remove this transfer
                 </button>
               </div>
             ) : null}
@@ -892,7 +892,7 @@ function MovesPanel({
               }}
               className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-40"
             >
-              Add move
+              Add transfer
             </button>
             <button type="button" onClick={() => setAdding(false)} className="h-9 rounded-lg border border-input px-3 text-sm">
               Cancel
@@ -905,7 +905,7 @@ function MovesPanel({
           onClick={() => setAdding(true)}
           className="inline-flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-input text-sm font-medium hover:bg-muted"
         >
-          <Plus className="size-4" /> Add a move between sites
+          <Plus className="size-4" /> Add a site transfer
         </button>
       )}
     </div>

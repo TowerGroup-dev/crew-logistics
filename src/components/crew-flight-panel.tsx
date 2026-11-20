@@ -448,12 +448,12 @@ function FlightConfirmationForm({
               onClick={() => applyUsualRoute()}
               className="h-8 rounded-lg bg-sky-700 px-3 text-xs font-semibold text-white hover:opacity-90"
             >
-              {segmentsBlank ? "Fill legs" : "Replace legs with usual route"}
+              {segmentsBlank ? "Fill itinerary" : "Replace itinerary with usual route"}
             </button>
           </div>
         ) : (
           <p className="mt-2 text-xs text-muted-foreground">
-            Pick both ends to fill the legs from the usual route (Settings → Usual routes).
+            Pick both ends to fill the itinerary from the usual route (Settings → Usual routes).
           </p>
         )}
       </div>

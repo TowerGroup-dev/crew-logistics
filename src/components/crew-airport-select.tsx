@@ -29,6 +29,7 @@ export function AirportSelect({
   className,
   id,
   ariaLabel,
+  suggested = [],
 }: {
   value: string;
   onChange: (code: string) => void;
@@ -37,6 +38,8 @@ export function AirportSelect({
   className?: string;
   id?: string;
   ariaLabel?: string;
+  /** Likely places, shown first (e.g. where people usually go next from the last stop). */
+  suggested?: { code: string; uses?: number; why?: string }[];
 }) {
   const code = value.trim().toUpperCase();
   const known = [...CAMP_AIRPORTS, ...hubs].some((row) => row.code === code);
@@ -49,6 +52,21 @@ export function AirportSelect({
       className={cn("h-9 w-full min-w-0 rounded-lg border border-input bg-card px-2", !code && "text-muted-foreground", className)}
     >
       <option value="">{placeholder}</option>
+      {suggested.length ? (
+        <optgroup label="Suggested">
+          {suggested.map((row) => {
+            const name = [...CAMP_AIRPORTS, ...hubs].find((place) => place.code === row.code)?.name;
+            const note = row.why || (row.uses ? `used ${row.uses}×` : "");
+            return (
+              <option key={`s-${row.code}`} value={row.code}>
+                {row.code}
+                {name ? ` · ${name}` : ""}
+                {note ? ` (${note})` : ""}
+              </option>
+            );
+          })}
+        </optgroup>
+      ) : null}
       <optgroup label="Sites">
         {CAMP_AIRPORTS.map((row) => (
           <option key={row.code} value={row.code}>

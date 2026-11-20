@@ -8,6 +8,7 @@ import { emptyHotel, emptySegment, type FlightHotel, type FlightSegment } from "
 import {
   legsForRoute,
   loadRoutes,
+  placeLinks,
   routeAirports,
   routeBetweenSites,
   suggestRoutes,
@@ -133,6 +134,26 @@ export function CrewTripForm({
     [book, tripEnds.from, tripEnds.to, chain.join(">")],
   );
 
+  // Likely places for each leg's From / To, from every trip on file.
+  const links = useMemo(() => placeLinks(pastTrips(book), EXCEL_ROUTES), [book]);
+  function placeHints(index: number, end: "from" | "to") {
+    const leg = legs[index]!;
+    const hints: { code: string; uses?: number; why?: string }[] = [];
+    const push = (row: { code: string; uses?: number; why?: string }) => {
+      if (row.code && !hints.some((hint) => hint.code === row.code)) hints.push(row);
+    };
+    if (end === "from") {
+      const before = legs[index - 1]?.toAirport;
+      if (before) push({ code: before, why: "last stop" });
+      else if (tripEnds.from) push({ code: tripEnds.from, why: "start" });
+      if (leg.toAirport) links.before(leg.toAirport).forEach(push);
+    } else {
+      if (tripEnds.to && tripEnds.to !== leg.fromAirport) push({ code: tripEnds.to, why: "destination" });
+      if (leg.fromAirport) links.after(leg.fromAirport).filter((row) => row.code !== leg.fromAirport).forEach(push);
+    }
+    return hints.slice(0, 6);
+  }
+
   function applySuggestion(suggestion: RouteSuggestion) {
     const next = legsForRoute(suggestion.airports, travelDate).map((leg, index) => ({
       ...leg,
@@ -218,7 +239,7 @@ export function CrewTripForm({
         {suggestions.length ? (
           <div className="mt-3 space-y-1.5">
             <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Suggested routes {legs.length ? "(click to replace the legs)" : "(click to fill the legs)"}
+              Suggested routes {legs.length ? "(click to replace the itinerary)" : "(click to fill the itinerary)"}
             </p>
             {suggestions.map((suggestion) => (
               <button
@@ -264,7 +285,7 @@ export function CrewTripForm({
 
       <section className="grid gap-2">
         <div className="flex items-center justify-between">
-          <p className="font-semibold">Legs</p>
+          <p className="font-semibold">Itinerary</p>
           <div className="flex gap-1.5">
             {(["flight", "road"] as const).map((mode) => (
               <button
@@ -292,7 +313,7 @@ export function CrewTripForm({
         </div>
         {legs.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-            No legs yet. Pick the route above, or add a flight or a drive.
+            The itinerary is empty. Pick a suggested route above, or add a flight or a drive.
           </p>
         ) : (
           legs.map((leg, index) => (
@@ -304,8 +325,8 @@ export function CrewTripForm({
               )}
             >
               <div className="col-span-2 flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Leg {index + 1}</span>
-                <div className="inline-flex rounded-lg border border-input bg-card p-0.5" role="group" aria-label={`Leg ${index + 1} by`}>
+                <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Step {index + 1}</span>
+                <div className="inline-flex rounded-lg border border-input bg-card p-0.5" role="group" aria-label={`Step ${index + 1} by`}>
                   {(["flight", "road"] as const).map((mode) => {
                     const active = (leg.mode ?? "flight") === mode;
                     return (
@@ -330,14 +351,16 @@ export function CrewTripForm({
                 value={leg.fromAirport}
                 hubs={hubs}
                 placeholder="From"
-                ariaLabel={`Flight ${index + 1} from`}
+                suggested={placeHints(index, "from")}
+                ariaLabel={`Step ${index + 1} from`}
                 onChange={(code) => patchLeg(index, { fromAirport: code })}
               />
               <AirportSelect
                 value={leg.toAirport}
                 hubs={hubs}
                 placeholder="To"
-                ariaLabel={`Flight ${index + 1} to`}
+                suggested={placeHints(index, "to")}
+                ariaLabel={`Step ${index + 1} to`}
                 onChange={(code) => {
                   const next = legs.map((row, i) =>
                     i === index ? { ...row, toAirport: code } : i === index + 1 && !row.fromAirport ? { ...row, fromAirport: code } : row,
@@ -405,7 +428,7 @@ export function CrewTripForm({
                 onClick={() => setLegs(legs.filter((_, i) => i !== index))}
                 className="col-span-2 inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-input text-xs text-rose-700 hover:bg-rose-50"
               >
-                <Trash2 className="size-3.5" /> Remove leg
+                <Trash2 className="size-3.5" /> Remove from itinerary
               </button>
             </div>
           ))

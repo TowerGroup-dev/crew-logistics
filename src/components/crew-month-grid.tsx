@@ -687,7 +687,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onMoveSite?: (personId: string, iso: string, toSite: string | null) => void;
   /** The move that starts on this day, if any. */
   moveOnDay?: (personId: string, iso: string) => { fromSite: string; toSite: string } | null;
-  /** Open the stay on Travel → Moves to book the flight. */
+  /** Open the stay on Travel → Site transfers to book the travel. */
   onBookMove?: (personId: string, iso: string) => void;
   /** Delete an app-painted placement (NAV-07). */
   onRemoveRotation?: (personId: string, planId: string) => void;
@@ -1655,7 +1655,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold transition-colors",
                 paintBrush.kind === "travel"
-                  ? "border-transparent bg-stone-500 text-white ring-2 ring-inset ring-black/10"
+                  ? "border-stone-400 bg-stone-200 text-stone-900 ring-2 ring-inset ring-stone-400/40"
                   : "border-border bg-card text-muted-foreground hover:bg-muted",
               )}
             >
@@ -2251,7 +2251,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                   {startsHere ? (
                     <div className="mb-2 space-y-1">
                       <p className="text-sm font-semibold">
-                        Moves {startsHere.fromSite} → {startsHere.toSite} today
+                        Site transfer {startsHere.fromSite} → {startsHere.toSite} today
                       </p>
                       <div className="flex gap-1.5">
                         {onBookMove ? (
@@ -2264,7 +2264,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                               setCellMenu(null);
                             }}
                           >
-                            Book the flight
+                            Book the travel
                           </button>
                         ) : null}
                         <button
@@ -2274,15 +2274,15 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                           onClick={() => {
                             onMoveSite(cellMenu.personId, cellMenu.iso, null);
                             setCellMenu(null);
-                            showFlash("Move removed");
+                            showFlash("Site transfer removed");
                           }}
                         >
-                          Undo move
+                          Undo transfer
                         </button>
                       </div>
                     </div>
                   ) : null}
-                  <p className="pb-1 text-xs text-muted-foreground">Move to another site from this day</p>
+                  <p className="pb-1 text-xs text-muted-foreground">Transfer to another site from this day</p>
                   <div className="flex flex-wrap gap-1.5">
                     {siteList
                       .filter((row) => row.code !== here)

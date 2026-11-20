@@ -218,7 +218,7 @@ export function CrewTravelDesk({
             <Plane className="size-5 text-primary" /> Travel to book
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Everyone travelling in, home or between sites (by air or road), in date order. Open a name to plan the legs,
+            Everyone travelling in, home or between sites (by air or road), in date order. Open a name to plan the itinerary,
             stopovers, hotel and car service.
           </p>
         </div>
@@ -310,7 +310,7 @@ export function CrewTravelDesk({
                           ? `IN to ${trip.site}`
                           : trip.kind === "home"
                             ? `OUT from ${trip.site}`
-                            : `Move ${trip.fromSite} → ${trip.site}`}
+                            : `Transfer ${trip.fromSite} → ${trip.site}`}
                       </span>
                       <p className="text-xs text-muted-foreground">{trip.site ? siteLabel(trip.site) : ""}</p>
                     </td>

@@ -20,7 +20,7 @@ const STORAGE_KEY = "tower-arctic-crew-travel-hubs-v1";
 export const DEFAULT_TRAVEL_HUBS: TravelHub[] = [
   { code: "YOW", name: "Ottawa" },
   { code: "YYZ", name: "Toronto" },
-  { code: "YUL", name: "Dorval" },
+  { code: "YUL", name: "Montreal" },
   { code: "YVR", name: "Vancouver" },
   { code: "YEG", name: "Edmonton" },
   { code: "CAM", name: "Campbell" },
@@ -57,7 +57,9 @@ function readHub(raw: unknown): TravelHub | null {
   const row = raw as Record<string, unknown>;
   const code = typeof row.code === "string" ? row.code.trim().toUpperCase() : "";
   if (!/^[A-Z0-9]{2,8}$/.test(code)) return null;
-  const name = typeof row.name === "string" && row.name.trim() ? row.name.trim() : code;
+  let name = typeof row.name === "string" && row.name.trim() ? row.name.trim() : code;
+  // YUL was saved as "Dorval" before; the office calls it Montreal.
+  if (code === "YUL" && name === "Dorval") name = "Montreal";
   return { code, name };
 }
 

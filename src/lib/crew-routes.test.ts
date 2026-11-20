@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyRoutesBook, flightPlaceOnDay, legsForRoute, readRoutesBook, routeAirports, routeBetweenSites, setRouteVia, suggestRoutes, tripPlan } from "./crew-routes";
+import { emptyRoutesBook, flightPlaceOnDay, legsForRoute, readRoutesBook, routeAirports, routeBetweenSites, placeLinks, setRouteVia, suggestRoutes, tripPlan } from "./crew-routes";
 import type { FlightSegment } from "./crew-flights";
 import { applyRotationMoves, dropAssumedFlights, emptyTravel, newMove, type RotationBook, type RotationMove } from "./crew-rotations";
 import { siteOnDay, travelSegmentOnDay } from "./crew-site-days";
@@ -179,5 +179,13 @@ describe("route suggestions", () => {
   it("uses part of a longer journey", () => {
     const out = suggestRoutes({ from: "IQA", to: "POND", trips: [], routeTexts: ["YOW → IQA → POND"] });
     expect(out[0]!.airports).toEqual(["IQA", "POND"]);
+  });
+});
+
+describe("place suggestions for legs", () => {
+  it("lists where people usually go next from a stop, and where they came from", () => {
+    const links = placeLinks([], ["KUG → YK → IQA", "KUG → YK → IQA", "KUG → YK → YEG"]);
+    expect(links.after("YK")).toEqual([{ code: "IQA", uses: 2 }, { code: "YEG", uses: 1 }]);
+    expect(links.before("YK")).toEqual([{ code: "KUG", uses: 3 }]);
   });
 });

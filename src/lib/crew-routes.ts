@@ -210,12 +210,12 @@ export function tripPlan(
       arriveTime: row.arriveTime,
       ref: row.flightNumber,
     });
-    if (!row.departDate) warnings.push(`Leg ${i + 1} (${row.fromAirport || "?"} → ${row.toAirport || "?"}) has no date`);
-    if (!row.fromAirport || !row.toAirport) warnings.push(`Leg ${i + 1} is missing where it starts or ends`);
+    if (!row.departDate) warnings.push(`Step ${i + 1} (${row.fromAirport || "?"} → ${row.toAirport || "?"}) has no date`);
+    if (!row.fromAirport || !row.toAirport) warnings.push(`Step ${i + 1} is missing where it starts or ends`);
     const next = sorted[i + 1]?.row;
     if (!next) return;
     if (row.toAirport && next.fromAirport && row.toAirport !== next.fromAirport) {
-      warnings.push(`Leg ${i + 1} ends at ${row.toAirport} but the next leaves from ${next.fromAirport}`);
+      warnings.push(`Step ${i + 1} ends at ${row.toAirport} but the next leaves from ${next.fromAirport}`);
     }
     const landed = row.arriveDate || row.departDate;
     if (landed && next.departDate && next.departDate > landed) {
@@ -297,4 +297,38 @@ export function suggestRoutes(input: {
     list.push({ airports: [from, to], modes: ["flight"], uses: 0, usual: false });
   }
   return list.slice(0, input.limit ?? 5);
+}
+
+/** Which places usually follow (and come before) each place, from every trip on file. */
+export function placeLinks(trips: FlightSegment[][], routeTexts: string[] = []) {
+  const next = new Map<string, Map<string, number>>();
+  const prev = new Map<string, Map<string, number>>();
+  const link = (a: string, b: string) => {
+    if (!a || !b || a === b) return;
+    const out = next.get(a) ?? new Map<string, number>();
+    out.set(b, (out.get(b) ?? 0) + 1);
+    next.set(a, out);
+    const back = prev.get(b) ?? new Map<string, number>();
+    back.set(a, (back.get(a) ?? 0) + 1);
+    prev.set(b, back);
+  };
+  for (const legs of trips) for (const leg of legs) link(leg.fromAirport.toUpperCase(), leg.toAirport.toUpperCase());
+  for (const text of routeTexts) {
+    const codes = text
+      .split(/→|->|>/)
+      .map((part) => part.trim().toUpperCase())
+      .filter((code) => CODE.test(code));
+    for (let i = 1; i < codes.length; i += 1) link(codes[i - 1]!, codes[i]!);
+  }
+  const top = (map: Map<string, Map<string, number>>, code: string, limit = 5) =>
+    [...(map.get(code.toUpperCase())?.entries() ?? [])]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([place, uses]) => ({ code: place, uses }));
+  return {
+    /** Where people went next from `code`, most used first. */
+    after: (code: string, limit?: number) => top(next, code, limit),
+    /** Where people came from before `code`. */
+    before: (code: string, limit?: number) => top(prev, code, limit),
+  };
 }

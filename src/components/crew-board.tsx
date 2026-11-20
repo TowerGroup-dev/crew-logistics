@@ -537,6 +537,13 @@ export function CrewBoard({
     saveRotations(next);
   }
 
+  // Opening the Calendar always starts in View (Edit is a deliberate click each time).
+  useEffect(() => {
+    if (boardView === "month" || boardView === "year" || boardView === "list") {
+      setScheduleView((current) => setCalendarMode(current, "view"));
+    }
+  }, [boardView]);
+
   // Someone on another computer saved: reload just the books that changed.
   useEffect(() => {
     function onShared(event: Event) {
