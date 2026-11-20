@@ -34,4 +34,6 @@ export type SharedDoc = {
   /** Who saved last, and when (ISO). */
   by: string;
   at: string;
+  /** Set when a fresh copy of live data was pulled down (npm run data:pull): browsers take it as is. */
+  resetAt?: string;
 };

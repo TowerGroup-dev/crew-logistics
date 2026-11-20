@@ -14,7 +14,10 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:report": "playwright show-report tests/report"
+    "test:e2e:report": "playwright show-report tests/report",
+    "data:pull": "node scripts/live-data.mjs pull",
+    "data:push": "node scripts/live-data.mjs push",
+    "data:status": "node scripts/live-data.mjs status"
   },
   "dependencies": {
     "clsx": "^2.1.1",

@@ -63,10 +63,25 @@ function revOf(key: SharedKey) {
 function remember(key: SharedKey, doc: SharedDoc) {
   rawSet(`${META}base:${key}`, JSON.stringify(doc.value));
   rawSet(`${META}rev:${key}`, String(doc.rev));
+  if (doc.resetAt) rawSet(`${META}reset:${key}`, doc.resetAt);
   if (!status.lastAt || doc.at > status.lastAt) setStatus({ lastBy: doc.by, lastAt: doc.at });
 }
 function writeLocal(key: SharedKey, value: unknown) {
-  rawSet(key, JSON.stringify(value));
+  if (value === null || value === undefined) rawRemove(key);
+  else rawSet(key, JSON.stringify(value));
+}
+
+/** A fresh copy of live data was pulled down since this browser last looked: take it as is. */
+function isNewReset(key: SharedKey, doc: SharedDoc) {
+  return Boolean(doc.resetAt && doc.resetAt !== localStorage.getItem(`${META}reset:${key}`));
+}
+
+function takeAsIs(key: SharedKey, doc: SharedDoc) {
+  clearTimeout(timers.get(key));
+  dirty.delete(key);
+  saveDirty();
+  writeLocal(key, doc.value);
+  remember(key, doc);
 }
 
 function same(a: unknown, b: unknown) {
@@ -181,6 +196,11 @@ async function pull() {
     for (const key of SHARED_KEYS) {
       const doc = docs[key];
       if (!doc || doc.rev <= revOf(key)) continue;
+      if (isNewReset(key, doc)) {
+        takeAsIs(key, doc);
+        changed.push(key);
+        continue;
+      }
       if (dirty.has(key) || inFlight.has(key)) continue; // Our push will merge with it.
       const local = readJson(key);
       const merged = local === undefined ? doc.value : merge3(baseOf(key), local, doc.value);
@@ -230,6 +250,10 @@ export function startSync(): Promise<void> {
         const local = readJson(key);
         if (!doc) {
           if (local !== undefined) markDirty(key); // First person to share this data.
+          continue;
+        }
+        if (isNewReset(key, doc)) {
+          takeAsIs(key, doc);
           continue;
         }
         const base = baseOf(key);

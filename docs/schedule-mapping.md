@@ -1,3 +1,5 @@
+> **Retired (20 Nov 2026):** the Excel is no longer read. The import scripts moved to `scripts/retired/`. Everything is now changed in the app; see `docs/working-with-data.md`.
+
 # Crew schedule → app mapping
 
 How the **"Crew - Schedule - 2026"** sheet in `2026_ Crew Schedules (Master).xlsm` works, and where each
