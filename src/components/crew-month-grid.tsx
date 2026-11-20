@@ -281,7 +281,7 @@ function overlapMessage(person: CrewPerson, from: string, to: string) {
   return null;
 }
 
-type DragMode = "place" | "clear" | "open" | "extend";
+type DragMode = "place" | "clear" | "open" | "extend" | "moveIn";
 
 function stintCovering(person: CrewPerson, iso: string) {
   const seasonExclusive = scheduleYearOutExclusive(Number(iso.slice(0, 4)));
@@ -346,7 +346,7 @@ const MonthRow = memo(function MonthRow({
 }: {
   person: CrewPerson;
   opsEntry: CrewPersonOps | undefined;
-  draft: { personId: string; start: string; end: string; mode: DragMode } | null;
+  draft: { personId: string; start: string; end: string; mode: DragMode; stayFrom?: string } | null;
   staySelection: StaySelection | null;
   stopoverBook: CrewStopoverBook | undefined;
   flightBook: FlightBook | undefined;
@@ -452,7 +452,11 @@ const MonthRow = memo(function MonthRow({
         // Yellow only on stay days; white (away) days stay white.
         const returnWindow = Boolean(site) && showReturnWindow(ops, iso);
         const placePreview = inDraft && draftMode === "place";
-        const extendPreview = inDraft && draftMode === "extend";
+        const stayDrag = draftMode === "extend" || draftMode === "moveIn";
+        const extendPreview = inDraft && stayDrag;
+        // Days this drag takes off the stay: faded until you let go.
+        const trimPreview =
+          !inDraft && stayDrag && Boolean(site) && Boolean(covering && draft?.stayFrom && covering.from === draft.stayFrom);
         const paintPreview = placePreview || extendPreview;
         const staySelected = Boolean(
           staySelection &&
@@ -493,6 +497,7 @@ const MonthRow = memo(function MonthRow({
           <div
             key={`${person.id}-${iso}`}
             role="button"
+            data-iso={iso}
             tabIndex={0}
             title={
               flight
@@ -552,6 +557,7 @@ const MonthRow = memo(function MonthRow({
                 paintBrush.kind === "travel" &&
                 "bg-stone-500/55 text-white ring-1 ring-inset ring-stone-700/50",
               extendPreview && "bg-emerald-500/40 text-emerald-950 ring-1 ring-inset ring-emerald-600/40",
+              trimPreview && "opacity-25",
               staySelected && "ring-2 ring-inset ring-stone-900/70",
             )}
           >
@@ -632,6 +638,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onPaintStopovers,
   onAddRotation,
   onExtendStay,
+  onMoveStayIn,
   onMoveSite,
   moveOnDay,
   onBookMove,
@@ -683,6 +690,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onAddRotation: (personId: string, input: PlaceRotationInput) => string | void;
   /** Extend or shorten a stay's exclusive OUT (sheet + app). */
   onExtendStay?: (personId: string, stintFrom: string, newOut: string) => void;
+  /** Drag the first box of a stay: start it earlier or later. */
+  onMoveStayIn?: (personId: string, stintFrom: string, newFrom: string) => void;
   /** Move to another site from this day, during the stay (null = undo the move starting that day). */
   onMoveSite?: (personId: string, iso: string, toSite: string | null) => void;
   /** The move that starts on this day, if any. */
@@ -751,12 +760,14 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     end: string;
     mode: DragMode;
     moved: boolean;
+    stayFrom?: string;
   } | null>(null);
   const [draft, setDraft] = useState<{
     personId: string;
     start: string;
     end: string;
     mode: DragMode;
+    stayFrom?: string;
   } | null>(null);
   const [staySelection, setStaySelection] = useState<StaySelection | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
@@ -1394,12 +1405,22 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       const person = peopleById.get(active.personId);
       const stint = person ? stintCovering(person, active.anchor) : null;
       if (!stint || !onExtendStay) return;
-      const painted = orderedRange(active.start, active.end);
-      const lastInclusive = clampPlaceRange(stint.from, painted.to).to;
-      const newOut = addDays(lastInclusive, 1);
-      if (!stint.out || newOut > stint.out) {
+      const newOut = addDays(active.end, 1);
+      const oldOut = stint.out || addDays(scheduleYearLastDay(year), 1);
+      if (newOut !== oldOut) {
         onExtendStay(active.personId, stint.from, newOut);
-        showFlash(`Extended stay · out ${formatMedium(addDays(newOut, -1))}`);
+        showFlash(`${newOut > oldOut ? "Longer" : "Shorter"} stay · last day ${formatMedium(active.end)}`);
+      }
+      return;
+    }
+
+    if (active.mode === "moveIn") {
+      const person = peopleById.get(active.personId);
+      const stint = person ? stintCovering(person, active.anchor) : null;
+      if (!stint || !onMoveStayIn) return;
+      if (active.start !== stint.from) {
+        onMoveStayIn(active.personId, stint.from, active.start);
+        showFlash(`Stay starts ${formatMedium(active.start)}`);
       }
       return;
     }
@@ -1534,33 +1555,56 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     const active = dragRef.current;
     if (!active || active.personId !== personId || active.mode === "clear") return;
 
-    // Stay drag = extend stay (past OUT). Yellow return window is right-click only.
-    if (active.mode === "open" || active.mode === "extend") {
+    // Stay drag: grab the first box to move the IN, anywhere else to move the OUT.
+    // Both go either way (earlier or later). Yellow return window is right-click only.
+    if (active.mode === "open" || active.mode === "extend" || active.mode === "moveIn") {
       const person = peopleById.get(personId);
       const stint = person ? stintCovering(person, active.anchor) : null;
-      if (!stint || !onExtendStay) {
+      if (iso === active.anchor && active.mode === "open") return;
+      const currentLast = stint ? (stint.out ? addDays(stint.out, -1) : scheduleYearLastDay(year)) : "";
+      const grabIn =
+        active.mode === "moveIn" || (active.mode === "open" && Boolean(stint) && active.anchor === stint!.from && currentLast !== stint!.from);
+      if (!stint || (grabIn ? !onMoveStayIn : !onExtendStay)) {
         dragRef.current = { ...active, moved: true };
         return;
       }
-      const currentLast = stint.out ? addDays(stint.out, -1) : scheduleYearLastDay(year);
-      let end = currentLast;
-      if (stint.out && iso >= stint.out) {
-        end = addDays(stint.out, -1);
-        for (let d = stint.out; d <= iso; d = addDays(d, 1)) {
-          if (siteOnDay(person!, d)) break;
-          end = d;
+      if (grabIn) {
+        let start = iso > currentLast ? currentLast : iso;
+        if (start < stint.from) {
+          // Earlier: stop at the day after the previous stay.
+          let ok = stint.from;
+          for (let d = addDays(stint.from, -1); d >= start; d = addDays(d, -1)) {
+            if (siteOnDay(person!, d)) break;
+            ok = d;
+          }
+          start = ok;
         }
+        dragRef.current = { personId, anchor: active.anchor, start, end: currentLast, mode: "moveIn", moved: true, stayFrom: stint.from };
+        setDraft({ personId, start, end: currentLast, mode: "moveIn", stayFrom: stint.from });
+        autoScrollToward(iso);
+        return;
       }
-      const range = clampPlaceRange(stint.from, end);
+      let end = iso < stint.from ? stint.from : iso;
+      if (end > currentLast) {
+        // Later: stop before the next stay.
+        let ok = currentLast;
+        for (let d = addDays(currentLast, 1); d <= end; d = addDays(d, 1)) {
+          if (siteOnDay(person!, d) && !(stint.from <= d && (!stint.out || d < stint.out))) break;
+          ok = d;
+        }
+        end = ok;
+      }
+      end = clampPlaceRange(stint.from, end).to;
       dragRef.current = {
         personId,
         anchor: active.anchor,
         start: stint.from,
-        end: range.to,
+        end,
         mode: "extend",
         moved: true,
+        stayFrom: stint.from,
       };
-      setDraft({ personId, start: stint.from, end: range.to, mode: "extend" });
+      setDraft({ personId, start: stint.from, end, mode: "extend", stayFrom: stint.from });
       autoScrollToward(iso);
       return;
     }
@@ -1593,7 +1637,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   }
 
   const draftDays =
-    draft && (draft.mode === "place" || draft.mode === "extend")
+    draft && (draft.mode === "place" || draft.mode === "extend" || draft.mode === "moveIn")
       ? daysBetween(orderedRange(draft.start, draft.end).from, orderedRange(draft.start, draft.end).to) + 1
       : null;
 

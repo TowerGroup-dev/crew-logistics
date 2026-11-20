@@ -67,6 +67,8 @@ export type CrewEvent = {
  * ("shading-ended" / "travel-cell"), or nothing yet ("open").
  */
 export type CrewStint = {
+  /** First start date when the IN has been dragged (bookings, notes and ids follow it). */
+  idFrom?: string;
   site: string;
   sites: string[];
   from: string;

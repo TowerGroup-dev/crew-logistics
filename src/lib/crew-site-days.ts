@@ -21,15 +21,18 @@ export function siteOnDay(person: CrewPerson, iso: string) {
     if (stint.from <= iso && iso < out) {
       const segment = segmentOn(stint.segments, iso);
       if (segment) return segment.kind === "site" ? worksiteFromMark(segment.site || "") || null : null;
-      // Open stay (no OUT yet) past its last known piece: still at the last site they were at.
+      // Past its last known piece (open stay, or a stay dragged longer): still at the last site they were at.
       const lastPiece = stint.segments?.length ? stint.segments[stint.segments.length - 1] : null;
-      if (!stint.out && lastPiece && iso >= lastPiece.out && lastPiece.kind === "site") {
-        return worksiteFromMark(lastPiece.site || "") || null;
+      const lastSite = [...(stint.segments || [])].reverse().find((piece) => piece.kind === "site");
+      if (lastPiece && lastSite && iso >= lastPiece.out) {
+        return worksiteFromMark(lastSite.site || "") || null;
       }
       const site = worksiteFromMark(stint.site) || stint.sites.map(worksiteFromMark).find(Boolean);
       return site || null;
     }
   }
+  // People with stays: the stays are the truth (a stay dragged shorter really ends).
+  if (person.stints?.length) return null;
   const mark = statusOnDate(person, iso);
   if (!mark || isOffRotation(mark)) return null;
   if (iso > scheduleYearLastDay(Number(iso.slice(0, 4)))) return null;

@@ -189,3 +189,20 @@ describe("place suggestions for legs", () => {
     expect(links.before("YK")).toEqual([{ code: "KUG", uses: 3 }]);
   });
 });
+
+describe("dragging a stay's dates", async () => {
+  const roster = await import("./crew-roster");
+  it("moves the IN of an imported stay and keeps its OUT, ids and notes", () => {
+    let book = roster.emptyRoster();
+    book = roster.setStayNote(book, "p1", "2026-11-01", "2026-12-01", "Lingering for snow");
+    book = roster.setStayIn(book, "p1", "2026-11-01", "2026-10-28");
+    expect(book.stintInOverrides["p1:2026-11-01"]).toBe("2026-10-28");
+    // OUT after the IN moved is still saved on the original start.
+    book = roster.setStayOut(book, "p1", "2026-10-28", "2026-11-25");
+    expect(book.stintOutOverrides["p1:2026-11-01"]).toBe("2026-11-25");
+    expect(roster.getStayNote(book, "p1", "2026-10-28", "2026-11-25")).toBe("Lingering for snow");
+    // Back to where it was: the override goes away.
+    book = roster.setStayIn(book, "p1", "2026-10-28", "2026-11-01");
+    expect(book.stintInOverrides["p1:2026-11-01"]).toBeUndefined();
+  });
+});

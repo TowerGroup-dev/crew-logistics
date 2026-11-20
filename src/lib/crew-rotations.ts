@@ -344,7 +344,9 @@ function stintToSeed(person: CrewPerson, stint: CrewStint): CrewRotation {
   const site = stint.site || stint.sites[0] || "";
   const role = stint.role || person.role;
   const source = stint.arrival === "app" ? "app" : "sheet";
-  const id = source === "app" ? appRotationId(person.id, from) : sheetRotationId(person.id, from);
+  // Ids follow the stay's first start, so dragging its IN keeps bookings, transfers and to-dos.
+  const idFrom = stint.idFrom ?? from;
+  const id = source === "app" ? appRotationId(person.id, idFrom) : sheetRotationId(person.id, idFrom);
   return {
     id,
     personId: person.id,
@@ -625,7 +627,8 @@ export function extendRotationOut(book: RotationBook, rotationId: string, newOut
   if (!rotation) return book;
   const out = newOutExclusive.slice(0, 10);
   if (!out || out <= rotation.plannedIn) return book;
-  if (rotation.plannedOut >= out) return book;
+  // Shortening is allowed too (drag the OUT earlier).
+  if (rotation.plannedOut === out) return book;
   const endInclusive = addDays(out, -1);
   return upsertRotation(book, {
     ...rotation,
@@ -973,7 +976,8 @@ export function applyRotationMoves(people: CrewPerson[], book: RotationBook): Cr
   return people.map((person) => {
     let changed = false;
     const stints = (person.stints || []).map((stint) => {
-      const moves = byStay.get(`${person.id}|${stint.from}`);
+      // The stay's IN may have been dragged: its transfers stay on its first start.
+      const moves = byStay.get(`${person.id}|${stint.from}`) ?? (stint.idFrom ? byStay.get(`${person.id}|${stint.idFrom}`) : undefined);
       if (!moves?.length) return stint;
       const rewritten = rewriteStint(stint, moves);
       if (rewritten !== stint) changed = true;

@@ -62,6 +62,7 @@ import {
   setEmploymentStatus,
   setRotationPlanNote,
   setStayNote,
+  setStayIn,
   setStayOut,
   slugEmployee,
   upsertEmployeeProfile,
@@ -1173,8 +1174,8 @@ export function CrewBoard({
                 patchRoster((current) => setStayOut(current, personId, stintFrom, newOut));
                 setRotationBook((current) => {
                   const hit = current.rotations.find(
-                    (row) => row.personId === personId && row.plannedIn === stintFrom,
-                  );
+                    (row) => row.personId === personId && row.plannedIn <= stintFrom && stintFrom < row.plannedOut,
+                  ) ?? current.rotations.find((row) => row.personId === personId && row.plannedIn === stintFrom);
                   if (!hit) return current;
                   const next = extendRotationOut(current, hit.id, newOut);
                   saveRotations(next);
@@ -1185,7 +1186,19 @@ export function CrewBoard({
                   kind: "stay_extend",
                   personId,
                   personName: person?.name,
-                  text: `${person?.name || personId} stay extended · out ${newOut}`,
+                  text: `${person?.name || personId} stay changed · out ${newOut}`,
+                });
+              }}
+              onMoveStayIn={(personId, stintFrom, newFrom) => {
+                // Start the stay earlier or later; OUT, bookings, transfers and notes stay put.
+                captureHistory();
+                patchRoster((current) => setStayIn(current, personId, stintFrom, newFrom));
+                const person = overview.rows.find((row) => row.person.id === personId)?.person;
+                logActivity({
+                  kind: "stay_extend",
+                  personId,
+                  personName: person?.name,
+                  text: `${person?.name || personId} stay changed · in ${newFrom}`,
                 });
               }}
               onHidePerson={hideCalendarPerson}

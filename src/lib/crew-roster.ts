@@ -56,6 +56,8 @@ export type RosterRotationPlan = {
   role?: string;
   /** Coordinator cell note (Excel-style), e.g. "Lingering for snow". */
   note?: string;
+  /** First start date, kept when the IN is dragged, so bookings and notes stay attached. */
+  idFrom?: string;
 };
 
 /** Standard on-site length (6 weeks). Place/forms stop here unless extending past. */
@@ -83,6 +85,10 @@ export type CrewRosterBook = {
    */
   stintOutOverrides: Record<string, string>;
   /**
+   * Move the IN of an imported stint. Key: `${personId}:${original start}` → new start.
+   */
+  stintInOverrides: Record<string, string>;
+  /**
    * Coordinator notes on any stay (sheet or app), keyed by {@link stayNoteKey}.
    * App plans also keep a copy on `RosterRotationPlan.note`.
    */
@@ -99,6 +105,7 @@ export function emptyRoster(): CrewRosterBook {
     employmentStatus: {},
     rotationPlans: {},
     stintOutOverrides: {},
+    stintInOverrides: {},
     stayNotes: {},
     employees: [],
   };
@@ -106,6 +113,16 @@ export function emptyRoster(): CrewRosterBook {
 
 export function stintOverrideKey(personId: string, stintFrom: string) {
   return `${personId}:${stintFrom.slice(0, 10)}`;
+}
+
+/** The first start of a stay whose IN was dragged to `from` (or `from` itself). */
+export function noteAnchorFrom(roster: CrewRosterBook, personId: string, from: string) {
+  const iso = from.slice(0, 10);
+  for (const [key, moved] of Object.entries(roster.stintInOverrides ?? {})) {
+    if (moved === iso && key.startsWith(`${personId}:`)) return key.slice(personId.length + 1);
+  }
+  const plan = (roster.rotationPlans?.[personId] ?? []).find((row) => row.from === iso && row.idFrom);
+  return plan?.idFrom ?? iso;
 }
 
 export function stayNoteKey(personId: string, from: string, out: string) {
@@ -126,6 +143,12 @@ export function getStayNote(
   const key = stayNoteKey(personId, from, out);
   const fromMap = roster.stayNotes?.[key];
   if (fromMap) return fromMap;
+  // The stay's dates may have been dragged since the note was written: match on its first start.
+  const anchor = noteAnchorFrom(roster, personId, from);
+  const prefixes = [...new Set([`${personId}:${from.slice(0, 10)}:`, `${personId}:${anchor}:`])];
+  for (const [noteKey, note] of Object.entries(roster.stayNotes ?? {})) {
+    if (note && prefixes.some((prefix) => noteKey.startsWith(prefix))) return note;
+  }
   const plan = (roster.rotationPlans?.[personId] ?? []).find(
     (row) => row.from === from.slice(0, 10) && row.out === out.slice(0, 10),
   );
@@ -280,6 +303,10 @@ export function removeManualEmployee(roster: CrewRosterBook, personId: string): 
   for (const key of Object.keys(stintOutOverrides)) {
     if (key.startsWith(`${personId}:`)) delete stintOutOverrides[key];
   }
+  const stintInOverrides = { ...(roster.stintInOverrides ?? {}) };
+  for (const key of Object.keys(stintInOverrides)) {
+    if (key.startsWith(`${personId}:`)) delete stintInOverrides[key];
+  }
   return {
     ...roster,
     employees,
@@ -287,6 +314,7 @@ export function removeManualEmployee(roster: CrewRosterBook, personId: string): 
     employmentStatus,
     projectLinks,
     stintOutOverrides,
+    stintInOverrides,
   };
 }
 
@@ -346,6 +374,7 @@ export function readRoster(value: unknown): CrewRosterBook {
           };
           if (typeof row.role === "string" && row.role.trim()) plan.role = row.role.trim();
           if (typeof row.note === "string" && row.note.trim()) plan.note = row.note.trim();
+          if (typeof row.idFrom === "string" && row.idFrom.length >= 10) plan.idFrom = row.idFrom.slice(0, 10);
           return plan;
         })
         .filter((item): item is RosterRotationPlan => Boolean(item));
@@ -355,6 +384,12 @@ export function readRoster(value: unknown): CrewRosterBook {
   if (raw.stintOutOverrides && typeof raw.stintOutOverrides === "object") {
     for (const [key, out] of Object.entries(raw.stintOutOverrides)) {
       if (typeof out === "string" && out.length >= 10) stintOutOverrides[key] = out.slice(0, 10);
+    }
+  }
+  const stintInOverrides: Record<string, string> = {};
+  if (raw.stintInOverrides && typeof raw.stintInOverrides === "object") {
+    for (const [key, from] of Object.entries(raw.stintInOverrides)) {
+      if (typeof from === "string" && from.length >= 10) stintInOverrides[key] = from.slice(0, 10);
     }
   }
   const stayNotes: Record<string, string> = {};
@@ -381,6 +416,7 @@ export function readRoster(value: unknown): CrewRosterBook {
     employmentStatus,
     rotationPlans,
     stintOutOverrides,
+    stintInOverrides,
     stayNotes,
     employees,
   };
@@ -542,6 +578,7 @@ export function mergeProjects<T extends CrewProject>(imported: T[], roster: Crew
 }
 
 type StintLike = {
+  idFrom?: string;
   site: string;
   sites: string[];
   from: string;
@@ -701,9 +738,16 @@ export function setStayNote(
 ): CrewRosterBook {
   const fromIso = from.slice(0, 10);
   const outIso = out.slice(0, 10);
-  const key = stayNoteKey(personId, fromIso, outIso);
+  // Keyed on the stay's first start, so dragging its dates never loses the note.
+  const anchor = noteAnchorFrom(roster, personId, fromIso);
+  const key = stayNoteKey(personId, anchor, outIso);
   const nextNote = clampStayNote(note);
   const stayNotes = { ...(roster.stayNotes ?? {}) };
+  for (const noteKey of Object.keys(stayNotes)) {
+    if (noteKey !== key && (noteKey.startsWith(`${personId}:${anchor}:`) || noteKey.startsWith(`${personId}:${fromIso}:`))) {
+      delete stayNotes[noteKey];
+    }
+  }
   const prev = stayNotes[key] || "";
   if (prev === nextNote) {
     // Still sync plan copy if needed.
@@ -849,19 +893,52 @@ export function extendStay(
   };
 }
 
-function applyStintOutOverrides<T extends { from: string; out: string | null }>(
+function applyStintOutOverrides<T extends { from: string; out: string | null; idFrom?: string }>(
   personId: string,
   stints: T[],
   overrides: Record<string, string> | undefined,
+  inOverrides?: Record<string, string>,
 ): T[] {
-  if (!overrides || !Object.keys(overrides).length) return stints;
+  const hasOut = overrides && Object.keys(overrides).length;
+  const hasIn = inOverrides && Object.keys(inOverrides).length;
+  if (!hasOut && !hasIn) return stints;
   return stints.map((stint) => {
-    const override = overrides[stintOverrideKey(personId, stint.from)];
-    if (!override) return stint;
+    const key = stintOverrideKey(personId, stint.from);
+    let next = stint;
+    const override = overrides?.[key];
     // Override always wins so extracted sheet stays can be shortened as well as extended.
-    if (override <= stint.from) return stint;
-    return { ...stint, out: override };
+    if (override && override > stint.from) next = { ...next, out: override };
+    const movedIn = inOverrides?.[key];
+    if (movedIn && (!next.out || movedIn < next.out)) next = { ...next, from: movedIn, idFrom: stint.idFrom ?? stint.from };
+    return next;
   });
+}
+
+/**
+ * Move the IN (first day) of a stay, earlier or later, keeping its OUT.
+ * Bookings, notes and transfers stay attached (they follow the stay's first start).
+ */
+export function setStayIn(roster: CrewRosterBook, personId: string, currentFrom: string, newFrom: string): CrewRosterBook {
+  const current = currentFrom.slice(0, 10);
+  const next = newFrom.slice(0, 10);
+  if (!current || !next || current === next) return roster;
+  const plans = roster.rotationPlans?.[personId] ?? [];
+  const index = plans.findIndex((plan) => plan.from === current);
+  if (index >= 0) {
+    const plan = plans[index]!;
+    if (next >= plan.out) return roster;
+    const nextPlans = [...plans];
+    nextPlans[index] = { ...plan, from: next, idFrom: plan.idFrom ?? plan.from };
+    return { ...roster, rotationPlans: { ...(roster.rotationPlans ?? {}), [personId]: nextPlans } };
+  }
+  const original =
+    Object.entries(roster.stintInOverrides ?? {}).find(
+      ([key, moved]) => moved === current && key.startsWith(`${personId}:`),
+    )?.[0] ?? stintOverrideKey(personId, current);
+  const stintInOverrides = { ...(roster.stintInOverrides ?? {}) };
+  if (original === stintOverrideKey(personId, next)) delete stintInOverrides[original];
+  else stintInOverrides[original] = next;
+  return { ...roster, stintInOverrides };
 }
 
 /**
@@ -896,7 +973,11 @@ export function setStayOut(
     };
   }
 
-  const key = stintOverrideKey(personId, from);
+  // Imported stay whose IN was dragged: its OUT override stays on the original start.
+  const original = Object.entries(roster.stintInOverrides ?? {}).find(
+    ([key, moved]) => moved === from && key.startsWith(`${personId}:`),
+  )?.[0];
+  const key = original ?? stintOverrideKey(personId, from);
   if (roster.stintOutOverrides?.[key] === cappedOut) return roster;
   return {
     ...roster,
@@ -930,6 +1011,7 @@ function plansAsStints(plans: RosterRotationPlan[] | undefined): StintLike[] {
       tentative: false,
       note: plan.note ? `${plan.note} · ${meta}` : meta,
       role: plan.role,
+      ...(plan.idFrom ? { idFrom: plan.idFrom } : {}),
     };
   });
 }
@@ -943,6 +1025,7 @@ export function mergePeople(imported: ImportedPerson[], roster: CrewRosterBook):
       person.id,
       [...(person.stints ?? []), ...extra],
       roster.stintOutOverrides,
+      roster.stintInOverrides,
     );
     return {
       ...person,
@@ -990,6 +1073,7 @@ export function mergePeople(imported: ImportedPerson[], roster: CrewRosterBook):
         employee.id,
         plansAsStints(roster.rotationPlans?.[employee.id]),
         roster.stintOutOverrides,
+        roster.stintInOverrides,
       ),
       manual: true,
       provisional: employee.provisional === true,
