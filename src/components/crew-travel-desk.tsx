@@ -10,6 +10,7 @@ import { siteLabel, type CrewPerson, type CrewSnapshot } from "@/lib/crew-schedu
 import { formatJourneyPath } from "@/lib/crew-travel-hubs";
 import { addDays, daysBetween, formatMedium } from "@/lib/dates";
 import { cn } from "@/lib/cn";
+import { CrewTripPlan } from "@/components/crew-trip-plan";
 
 type TripKind = "to_site" | "home" | "transfer";
 
@@ -208,10 +209,11 @@ export function CrewTravelDesk({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-            <Plane className="size-5 text-primary" /> Flights to book
+            <Plane className="size-5 text-primary" /> Travel to book
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Everyone flying in, home or between sites, in date order. Open a name to add the booking, hotel and car service.
+            Everyone travelling in, home or between sites (by air or road), in date order. Open a name to plan the legs,
+            stopovers, hotel and car service.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -307,8 +309,8 @@ export function CrewTravelDesk({
                       <p className="text-xs text-muted-foreground">{trip.site ? siteLabel(trip.site) : ""}</p>
                     </td>
                     <td className="px-3 py-3">
-                      {booked ? (
-                        <p className="font-medium">{booked}</p>
+                      {booked && trip.booking ? (
+                        <CrewTripPlan compact legs={trip.booking.segments} hotels={trip.booking.hotels ?? []} />
                       ) : (
                         <p className="text-muted-foreground">
                           <span className="text-xs">Usual </span>

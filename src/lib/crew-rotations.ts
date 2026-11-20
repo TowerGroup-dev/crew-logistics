@@ -1005,9 +1005,12 @@ function rewriteStint(stint: CrewStint, moves: RotationMove[]): CrewStint {
     const last = legs[legs.length - 1];
     const arrive = last ? last.arriveDate || last.departDate : move.date;
     const until = sorted[index + 1]?.date || end;
-    const route = legs.length
-      ? [legs[0]!.fromAirport, ...legs.map((row) => row.toAirport)].filter(Boolean).join(" → ")
-      : `${move.fromSite} → ${move.toSite}`;
+    // Hover text: the chain of places, saying which legs are by road.
+    const route = !legs.length
+      ? `${move.fromSite} → ${move.toSite}`
+      : legs.some((row) => row.mode === "road")
+        ? legs.map((row) => `${row.fromAirport} → ${row.toAirport} (${row.mode === "road" ? "road" : "flight"})`).join(", ")
+        : [legs[0]!.fromAirport, ...legs.map((row) => row.toAirport)].filter(Boolean).join(" → ");
     days.forEach((iso, i) => {
       if (iso < depart || iso >= until) return;
       if (iso < arrive) {

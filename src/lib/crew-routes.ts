@@ -4,6 +4,7 @@
  */
 
 import type { FlightBook, FlightDirection, FlightSegment } from "@/lib/crew-flights";
+import { formatMedium } from "@/lib/dates";
 
 export type SiteRoute = {
   /** Camp code: IQA, POND, KUG, ALRT. */
@@ -178,4 +179,52 @@ export function flightPlaceOnDay(segments: FlightSegment[], iso: string): string
     if (next && iso > arrive && iso < next.departDate) return leg.toAirport || null;
   }
   return null;
+}
+
+export type TripStep =
+  | { kind: "leg"; index: number; mode: "flight" | "road"; from: string; to: string; date: string; departTime: string; arriveTime: string; ref: string }
+  | { kind: "stop"; place: string; from: string; to: string; nights: number; hotel: string | null };
+
+/**
+ * The whole journey in order: each flight or drive, and every stopover between them
+ * (with the nights spent and the hotel booked there, if any).
+ */
+export function tripPlan(
+  legs: FlightSegment[],
+  hotels: { place: string; name: string; checkIn: string; checkOut: string }[] = [],
+) {
+  const sorted = legs
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => (a.row.departDate + a.row.departTime).localeCompare(b.row.departDate + b.row.departTime) || a.index - b.index);
+  const steps: TripStep[] = [];
+  const warnings: string[] = [];
+  sorted.forEach(({ row, index }, i) => {
+    steps.push({
+      kind: "leg",
+      index,
+      mode: row.mode === "road" ? "road" : "flight",
+      from: row.fromAirport,
+      to: row.toAirport,
+      date: row.departDate,
+      departTime: row.departTime,
+      arriveTime: row.arriveTime,
+      ref: row.flightNumber,
+    });
+    if (!row.departDate) warnings.push(`Leg ${i + 1} (${row.fromAirport || "?"} → ${row.toAirport || "?"}) has no date`);
+    if (!row.fromAirport || !row.toAirport) warnings.push(`Leg ${i + 1} is missing where it starts or ends`);
+    const next = sorted[i + 1]?.row;
+    if (!next) return;
+    if (row.toAirport && next.fromAirport && row.toAirport !== next.fromAirport) {
+      warnings.push(`Leg ${i + 1} ends at ${row.toAirport} but the next leaves from ${next.fromAirport}`);
+    }
+    const landed = row.arriveDate || row.departDate;
+    if (landed && next.departDate && next.departDate > landed) {
+      const nights = Math.round((Date.parse(next.departDate) - Date.parse(landed)) / 86400000);
+      const place = row.toAirport;
+      const hotel = hotels.find((h) => h.place === place && (!h.checkIn || h.checkIn <= landed) && (!h.checkOut || h.checkOut >= next.departDate));
+      steps.push({ kind: "stop", place, from: landed, to: next.departDate, nights, hotel: hotel ? hotel.name || "Hotel booked" : null });
+      if (!hotel) warnings.push(`${nights} night${nights === 1 ? "" : "s"} in ${place} from ${formatMedium(landed)}, no hotel booked`);
+    }
+  });
+  return { steps, warnings };
 }

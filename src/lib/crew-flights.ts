@@ -14,8 +14,14 @@ export type FlightSegment = {
   departTime: string;
   arriveDate: string;
   arriveTime: string;
+  /** Flight number, or for a drive: vehicle / driver. */
   flightNumber: string;
+  /** How this leg is travelled. Missing on older records means flight. */
+  mode?: TravelMode;
 };
+
+/** Up north a leg can be flown or driven. */
+export type TravelMode = "flight" | "road";
 
 /** Overnight stop on the way (e.g. a night in Ottawa or Yellowknife). */
 export type FlightHotel = {
@@ -95,6 +101,7 @@ function readSegment(value: unknown): FlightSegment | null {
     arriveDate: typeof row.arriveDate === "string" ? row.arriveDate.slice(0, 10) : "",
     arriveTime: typeof row.arriveTime === "string" ? row.arriveTime : "",
     flightNumber: typeof row.flightNumber === "string" ? row.flightNumber : "",
+    mode: row.mode === "road" ? "road" : "flight",
   };
 }
 
@@ -190,6 +197,7 @@ export function emptySegment(): FlightSegment {
     arriveDate: "",
     arriveTime: "",
     flightNumber: "",
+    mode: "flight",
   };
 }
 

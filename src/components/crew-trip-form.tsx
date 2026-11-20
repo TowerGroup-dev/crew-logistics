@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BedDouble, Car, Plus, Route, Trash2 } from "lucide-react";
+import { BedDouble, Car, Plane, Plus, Route, Trash2 } from "lucide-react";
+import { CrewTripPlan } from "@/components/crew-trip-plan";
 import { AirportSelect, CAMP_AIRPORTS, useTravelHubs } from "@/components/crew-airport-select";
 import { emptyHotel, emptySegment, type FlightHotel, type FlightSegment } from "@/lib/crew-flights";
 import { legsForRoute, loadRoutes, routeAirports, routeBetweenSites } from "@/lib/crew-routes";
@@ -183,28 +184,68 @@ export function CrewTripForm({
 
       <section className="grid gap-2">
         <div className="flex items-center justify-between">
-          <p className="font-semibold">Flights</p>
-          <button
-            type="button"
-            onClick={() => {
-              const last = legs[legs.length - 1];
-              setLegs([
-                ...legs,
-                { ...emptySegment(), fromAirport: last?.toAirport || "", departDate: last?.arriveDate || travelDate },
-              ]);
-            }}
-            className="inline-flex h-8 items-center gap-1 rounded-lg border border-input px-2 text-xs font-medium hover:bg-muted"
-          >
-            <Plus className="size-3.5" /> Flight
-          </button>
+          <p className="font-semibold">Legs</p>
+          <div className="flex gap-1.5">
+            {(["flight", "road"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => {
+                  const last = legs[legs.length - 1];
+                  setLegs([
+                    ...legs,
+                    {
+                      ...emptySegment(),
+                      mode,
+                      fromAirport: last?.toAirport || "",
+                      departDate: last?.arriveDate || last?.departDate || travelDate,
+                      arriveDate: last?.arriveDate || last?.departDate || travelDate,
+                    },
+                  ]);
+                }}
+                className="inline-flex h-8 items-center gap-1 rounded-lg border border-input px-2 text-xs font-medium hover:bg-muted"
+              >
+                <Plus className="size-3.5" /> {mode === "flight" ? "Flight" : "Drive"}
+              </button>
+            ))}
+          </div>
         </div>
         {legs.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-            No flights yet. Pick the route above or add a flight.
+            No legs yet. Pick the route above, or add a flight or a drive.
           </p>
         ) : (
           legs.map((leg, index) => (
-            <div key={index} className="grid grid-cols-2 gap-2 rounded-xl border border-border p-3">
+            <div
+              key={index}
+              className={cn(
+                "grid grid-cols-2 gap-2 rounded-xl border p-3",
+                leg.mode === "road" ? "border-amber-200 bg-amber-50/40" : "border-border",
+              )}
+            >
+              <div className="col-span-2 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Leg {index + 1}</span>
+                <div className="inline-flex rounded-lg border border-input bg-card p-0.5" role="group" aria-label={`Leg ${index + 1} by`}>
+                  {(["flight", "road"] as const).map((mode) => {
+                    const active = (leg.mode ?? "flight") === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => patchLeg(index, { mode })}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold",
+                          active ? (mode === "road" ? "bg-amber-600 text-white" : "bg-sky-700 text-white") : "text-muted-foreground",
+                        )}
+                      >
+                        {mode === "road" ? <Car className="size-3.5" /> : <Plane className="size-3.5" />}
+                        {mode === "road" ? "Road" : "Flight"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <AirportSelect
                 value={leg.fromAirport}
                 hubs={hubs}
@@ -225,25 +266,26 @@ export function CrewTripForm({
                 }}
               />
               <label className="grid min-w-0 gap-1">
-                <span className="text-xs text-muted-foreground">Date</span>
+                <span className="text-xs text-muted-foreground">Leaves on</span>
                 <input
                   type="date"
                   value={leg.departDate}
                   onChange={(event) =>
                     patchLeg(index, {
                       departDate: event.target.value,
-                      arriveDate: !leg.arriveDate || leg.arriveDate === leg.departDate ? event.target.value : leg.arriveDate,
+                      arriveDate: !leg.arriveDate || leg.arriveDate <= leg.departDate ? event.target.value : leg.arriveDate,
                     })
                   }
                   className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
                 />
               </label>
               <label className="grid min-w-0 gap-1">
-                <span className="text-xs text-muted-foreground">Flight #</span>
+                <span className="text-xs text-muted-foreground">Arrives on</span>
                 <input
-                  value={leg.flightNumber}
-                  onChange={(event) => patchLeg(index, { flightNumber: event.target.value.toUpperCase() })}
-                  placeholder="5T 401"
+                  type="date"
+                  value={leg.arriveDate || leg.departDate}
+                  min={leg.departDate || undefined}
+                  onChange={(event) => patchLeg(index, { arriveDate: event.target.value })}
                   className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
                 />
               </label>
@@ -257,11 +299,24 @@ export function CrewTripForm({
                 />
               </label>
               <label className="grid min-w-0 gap-1">
-                <span className="text-xs text-muted-foreground">Lands</span>
+                <span className="text-xs text-muted-foreground">Arrives</span>
                 <input
                   type="time"
                   value={leg.arriveTime}
                   onChange={(event) => patchLeg(index, { arriveTime: event.target.value })}
+                  className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
+                />
+              </label>
+              <label className="col-span-2 grid min-w-0 gap-1">
+                <span className="text-xs text-muted-foreground">{leg.mode === "road" ? "Vehicle / driver" : "Flight #"}</span>
+                <input
+                  value={leg.flightNumber}
+                  onChange={(event) =>
+                    patchLeg(index, {
+                      flightNumber: leg.mode === "road" ? event.target.value : event.target.value.toUpperCase(),
+                    })
+                  }
+                  placeholder={leg.mode === "road" ? "e.g. Company truck, driver John" : "5T 401"}
                   className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
                 />
               </label>
@@ -270,12 +325,20 @@ export function CrewTripForm({
                 onClick={() => setLegs(legs.filter((_, i) => i !== index))}
                 className="col-span-2 inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-input text-xs text-rose-700 hover:bg-rose-50"
               >
-                <Trash2 className="size-3.5" /> Remove flight
+                <Trash2 className="size-3.5" /> Remove leg
               </button>
             </div>
           ))
         )}
       </section>
+
+      <CrewTripPlan
+        legs={legs}
+        hotels={value.hotels}
+        onAddHotel={(place, checkIn, checkOut) =>
+          onChange({ hotels: [...value.hotels, { ...emptyHotel(place, checkIn), checkOut }] })
+        }
+      />
 
       <section className="grid grid-cols-2 gap-2">
         <label className="grid min-w-0 gap-1">

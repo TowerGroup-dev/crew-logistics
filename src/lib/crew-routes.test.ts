@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyRoutesBook, flightPlaceOnDay, legsForRoute, readRoutesBook, routeAirports, routeBetweenSites, setRouteVia } from "./crew-routes";
+import { emptyRoutesBook, flightPlaceOnDay, legsForRoute, readRoutesBook, routeAirports, routeBetweenSites, setRouteVia, tripPlan } from "./crew-routes";
 import type { FlightSegment } from "./crew-flights";
 import { applyRotationMoves, dropAssumedFlights, emptyTravel, newMove, type RotationBook, type RotationMove } from "./crew-rotations";
 import { siteOnDay, travelSegmentOnDay } from "./crew-site-days";
@@ -116,5 +116,21 @@ describe("booked moves change the calendar", () => {
     expect(siteOnDay(out!, "2026-11-20")).toBeNull();
     expect(travelSegmentOnDay(out!, "2026-11-20")?.label).toBe("YK");
     expect(siteOnDay(out!, "2026-11-21")).toBe("IQA");
+  });
+});
+
+describe("trip plan", () => {
+  it("lists every leg and stopover night, and warns when a night has no hotel", () => {
+    const legs = [
+      { fromAirport: "KUG", toAirport: "YK", departDate: "2026-12-01", departTime: "", arriveDate: "2026-12-01", arriveTime: "", flightNumber: "", mode: "flight" as const },
+      { fromAirport: "YK", toAirport: "IQA", departDate: "2026-12-03", departTime: "", arriveDate: "2026-12-03", arriveTime: "", flightNumber: "", mode: "road" as const },
+    ];
+    const plan = tripPlan(legs, []);
+    expect(plan.steps.map((row) => row.kind)).toEqual(["leg", "stop", "leg"]);
+    expect(plan.steps[1]).toMatchObject({ place: "YK", nights: 2, hotel: null });
+    expect(plan.warnings[0]).toMatch(/2 nights in YK/);
+    const booked = tripPlan(legs, [{ place: "YK", name: "Explorer", checkIn: "2026-12-01", checkOut: "2026-12-03" }]);
+    expect(booked.warnings).toEqual([]);
+    expect(booked.steps[1]).toMatchObject({ hotel: "Explorer" });
   });
 });

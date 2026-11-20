@@ -34,7 +34,7 @@ const PRIMARY: Section[] = [
     icon: CalendarDays,
     match: (path) => path.startsWith("/month") || path.startsWith("/year") || path.startsWith("/list"),
   },
-  { key: "flights", href: "/travel", label: "Flights", icon: Plane, match: (path) => path.startsWith("/travel") },
+  { key: "flights", href: "/travel", label: "Travel", icon: Plane, match: (path) => path.startsWith("/travel") },
 ];
 
 /** Right ☰ dropdown, plain list like B2W. */
