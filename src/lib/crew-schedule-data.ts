@@ -4776,11 +4776,11 @@ export const CREW_SCHEDULE_DATA = {
         },
         {
           "date": "2026-11-09",
-          "mark": "IN"
+          "mark": "IQA"
         },
         {
-          "date": "2026-11-10",
-          "mark": "TBC"
+          "date": "2026-12-21",
+          "mark": "Out"
         }
       ],
       "stints": [
@@ -4856,29 +4856,28 @@ export const CREW_SCHEDULE_DATA = {
           ]
         },
         {
-          "site": "TBC",
+          "site": "IQA",
           "sites": [
-            "TBC"
+            "IQA"
           ],
           "from": "2026-11-09",
-          "out": null,
+          "out": "2026-12-21",
           "arrival": "marked",
-          "departure": "shading-ended",
-          "tentative": true,
+          "departure": "marked",
+          "tentative": false,
           "segments": [
             {
               "from": "2026-11-09",
-              "out": "2026-11-10",
-              "kind": "travel",
-              "label": "IN",
-              "route": "IN → TBC"
+              "out": "2026-12-18",
+              "kind": "site",
+              "site": "IQA"
             },
             {
-              "from": "2026-11-10",
-              "out": "2027-01-01",
+              "from": "2026-12-18",
+              "out": "2026-12-21",
               "kind": "travel",
-              "label": "TBC",
-              "route": "IN → TBC"
+              "label": "TRV",
+              "route": "Leaving Iqaluit, 18 to 20 Dec, route not booked yet (confirmed by Yimika, 20 Nov 2026)"
             }
           ]
         }
