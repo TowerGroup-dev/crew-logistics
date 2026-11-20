@@ -633,6 +633,9 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onPaintStopovers,
   onAddRotation,
   onExtendStay,
+  onMoveSite,
+  moveOnDay,
+  onBookMove,
   onRemoveRotation,
   onSetRotationNote,
   onSetStayNote,
@@ -681,6 +684,12 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onAddRotation: (personId: string, input: PlaceRotationInput) => string | void;
   /** Extend or shorten a stay's exclusive OUT (sheet + app). */
   onExtendStay?: (personId: string, stintFrom: string, newOut: string) => void;
+  /** Move to another site from this day, during the stay (null = undo the move starting that day). */
+  onMoveSite?: (personId: string, iso: string, toSite: string | null) => void;
+  /** The move that starts on this day, if any. */
+  moveOnDay?: (personId: string, iso: string) => { fromSite: string; toSite: string } | null;
+  /** Open the stay on Travel → Moves to book the flight. */
+  onBookMove?: (personId: string, iso: string) => void;
   /** Delete an app-painted placement (NAV-07). */
   onRemoveRotation?: (personId: string, planId: string) => void;
   /** Update stay note on an app plan (NAV-08). */
@@ -1574,7 +1583,13 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
       <div className="border-b border-border px-4 py-3">
         {flash ? (
-          <p className="mb-2 text-xs font-medium text-muted-foreground tabular-nums">{flash}</p>
+          // Floating, so the rows never jump under the mouse after an action.
+          <p
+            role="status"
+            className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-stone-900 px-4 py-2 text-sm font-medium text-white shadow-lg tabular-nums"
+          >
+            {flash}
+          </p>
         ) : null}
         <div className="flex flex-wrap items-center gap-2 text-[0.8125rem]">
           <div
@@ -2198,6 +2213,75 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             <p className="px-2 py-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               {formatMedium(cellMenu.iso)}
             </p>
+
+            {(() => {
+              const person = peopleById.get(cellMenu.personId);
+              const here = person ? siteOnDay(person, cellMenu.iso) : null;
+              const startsHere = moveOnDay?.(cellMenu.personId, cellMenu.iso) ?? null;
+              const inStay = person ? Boolean(stintCovering(person, cellMenu.iso)) : false;
+              if (!onMoveSite || !inStay) return null;
+              return (
+                <div className="mb-1 border-b border-border px-2 pb-2">
+                  {startsHere ? (
+                    <div className="mb-2 space-y-1">
+                      <p className="text-sm font-semibold">
+                        Moves {startsHere.fromSite} → {startsHere.toSite} today
+                      </p>
+                      <div className="flex gap-1.5">
+                        {onBookMove ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="h-8 flex-1 rounded-lg bg-primary px-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
+                            onClick={() => {
+                              onBookMove(cellMenu.personId, cellMenu.iso);
+                              setCellMenu(null);
+                            }}
+                          >
+                            Book the flight
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="h-8 flex-1 rounded-lg border border-input px-2 text-xs font-medium hover:bg-muted"
+                          onClick={() => {
+                            onMoveSite(cellMenu.personId, cellMenu.iso, null);
+                            setCellMenu(null);
+                            showFlash("Move removed");
+                          }}
+                        >
+                          Undo move
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <p className="pb-1 text-xs text-muted-foreground">Move to another site from this day</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {siteList
+                      .filter((row) => row.code !== here)
+                      .map((row) => (
+                        <button
+                          key={row.code}
+                          type="button"
+                          role="menuitem"
+                          className={cn(
+                            "h-8 rounded-lg px-2.5 text-xs font-bold text-white shadow-sm hover:opacity-90",
+                            siteTone(row.code, siteList),
+                          )}
+                          onClick={() => {
+                            onMoveSite(cellMenu.personId, cellMenu.iso, row.code);
+                            setCellMenu(null);
+                            showFlash(`${here || "Away"} → ${row.code} from ${formatMedium(cellMenu.iso)}`);
+                          }}
+                        >
+                          {row.code}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {cellMenu.hasSite ? (
               <button

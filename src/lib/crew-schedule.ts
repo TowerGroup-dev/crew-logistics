@@ -83,6 +83,8 @@ export type CrewStint = {
    * Missing when the whole stay is one site.
    */
   segments?: readonly CrewStintSegment[];
+  /** The Excel's own pieces, kept when booked moves have rewritten `segments`. */
+  excelSegments?: readonly CrewStintSegment[];
   /** Shaded on the sheet with no site code: site taken from the Location column, needs confirming. */
   unsure?: boolean;
 };

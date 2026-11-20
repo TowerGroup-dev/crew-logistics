@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { emptyRoutesBook, flightPlaceOnDay, legsForRoute, readRoutesBook, routeAirports, routeBetweenSites, setRouteVia } from "./crew-routes";
 import type { FlightSegment } from "./crew-flights";
-import { dropAssumedFlights, emptyTravel, type RotationBook } from "./crew-rotations";
+import { applyRotationMoves, dropAssumedFlights, emptyTravel, newMove, type RotationBook, type RotationMove } from "./crew-rotations";
+import { siteOnDay, travelSegmentOnDay } from "./crew-site-days";
+import type { CrewPerson } from "./crew-schedule";
 
 const leg = (fromAirport: string, toAirport: string, departDate: string, arriveDate = departDate): FlightSegment => ({
   fromAirport,
@@ -77,5 +79,42 @@ describe("no assumed flights", () => {
     expect(out.outbound.bookedOn).toBeNull();
     expect(out.outbound.notes).toBe("");
     expect(out.returnTravel).toBe(real);
+  });
+});
+
+describe("booked moves change the calendar", () => {
+  const person = {
+    id: "p1",
+    name: "Bryan",
+    role: "Surveyor",
+    roles: ["Surveyor"],
+    homeSites: ["IQA"],
+    projectIds: [],
+    inDate: null,
+    outDate: null,
+    rotationDays: 42,
+    events: [],
+    stints: [{ from: "2026-11-01", out: "2026-12-01", site: "IQA", sites: ["IQA"] }],
+  } as unknown as CrewPerson;
+  const book = (move: RotationMove) =>
+    ({ version: 1, rotations: [{ personId: "p1", plannedIn: "2026-11-01", moves: [move] }] }) as unknown as RotationBook;
+
+  it("shows the new site from the move day when no flights are booked yet", () => {
+    const [out] = applyRotationMoves([person], book(newMove("IQA", "POND", "2026-11-20")));
+    expect(siteOnDay(out!, "2026-11-19")).toBe("IQA");
+    expect(siteOnDay(out!, "2026-11-20")).toBe("POND");
+    expect(siteOnDay(out!, "2026-11-30")).toBe("POND");
+  });
+
+  it("is grey on a stopover night, then the new site on landing", () => {
+    const move = newMove("KUG", "IQA", "2026-11-20");
+    move.travel.segments = [
+      { fromAirport: "KUG", toAirport: "YK", departDate: "2026-11-20", departTime: "", arriveDate: "2026-11-20", arriveTime: "", flightNumber: "" },
+      { fromAirport: "YK", toAirport: "IQA", departDate: "2026-11-21", departTime: "", arriveDate: "2026-11-21", arriveTime: "", flightNumber: "" },
+    ];
+    const [out] = applyRotationMoves([person], book(move));
+    expect(siteOnDay(out!, "2026-11-20")).toBeNull();
+    expect(travelSegmentOnDay(out!, "2026-11-20")?.label).toBe("YK");
+    expect(siteOnDay(out!, "2026-11-21")).toBe("IQA");
   });
 });

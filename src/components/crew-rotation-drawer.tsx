@@ -784,7 +784,18 @@ function MovesPanel({
                   book={book}
                   move={{ fromSite: move.fromSite, toSite: move.toSite }}
                   onChange={(patch) =>
-                    onChange(moves.map((row) => (row.id === move.id ? { ...row, travel: { ...row.travel, ...patch } } : row)))
+                    onChange(
+                      moves.map((row) =>
+                        row.id === move.id
+                          ? {
+                              ...row,
+                              // The move happens on the day the first flight leaves.
+                              date: patch.departDate || row.date,
+                              travel: { ...row.travel, ...patch },
+                            }
+                          : row,
+                      ),
+                    )
                   }
                 />
                 <button

@@ -1,5 +1,6 @@
 "use client";
 
+import { siteOnDay } from "@/lib/crew-site-days";
 import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, X } from "lucide-react";
@@ -91,6 +92,9 @@ import {
   loadRotations,
   mergeRotationBook,
   dropAssumedFlights,
+  applyRotationMoves,
+  newMove,
+  upsertRotation,
   bookingsFromRotations,
   migrateOpsIntoRotations,
   rotationForPersonOnDay,
@@ -497,7 +501,9 @@ export function CrewBoard({
     );
   }
 
-  const people = useMemo(() => mergePeople(CREW_SCHEDULE.people, roster), [roster]);
+  // Stays from the Excel and the roster; booked moves between sites then reshape them for display.
+  const basePeople = useMemo(() => mergePeople(CREW_SCHEDULE.people, roster), [roster]);
+  const people = useMemo(() => applyRotationMoves(basePeople, rotationBook), [basePeople, rotationBook]);
   const projects = useMemo(
     () => mergeProjects(CREW_PROJECTS as CrewProject[], roster),
     [roster],
@@ -534,7 +540,7 @@ export function CrewBoard({
   useEffect(() => {
     if (!hydrated) return;
     setRotationBook((prev) => {
-      const merged = dropAssumedFlights(mergeRotationBook(people, prev));
+      const merged = dropAssumedFlights(mergeRotationBook(basePeople, prev));
       const same =
         merged.rotations.length === prev.rotations.length &&
         merged.rotations.every((row, index) => {
@@ -552,7 +558,7 @@ export function CrewBoard({
       saveRotations(merged);
       return merged;
     });
-  }, [hydrated, people]);
+  }, [hydrated, basePeople]);
 
   const selectedRotation = useMemo(
     () => rotationBook.rotations.find((row) => row.id === selectedRotationId) ?? null,
@@ -1111,6 +1117,28 @@ export function CrewBoard({
                   history: true,
                 })
               }
+              onMoveSite={(personId, iso, toSite) => {
+                // Right-click a stay day → move to another site from that day (undo-able).
+                const rotation = rotationForPersonOnDay(rotationBook, personId, iso);
+                if (!rotation) return;
+                captureHistory();
+                const others = (rotation.moves ?? []).filter((row) => row.date !== iso);
+                let moves = others;
+                if (toSite) {
+                  const person = people.find((row) => row.id === personId);
+                  const before = person ? siteOnDay(person, addDays(iso, -1)) : null;
+                  const fromSite = before || rotation.site;
+                  if (fromSite === toSite && iso !== rotation.plannedIn) return;
+                  moves = [...others, newMove(fromSite, toSite, iso)];
+                }
+                saveRotationBook(upsertRotation(rotationBook, { ...rotation, moves }));
+              }}
+              moveOnDay={(personId, iso) => {
+                const rotation = rotationForPersonOnDay(rotationBook, personId, iso);
+                const move = rotation?.moves?.find((row) => row.date === iso);
+                return move ? { fromSite: move.fromSite, toSite: move.toSite } : null;
+              }}
+              onBookMove={(personId, iso) => openPersonRotation(personId, iso, "moves")}
               onExtendStay={(personId, stintFrom, newOut) => {
                 // Sheet + app stays: set exclusive OUT (extend or end early).
                 captureHistory();

@@ -6,6 +6,7 @@
 
 import { addDays, daysBetween } from "@/lib/dates";
 import type { FlightBook, FlightBooking, FlightHotel, FlightSegment } from "@/lib/crew-flights";
+import { flightPlaceOnDay } from "@/lib/crew-routes";
 import type { CrewOpsBook } from "@/lib/crew-ops";
 import { opsFor } from "@/lib/crew-ops";
 import {
@@ -14,6 +15,7 @@ import {
   scheduleYearOutExclusive,
   type CrewPerson,
   type CrewStint,
+  type CrewStintSegment,
 } from "@/lib/crew-schedule";
 
 export type TravelDirection = "outbound" | "return";
@@ -134,7 +136,7 @@ function readMove(value: unknown): RotationMove | null {
  * Travel day = first day after leaving A.
  */
 export function movesFromStint(stint: CrewStint | null | undefined): { fromSite: string; toSite: string; date: string }[] {
-  const sites = (stint?.segments || []).filter((row) => row.kind === "site" && row.site);
+  const sites = (stint?.excelSegments || stint?.segments || []).filter((row) => row.kind === "site" && row.site);
   const moves: { fromSite: string; toSite: string; date: string }[] = [];
   for (let i = 1; i < sites.length; i += 1) {
     const prev = sites[i - 1]!;
@@ -947,4 +949,94 @@ export function inclusiveOut(rotation: CrewRotation) {
   // year cut Dec→Jan stays off at 18 Dec of the old year.)
   const seasonEnd = scheduleYearLastDay(Number(last.slice(0, 4)));
   return last > seasonEnd ? seasonEnd : last;
+}
+
+
+type DayState = { kind: "site" | "travel"; site?: string; label?: string; route?: string };
+
+/**
+ * Booked moves change where the person is: grey travel days while flying (and on a
+ * stopover night), then the new site from the day they land until the next move or OUT.
+ * A move with no flights yet that the Excel already shows leaves the Excel as it is.
+ */
+export function applyRotationMoves(people: CrewPerson[], book: RotationBook): CrewPerson[] {
+  const byStay = new Map<string, RotationMove[]>();
+  for (const rotation of book.rotations) {
+    if (rotation.moves?.length) byStay.set(`${rotation.personId}|${rotation.plannedIn}`, rotation.moves);
+  }
+  if (!byStay.size) return people;
+  return people.map((person) => {
+    let changed = false;
+    const stints = (person.stints || []).map((stint) => {
+      const moves = byStay.get(`${person.id}|${stint.from}`);
+      if (!moves?.length) return stint;
+      const rewritten = rewriteStint(stint, moves);
+      if (rewritten !== stint) changed = true;
+      return rewritten;
+    });
+    return changed ? { ...person, stints } : person;
+  });
+}
+
+function rewriteStint(stint: CrewStint, moves: RotationMove[]): CrewStint {
+  const excel = stint.excelSegments || stint.segments || [];
+  const end = stint.out || scheduleYearOutExclusive(Number(stint.from.slice(0, 4)));
+  const excelMoves = movesFromStint({ ...stint, excelSegments: excel });
+  const days: string[] = [];
+  for (let d = stint.from; d < end; d = addDays(d, 1)) days.push(d);
+  if (!days.length) return stint;
+
+  // Start from the Excel, day by day.
+  const states: DayState[] = days.map((iso) => {
+    const piece = excel.find((row) => row.from <= iso && iso < row.out);
+    if (piece) return { kind: piece.kind, site: piece.site, label: piece.label, route: piece.route };
+    return { kind: "site", site: stint.site || stint.sites[0] };
+  });
+
+  let touched = false;
+  const sorted = [...moves].sort((a, b) => a.date.localeCompare(b.date));
+  sorted.forEach((move, index) => {
+    const legs = move.travel.segments.filter((row) => row.departDate);
+    const onExcel = excelMoves.some(
+      (row) => row.fromSite === move.fromSite && row.toSite === move.toSite && Math.abs(daysBetween(row.date, move.date)) <= 3,
+    );
+    if (!legs.length && onExcel) return;
+    const depart = legs[0]?.departDate || move.date;
+    const last = legs[legs.length - 1];
+    const arrive = last ? last.arriveDate || last.departDate : move.date;
+    const until = sorted[index + 1]?.date || end;
+    const route = legs.length
+      ? [legs[0]!.fromAirport, ...legs.map((row) => row.toAirport)].filter(Boolean).join(" → ")
+      : `${move.fromSite} → ${move.toSite}`;
+    days.forEach((iso, i) => {
+      if (iso < depart || iso >= until) return;
+      if (iso < arrive) {
+        // Flying, or a night at a stopover on the way.
+        const place = flightPlaceOnDay(legs, iso) || move.toSite;
+        states[i] = { kind: "travel", label: place, route };
+      } else {
+        states[i] = { kind: "site", site: move.toSite };
+      }
+      touched = true;
+    });
+  });
+  if (!touched) return stint;
+
+  // Back into pieces: one per run of the same place.
+  const segments: CrewStintSegment[] = [];
+  days.forEach((iso, i) => {
+    const state = states[i]!;
+    const prev = segments[segments.length - 1];
+    const same =
+      prev &&
+      prev.kind === state.kind &&
+      (state.kind === "site" ? prev.site === state.site : prev.label === state.label && prev.route === state.route);
+    if (same) {
+      prev.out = addDays(iso, 1);
+    } else {
+      segments.push({ from: iso, out: addDays(iso, 1), kind: state.kind, site: state.site, label: state.label, route: state.route });
+    }
+  });
+  const sites = [...new Set(segments.filter((row) => row.kind === "site" && row.site).map((row) => row.site!))];
+  return { ...stint, segments, excelSegments: excel, sites: sites.length ? sites : stint.sites };
 }
