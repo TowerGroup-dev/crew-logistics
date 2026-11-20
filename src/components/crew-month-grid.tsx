@@ -533,6 +533,8 @@ const MonthRow = memo(function MonthRow({
             onPointerLeave={() => actions.pointerLeave(person.id, iso)}
             className={cn(
               "relative flex h-11 min-w-0 items-center justify-center overflow-hidden border-l border-border text-[0.625rem] font-bold",
+              // The blue month rule is drawn over this edge; no second thin line under it.
+              monthStartDay && "border-l-transparent",
               canEdit ? "cursor-cell select-none touch-none" : "cursor-pointer touch-pan-x touch-pan-y",
               !site &&
                 !hub &&
@@ -623,17 +625,6 @@ const MonthRow = memo(function MonthRow({
           </span>
         </div>
       ))}
-      {/* Month rule: one solid blue line, same as the header, drawn over the boxes. */}
-      {dayMeta.map((day, index) =>
-        day.monthStartDay && index > 0 ? (
-          <div
-            key={`m-${day.iso}`}
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 z-[5] w-0.5 bg-primary"
-            style={{ left: `${index * dayColRem}rem` }}
-          />
-        ) : null,
-      )}
       {dateNoteBars.map((row) => (
         <div
           key={row.id}
@@ -2153,6 +2144,18 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             onPointerCancel={commitDrag}
           >
           <div className="sticky top-0 z-30 border-b border-border bg-card">{daysHeader}</div>
+          <div className="relative">
+          {/* Month rule: one straight blue line from the header to the bottom, over rows and role bars. */}
+          {monthBands.map((band) =>
+            band.startIndex > 0 ? (
+              <div
+                key={`rule-${band.key}`}
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 z-[25] w-0.5 bg-primary"
+                style={{ left: `${band.startIndex * dayColRem}rem` }}
+              />
+            ) : null,
+          )}
           {groups.length === 0 ? (
             <p className="px-4 py-8 text-sm text-muted-foreground">No crew match these filters.</p>
           ) : (
@@ -2167,18 +2170,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                   )}
                   style={{ width: daysTrackWidth, minWidth: daysTrackWidth }}
                   aria-hidden
-                >
-                  {/* Keep the blue month line unbroken through the role bars. */}
-                  {monthBands.map((band) =>
-                    band.startIndex > 0 ? (
-                      <div
-                        key={band.key}
-                        className="absolute inset-y-0 w-0.5 bg-primary"
-                        style={{ left: `${band.startIndex * dayColRem}rem` }}
-                      />
-                    ) : null,
-                  )}
-                </div>
+                />
                 {visiblePeople.map((person) => (
                   <MonthRow
                     key={`${person.id}::${group.role}`}
@@ -2205,6 +2197,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               );
             })
           )}
+          </div>
           </div>
       </div>
 
