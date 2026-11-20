@@ -7,9 +7,9 @@
  *                         others changed live since your last pull).
  *   npm run data:status   Show what you changed locally and haven't pushed.
  *
- * Needs two lines in .env.local (never committed):
+ * Needs in .env.local (never committed):
  *   CREW_LIVE_URL=https://<your-app>.azurewebsites.net
- *   CREW_LIVE_PASSWORD=<the Office password>
+ *   CREW_LIVE_PASSWORD=<the Office password>   (optional: falls back to CREW_PASSWORD)
  *
  * Local data lives in .data/ (what `npm run dev` reads and writes).
  * .data/.live-base/ remembers what live looked like at your last pull or push,
@@ -60,12 +60,13 @@ const short = (key) => key.replace(/^tower-arctic-crew-/, "").replace(/-v\d+$/, 
 async function connect() {
   const env = { ...(await readEnvFile()), ...process.env };
   const url = (env.CREW_LIVE_URL || "").replace(/\/+$/, "");
-  const password = env.CREW_LIVE_PASSWORD || "";
+  // Same Office password as the app itself unless live uses a different one.
+  const password = env.CREW_LIVE_PASSWORD || env.CREW_PASSWORD || "";
   if (!url || !password) {
     console.error(
       "Add these two lines to .env.local first (this file is never committed):\n" +
         "  CREW_LIVE_URL=https://<your-app>.azurewebsites.net\n" +
-        "  CREW_LIVE_PASSWORD=<the Office password>",
+        "  CREW_LIVE_PASSWORD=<the Office password>   (or set CREW_PASSWORD)",
     );
     process.exit(1);
   }
