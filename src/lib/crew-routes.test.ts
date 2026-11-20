@@ -206,3 +206,19 @@ describe("dragging a stay's dates", async () => {
     expect(book.stintInOverrides["p1:2026-11-01"]).toBeUndefined();
   });
 });
+
+describe("notes on dates you pick", async () => {
+  const roster = await import("./crew-roster");
+  it("adds, changes and removes a note on some dates only", () => {
+    let book = roster.setDateNote(roster.emptyRoster(), { personId: "p1", from: "2026-11-20", to: "2026-11-15", note: "  Lingering   for snow " });
+    const [row] = roster.dateNotesFor(book, "p1");
+    expect(row).toMatchObject({ from: "2026-11-15", to: "2026-11-20", note: "Lingering for snow" });
+    expect(roster.dateNotesOn(book, "p1", "2026-11-14")).toEqual([]);
+    expect(roster.dateNotesOn(book, "p1", "2026-11-17")).toHaveLength(1);
+    book = roster.readRoster(JSON.parse(JSON.stringify(book)));
+    book = roster.setDateNote(book, { id: row!.id, personId: "p1", from: "2026-11-15", to: "2026-11-16", note: "Weather" });
+    expect(roster.dateNotesFor(book, "p1")).toMatchObject([{ to: "2026-11-16", note: "Weather" }]);
+    book = roster.setDateNote(book, { id: row!.id, personId: "p1", from: "2026-11-15", to: "2026-11-16", note: "" });
+    expect(roster.dateNotesFor(book, "p1")).toEqual([]);
+  });
+});

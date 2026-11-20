@@ -93,7 +93,19 @@ export type CrewRosterBook = {
    * App plans also keep a copy on `RosterRotationPlan.note`.
    */
   stayNotes: Record<string, string>;
+  /** Notes on dates you pick (e.g. "Lingering for snow" 15 to 20 Nov), shown only on those days. */
+  dateNotes: DateNote[];
   employees: ManualCrewPerson[];
+};
+
+export type DateNote = {
+  id: string;
+  personId: string;
+  /** First day (inclusive). */
+  from: string;
+  /** Last day (inclusive). */
+  to: string;
+  note: string;
 };
 
 const STORAGE_KEY = "tower-arctic-crew-roster";
@@ -107,6 +119,7 @@ export function emptyRoster(): CrewRosterBook {
     stintOutOverrides: {},
     stintInOverrides: {},
     stayNotes: {},
+    dateNotes: [],
     employees: [],
   };
 }
@@ -315,6 +328,7 @@ export function removeManualEmployee(roster: CrewRosterBook, personId: string): 
     projectLinks,
     stintOutOverrides,
     stintInOverrides,
+    dateNotes: (roster.dateNotes ?? []).filter((row) => row.personId !== personId),
   };
 }
 
@@ -400,6 +414,18 @@ export function readRoster(value: unknown): CrewRosterBook {
       if (clamped) stayNotes[key] = clamped;
     }
   }
+  const dateNotes: DateNote[] = Array.isArray(raw.dateNotes)
+    ? raw.dateNotes.flatMap((row: unknown) => {
+        const item = row as Partial<DateNote> | null;
+        if (!item || typeof item.id !== "string" || typeof item.personId !== "string") return [];
+        if (typeof item.from !== "string" || typeof item.to !== "string" || typeof item.note !== "string") return [];
+        const note = clampStayNote(item.note);
+        if (!note) return [];
+        const from = item.from.slice(0, 10);
+        const to = item.to.slice(0, 10);
+        return [{ id: item.id, personId: item.personId, from: from <= to ? from : to, to: from <= to ? to : from, note }];
+      })
+    : [];
   // Backfill plan notes into the shared map so sheet + app stays share one lookup.
   for (const [personId, plans] of Object.entries(rotationPlans)) {
     for (const plan of plans) {
@@ -418,8 +444,48 @@ export function readRoster(value: unknown): CrewRosterBook {
     stintOutOverrides,
     stintInOverrides,
     stayNotes,
+    dateNotes,
     employees,
   };
+}
+
+/** Notes for one person on picked dates, earliest first. */
+export function dateNotesFor(roster: CrewRosterBook | null | undefined, personId: string): DateNote[] {
+  return (roster?.dateNotes ?? [])
+    .filter((row) => row.personId === personId)
+    .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+}
+
+/** The date notes covering a day (newest last). */
+export function dateNotesOn(roster: CrewRosterBook | null | undefined, personId: string, iso: string): DateNote[] {
+  return dateNotesFor(roster, personId).filter((row) => row.from <= iso && iso <= row.to);
+}
+
+/** Add or change a note on dates you pick. Empty text removes it. */
+export function setDateNote(
+  roster: CrewRosterBook,
+  input: { id?: string; personId: string; from: string; to: string; note: string },
+): CrewRosterBook {
+  const note = clampStayNote(input.note);
+  const list = roster.dateNotes ?? [];
+  if (!note) return input.id ? removeDateNote(roster, input.id) : roster;
+  const a = input.from.slice(0, 10);
+  const b = input.to.slice(0, 10);
+  const row: DateNote = {
+    id: input.id || `dn-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    personId: input.personId,
+    from: a <= b ? a : b,
+    to: a <= b ? b : a,
+    note,
+  };
+  const exists = list.some((item) => item.id === row.id);
+  return { ...roster, dateNotes: exists ? list.map((item) => (item.id === row.id ? row : item)) : [...list, row] };
+}
+
+export function removeDateNote(roster: CrewRosterBook, id: string): CrewRosterBook {
+  const list = roster.dateNotes ?? [];
+  if (!list.some((item) => item.id === id)) return roster;
+  return { ...roster, dateNotes: list.filter((item) => item.id !== id) };
 }
 
 export function loadRoster(): CrewRosterBook {

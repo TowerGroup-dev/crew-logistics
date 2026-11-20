@@ -28,9 +28,12 @@ import {
   MAX_ROTATION_DAYS,
   MAX_STAY_NOTE_CHARS,
   STANDARD_ROTATION_DAYS,
+  dateNotesFor,
+  dateNotesOn,
   findRotationPlanAt,
   getStayNote,
   type CrewRosterBook,
+  type DateNote,
   type RosterRotationPlan,
 } from "@/lib/crew-roster";
 import {
@@ -383,6 +386,12 @@ const MonthRow = memo(function MonthRow({
     const end = Math.min(dayMeta.length, daysBetween(yearStart, out));
     if (end > start) stayNotes.push({ key: `${stint.from}|${out}`, start, span: end - start, note });
   }
+  // Notes on dates the coordinator picked: a thin amber line over those days, text at its start.
+  const dateNoteBars = dateNotesFor(roster, person.id).flatMap((row) => {
+    const start = Math.max(0, daysBetween(yearStart, row.from));
+    const end = Math.min(dayMeta.length, daysBetween(yearStart, row.to) + 1);
+    return end > start ? [{ ...row, start, span: end - start }] : [];
+  });
   return (
     <div
       className="crew-day-row relative grid h-11 border-b border-border"
@@ -615,6 +624,21 @@ const MonthRow = memo(function MonthRow({
           </span>
         </div>
       ))}
+      {dateNoteBars.map((row) => (
+        <div
+          key={row.id}
+          className="pointer-events-none absolute top-0 z-[4] h-full"
+          style={{ left: `${row.start * dayColRem}rem`, width: `${row.span * dayColRem}rem` }}
+        >
+          <div className="absolute inset-x-0.5 top-0 h-[3px] rounded-b bg-stone-900/80" />
+          <span
+            title={`${row.note} · ${formatMedium(row.from)}${row.to !== row.from ? ` to ${formatMedium(row.to)}` : ""}`}
+            className="sticky left-1 top-[3px] mt-[3px] inline-block max-w-[calc(100%-0.25rem)] truncate rounded border border-stone-300 bg-white px-1 text-[9px] font-semibold leading-[13px] text-stone-900 shadow-sm"
+          >
+            {row.note}
+          </span>
+        </div>
+      ))}
     </div>
   );
 });
@@ -645,6 +669,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onRemoveRotation,
   onSetRotationNote,
   onSetStayNote,
+  onSetDateNote,
   onHidePerson,
   hiddenPeople,
   onShowPerson,
@@ -704,6 +729,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onSetRotationNote?: (personId: string, planId: string, note: string) => void;
   /** Update stay note on sheet or app stays by date range (NAV-08). */
   onSetStayNote?: (personId: string, from: string, out: string, note: string) => void;
+  /** Note on dates you pick (add when no id, change when id). Empty text removes it. */
+  onSetDateNote?: (input: { id?: string; personId: string; from: string; to: string; note: string }) => void;
   /** Hide this person under the given section role (defaults to home role). */
   onHidePerson?: (personId: string, sectionRole?: string) => void;
   hiddenPeople?: { id: string; name: string; role?: string }[];
@@ -771,6 +798,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   } | null>(null);
   const [staySelection, setStaySelection] = useState<StaySelection | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  const [dateNoteDraft, setDateNoteDraft] = useState<DateNoteDraft | null>(null);
   const [cellMenu, setCellMenu] = useState<CellMenu | null>(null);
   const [rowMenu, setRowMenu] = useState<RowMenu | null>(null);
   const [roleHiddenOpen, setRoleHiddenOpen] = useState<string | null>(null);
@@ -1302,21 +1330,16 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     showFlash("Cleared placement");
   }
 
-  function saveSelectedNote() {
+  /** Whole-stay note for the selected stay (empty text clears it). */
+  function saveWholeStayNote(text: string) {
     if (!staySelection) return;
-    const next = noteDraft.slice(0, MAX_STAY_NOTE_CHARS);
-    if (onSetStayNote) {
-      onSetStayNote(staySelection.personId, staySelection.from, staySelection.out, next);
-    } else if (staySelection.planId && onSetRotationNote) {
-      onSetRotationNote(staySelection.personId, staySelection.planId, next);
-    } else {
-      return;
-    }
-    const trimmed = next.trim();
-    setStaySelection({ ...staySelection, note: trimmed });
-    setNoteDraft(trimmed);
-    setCellMenu((menu) => (menu ? { ...menu, noteOpen: false } : null));
-    showFlash(trimmed ? `Note saved · ${trimmed}` : "Note cleared");
+    const next = text.slice(0, MAX_STAY_NOTE_CHARS).trim();
+    if (onSetStayNote) onSetStayNote(staySelection.personId, staySelection.from, staySelection.out, next);
+    else if (staySelection.planId && onSetRotationNote) onSetRotationNote(staySelection.personId, staySelection.planId, next);
+    else return;
+    setStaySelection({ ...staySelection, note: next });
+    setNoteDraft(next);
+    showFlash(next ? `Note saved for the whole stay · ${next}` : "Note removed");
   }
 
   // Resolve real plan id / note after roster catches up from place or note save.
@@ -1507,6 +1530,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     if (plan) selectPlan(plan, personId);
     else if (stint) selectStay(personId, stint.from, stint.out || scheduleYearOutExclusive(year));
     else setNoteDraft("");
+    setDateNoteDraft(null);
     setCellMenu({
       personId,
       iso,
@@ -2425,58 +2449,96 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               </button>
             ) : null}
 
-            {cellMenu.hasSite && (onSetStayNote || onSetRotationNote) ? (
-              cellMenu.noteOpen ? (
-                <div className="mt-1 grid gap-2 border-t border-border px-2 pt-2">
-                  <label className="grid gap-1">
-                    <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                      Stay note
-                    </span>
-                    <input
-                      value={noteDraft}
-                      onChange={(event) =>
-                        setNoteDraft(event.target.value.slice(0, MAX_STAY_NOTE_CHARS))
-                      }
-                      placeholder="e.g. Linger for snow"
-                      maxLength={MAX_STAY_NOTE_CHARS}
-                      spellCheck
-                      autoCorrect="on"
-                      autoCapitalize="sentences"
-                      lang="en"
-                      className="h-9 rounded-lg border border-input px-2 text-sm"
-                      autoFocus
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          saveSelectedNote();
+            {onSetDateNote ? (
+              dateNoteDraft ? (
+                <DateNoteEditor
+                  draft={dateNoteDraft}
+                  onChange={setDateNoteDraft}
+                  onCancel={() => setDateNoteDraft(null)}
+                  stayRange={
+                    cellMenu.hasSite && staySelection && (onSetStayNote || onSetRotationNote)
+                      ? { from: staySelection.from, last: addDays(staySelection.out, -1) }
+                      : null
+                  }
+                  onSave={() => {
+                    const trimmed = dateNoteDraft.note.trim();
+                    if (dateNoteDraft.wholeStay) {
+                      saveWholeStayNote(trimmed);
+                      // A note that was on some dates and is now for the whole stay: move it.
+                      if (dateNoteDraft.id) onSetDateNote({ ...dateNoteDraft, note: "", personId: cellMenu.personId });
+                      setDateNoteDraft(null);
+                      setCellMenu(null);
+                      return;
+                    }
+                    if (dateNoteDraft.wasWholeStay) saveWholeStayNote("");
+                    onSetDateNote({ ...dateNoteDraft, personId: cellMenu.personId });
+                    showFlash(
+                      trimmed
+                        ? `Note saved · ${formatMedium(dateNoteDraft.from)}${dateNoteDraft.to !== dateNoteDraft.from ? ` to ${formatMedium(dateNoteDraft.to)}` : ""}`
+                        : "Note removed",
+                    );
+                    setDateNoteDraft(null);
+                    setCellMenu(null);
+                  }}
+                  onRemove={
+                    dateNoteDraft.wasWholeStay
+                      ? () => {
+                          saveWholeStayNote("");
+                          setDateNoteDraft(null);
                           setCellMenu(null);
                         }
-                      }}
-                    />
-                    <span className="text-right text-[11px] tabular-nums text-muted-foreground">
-                      {noteDraft.length}/{MAX_STAY_NOTE_CHARS}
-                    </span>
-                  </label>
+                      : dateNoteDraft.id
+                      ? () => {
+                          onSetDateNote({ ...dateNoteDraft, note: "", personId: cellMenu.personId });
+                          showFlash("Note removed");
+                          setDateNoteDraft(null);
+                          setCellMenu(null);
+                        }
+                      : undefined
+                  }
+                />
+              ) : (
+                <>
+                  {cellMenu.hasSite && (staySelection?.note || cellMenu.plan?.note) ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-muted"
+                      onClick={() =>
+                        setDateNoteDraft({
+                          from: cellMenu.iso,
+                          to: cellMenu.iso,
+                          note: staySelection?.note || cellMenu.plan?.note || "",
+                          wholeStay: true,
+                          wasWholeStay: true,
+                        })
+                      }
+                    >
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-stone-900" />
+                      <span className="min-w-0 truncate">Edit note · {staySelection?.note || cellMenu.plan?.note}</span>
+                    </button>
+                  ) : null}
+                  {dateNotesOn(roster, cellMenu.personId, cellMenu.iso).map((row: DateNote) => (
+                    <button
+                      key={row.id}
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-muted"
+                      onClick={() => setDateNoteDraft({ id: row.id, from: row.from, to: row.to, note: row.note })}
+                    >
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-stone-400" />
+                      <span className="min-w-0 truncate">Edit note · {row.note}</span>
+                    </button>
+                  ))}
                   <button
                     type="button"
-                    className="h-8 rounded-lg bg-stone-900 text-sm font-medium text-white"
-                    onClick={() => {
-                      saveSelectedNote();
-                      setCellMenu(null);
-                    }}
+                    role="menuitem"
+                    className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-muted"
+                    onClick={() => setDateNoteDraft({ from: cellMenu.iso, to: cellMenu.iso, note: "" })}
                   >
-                    Save note
+                    Add note
                   </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-muted"
-                  onClick={() => setCellMenu({ ...cellMenu, noteOpen: true })}
-                >
-                  {staySelection?.note || cellMenu.plan?.note ? "Edit note" : "Add note"}
-                </button>
+                </>
               )
             ) : null}
 
@@ -2610,4 +2672,140 @@ export function shiftMonth(monthStart: string, delta: number) {
   const [y, m] = monthStart.split("-").map(Number);
   const date = new Date(y, (m ?? 1) - 1 + delta, 1);
   return toISODate(date).slice(0, 7) + "-01";
+}
+
+/** From / To / text for a note on dates you pick (inside the right-click menu). */
+type DateNoteDraft = {
+  id?: string;
+  from: string;
+  to: string;
+  note: string;
+  /** Ticked: the note covers the whole stay instead of the dates. */
+  wholeStay?: boolean;
+  /** Opened from the existing whole-stay note. */
+  wasWholeStay?: boolean;
+};
+
+function DateNoteEditor({
+  draft,
+  onChange,
+  onSave,
+  onCancel,
+  onRemove,
+  stayRange,
+}: {
+  draft: DateNoteDraft;
+  onChange: (next: DateNoteDraft) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onRemove?: () => void;
+  /** The stay under this day, when there is one (enables the "Whole stay" box). */
+  stayRange: { from: string; last: string } | null;
+}) {
+  const whole = Boolean(stayRange && draft.wholeStay);
+  const days = whole && stayRange ? daysBetween(stayRange.from, stayRange.last) + 1 : Math.abs(daysBetween(draft.from, draft.to)) + 1;
+  return (
+    <div className="mt-1 grid gap-2 border-t border-border px-2 pt-2">
+      <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        {draft.id || draft.wasWholeStay ? "Edit note" : "Add note"}
+      </span>
+      {stayRange ? (
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={whole}
+            onChange={(event) => onChange({ ...draft, wholeStay: event.target.checked })}
+            className="h-4 w-4 accent-stone-900"
+          />
+          Whole stay
+          <span className="text-xs font-normal text-muted-foreground">
+            {formatMedium(stayRange.from)} to {formatMedium(stayRange.last)}
+          </span>
+        </label>
+      ) : null}
+      {whole ? null : (
+      <div className="grid grid-cols-2 gap-1.5">
+        <label className="grid gap-0.5 text-[11px] font-medium text-muted-foreground">
+          From
+          <input
+            type="date"
+            value={draft.from}
+            onChange={(event) => {
+              const from = event.target.value;
+              if (!from) return;
+              onChange({ ...draft, from, to: draft.to < from ? from : draft.to });
+            }}
+            className="h-8 rounded-lg border border-input px-1.5 text-xs text-foreground"
+          />
+        </label>
+        <label className="grid gap-0.5 text-[11px] font-medium text-muted-foreground">
+          To
+          <input
+            type="date"
+            value={draft.to}
+            min={draft.from}
+            onChange={(event) => {
+              const to = event.target.value;
+              if (!to) return;
+              onChange({ ...draft, to: to < draft.from ? draft.from : to });
+            }}
+            className="h-8 rounded-lg border border-input px-1.5 text-xs text-foreground"
+          />
+        </label>
+      </div>
+      )}
+      <label className="grid gap-1">
+        <input
+          value={draft.note}
+          onChange={(event) => onChange({ ...draft, note: event.target.value.slice(0, MAX_STAY_NOTE_CHARS) })}
+          placeholder="e.g. Lingering for snow"
+          maxLength={MAX_STAY_NOTE_CHARS}
+          spellCheck
+          autoCapitalize="sentences"
+          lang="en"
+          aria-label="Note"
+          className="h-9 rounded-lg border border-input px-2 text-sm"
+          autoFocus
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onSave();
+            }
+          }}
+        />
+        <span className="flex justify-between text-[11px] tabular-nums text-muted-foreground">
+          <span>
+            {days} day{days === 1 ? "" : "s"}
+          </span>
+          <span>
+            {draft.note.length}/{MAX_STAY_NOTE_CHARS}
+          </span>
+        </span>
+      </label>
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          className="h-8 flex-1 rounded-lg bg-stone-900 text-sm font-medium text-white disabled:opacity-40"
+          disabled={!draft.note.trim()}
+          title={whole ? "Shows across the whole stay" : "Shows on these dates only"}
+          onClick={onSave}
+        >
+          Save note
+        </button>
+        {onRemove ? (
+          <button
+            type="button"
+            className="h-8 rounded-lg border border-rose-200 px-2 text-sm font-medium text-rose-800 hover:bg-rose-50"
+            onClick={onRemove}
+          >
+            Remove
+          </button>
+        ) : (
+          <button type="button" className="h-8 rounded-lg border border-input px-2 text-sm font-medium hover:bg-muted" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }

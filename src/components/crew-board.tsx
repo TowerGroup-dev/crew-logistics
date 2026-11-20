@@ -62,6 +62,7 @@ import {
   setEmploymentStatus,
   setRotationPlanNote,
   setStayNote,
+  setDateNote,
   setStayIn,
   setStayOut,
   slugEmployee,
@@ -1141,6 +1142,7 @@ export function CrewBoard({
                   history: true,
                 })
               }
+              onSetDateNote={(input) => patchRoster((current) => setDateNote(current, input), { history: true })}
               onSetStayNote={(personId, from, out, note) =>
                 patchRoster((current) => setStayNote(current, personId, from, out, note), {
                   history: true,
