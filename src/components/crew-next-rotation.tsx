@@ -19,6 +19,7 @@ export function CrewNextRotationForm({
   isActive,
   roles = [],
   onSave,
+  onSaveMany,
 }: {
   defaultSite?: string | null;
   defaultRole?: string | null;
@@ -26,6 +27,8 @@ export function CrewNextRotationForm({
   isActive: boolean;
   roles?: string[];
   onSave: (input: { site: string; from: string; out: string; role: string }) => void;
+  /** Several stays at once (repeat pattern), saved as one change. */
+  onSaveMany?: (inputs: { site: string; from: string; out: string; role: string }[]) => void;
 }) {
   const [site, setSite] = useState(() => {
     const home = (defaultSite || "IQA").toUpperCase();
@@ -37,6 +40,10 @@ export function CrewNextRotationForm({
     String(Math.min(defaultDays || DEFAULT_ROTATION_DAYS, MAX_ROTATION_DAYS)),
   );
   const [error, setError] = useState("");
+  // Repeat: same length, N weeks off in between, until a date (planning a whole year).
+  const [repeat, setRepeat] = useState(false);
+  const [weeksOff, setWeeksOff] = useState("3");
+  const [until, setUntil] = useState("");
   const roleOptions = roles.length
     ? roles
     : ["Labourer", "Operator/Truck Driver", "Surveyor", "Manager", "Mechanic"];
@@ -47,6 +54,19 @@ export function CrewNextRotationForm({
     if (!Number.isFinite(n) || n < 1) return "";
     return addDays(from, n);
   }, [days, from]);
+
+  /** Every stay the repeat pattern makes: [IN, exclusive OUT). */
+  const series = useMemo(() => {
+    if (!repeat || !from || !out) return [];
+    const length = Math.max(1, Math.round((Date.parse(out) - Date.parse(from)) / 86400000));
+    const gap = Math.max(0, Math.round(Number(weeksOff) || 0)) * 7;
+    const last = until || `${from.slice(0, 4)}-12-31`;
+    const stays: { from: string; out: string }[] = [];
+    for (let start = from; start <= last && stays.length < 26; start = addDays(start, length + gap)) {
+      stays.push({ from: start, out: addDays(start, length) });
+    }
+    return stays;
+  }, [from, out, repeat, until, weeksOff]);
 
   function submit() {
     if (!from) {
@@ -62,7 +82,13 @@ export function CrewNextRotationForm({
       return;
     }
     setError("");
-    onSave({ site, from, out, role });
+    if (repeat && series.length > 1) {
+      const inputs = series.map((stay) => ({ site, role, ...stay }));
+      if (onSaveMany) onSaveMany(inputs);
+      else inputs.forEach(onSave);
+    } else {
+      onSave({ site, from, out, role });
+    }
     setFrom("");
   }
 
@@ -127,11 +153,57 @@ export function CrewNextRotationForm({
           />
         </label>
         <div className="grid gap-1 text-sm">
-          <span className="text-muted-foreground">OUT</span>
+          <span className="text-muted-foreground">OUT (last day)</span>
           <div className="flex h-9 items-center rounded-lg border border-dashed border-border px-2 text-sm">
-            {out ? formatMedium(out) : "-"}
+            {out ? formatMedium(addDays(out, -1)) : "-"}
           </div>
         </div>
+      </div>
+
+      <div className="grid gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+        <label className="inline-flex items-center gap-2 font-medium">
+          <input type="checkbox" checked={repeat} onChange={(event) => setRepeat(event.target.checked)} />
+          Repeat this rotation
+        </label>
+        {repeat ? (
+          <>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="grid gap-1">
+                <span className="text-muted-foreground">Weeks off between stays</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={26}
+                  value={weeksOff}
+                  onChange={(event) => setWeeksOff(event.target.value)}
+                  className="h-9 rounded-lg border border-input px-2"
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-muted-foreground">Last IN no later than</span>
+                <input
+                  type="date"
+                  value={until}
+                  min={from || undefined}
+                  onChange={(event) => setUntil(event.target.value)}
+                  className="h-9 rounded-lg border border-input px-2"
+                />
+              </label>
+            </div>
+            {series.length ? (
+              <ol className="grid gap-1 sm:grid-cols-2">
+                {series.map((stay, index) => (
+                  <li key={stay.from} className="rounded-md bg-card px-2 py-1 tabular-nums">
+                    <span className="font-semibold">{index + 1}.</span> {site} · IN {formatMedium(stay.from)}, OUT{" "}
+                    {formatMedium(addDays(stay.out, -1))}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-muted-foreground">Pick the first IN date to see every stay.</p>
+            )}
+          </>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -140,7 +212,11 @@ export function CrewNextRotationForm({
           onClick={submit}
           className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
-          {isActive ? "Add rotation" : "Set active + add rotation"}
+          {repeat && series.length > 1
+            ? `Add ${series.length} rotations`
+            : isActive
+              ? "Add rotation"
+              : "Set active + add rotation"}
         </button>
         <div className="flex flex-wrap gap-2 text-[0.8125rem] text-muted-foreground">
           {SITES.map((row) => (

@@ -1641,6 +1641,19 @@ export function CrewBoard({
               onEmploymentStatus={(status) =>
                 patchRoster((current) => setEmploymentStatus(current, selected.person.id, status))
               }
+              onAddRotations={(inputs) => {
+                // Whole repeat pattern in one change (one Undo step).
+                patchRoster(
+                  (current) => inputs.reduce((book, input) => addNextRotation(book, selected.person.id, input), current),
+                  { history: true },
+                );
+                logActivity({
+                  kind: "stay_place",
+                  personId: selected.person.id,
+                  personName: selected.person.name,
+                  text: `${selected.person.name}: ${inputs.length} rotations at ${inputs[0]?.site} from ${inputs[0]?.from}`,
+                });
+              }}
               onAddRotation={(input) => {
                 patchRoster((current) => addNextRotation(current, selected.person.id, input), {
                   history: true,
@@ -1714,6 +1727,7 @@ function PersonProfile({
   onSaveFlight,
   onEmploymentStatus,
   onAddRotation,
+  onAddRotations,
 }: {
   snap: CrewSnapshot;
   ops: CrewPersonOps;
@@ -1727,6 +1741,7 @@ function PersonProfile({
   onSaveFlight: (booking: FlightBooking) => void;
   onEmploymentStatus: (status: EmploymentStatus) => void;
   onAddRotation: (input: { site: string; from: string; out: string; role: string }) => void;
+  onAddRotations?: (inputs: { site: string; from: string; out: string; role: string }[]) => void;
 }) {
   const [note, setNote] = useState("");
   const segments = personSegments(snap.person);
@@ -1830,6 +1845,7 @@ function PersonProfile({
         isActive={isActive}
         roles={roles}
         onSave={onAddRotation}
+        onSaveMany={onAddRotations}
       />
 
       <section className="grid gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:grid-cols-3">

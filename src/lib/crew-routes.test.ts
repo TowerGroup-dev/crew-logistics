@@ -134,3 +134,29 @@ describe("trip plan", () => {
     expect(booked.steps[1]).toMatchObject({ hotel: "Explorer" });
   });
 });
+
+describe("open stays carry into the next year", () => {
+  it("stay at the site they last moved to, not the stay's first site", () => {
+    const eric = {
+      id: "eric",
+      name: "Eric",
+      role: "Manager",
+      roles: ["Manager"],
+      homeSites: ["IQA"],
+      projectIds: [],
+      inDate: null,
+      outDate: null,
+      rotationDays: 42,
+      events: [],
+      stints: [{ from: "2026-11-23", out: null, site: "IQA", sites: ["IQA"] }],
+    } as unknown as CrewPerson;
+    const book = {
+      version: 1,
+      rotations: [{ personId: "eric", plannedIn: "2026-11-23", moves: [newMove("IQA", "KUG", "2026-11-27")] }],
+    } as unknown as RotationBook;
+    const [out] = applyRotationMoves([eric], book);
+    expect(siteOnDay(out!, "2026-12-31")).toBe("KUG");
+    expect(siteOnDay(out!, "2027-01-01")).toBe("KUG");
+    expect(siteOnDay(out!, "2027-03-15")).toBe("KUG");
+  });
+});

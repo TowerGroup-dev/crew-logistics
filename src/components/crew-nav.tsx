@@ -70,7 +70,7 @@ export function CrewNav({
   const search = useSearchParams();
   const yearParam = Number(search.get("year") || "");
   const monthParam = search.get("month");
-  const [years, setYears] = useState<number[]>(() => [...loadScheduleYears()]);
+  const [storedYears, setYears] = useState<number[]>(() => [...loadScheduleYears()]);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const year =
@@ -112,6 +112,8 @@ export function CrewNav({
     };
   }, [menuOpen]);
 
+  // The year in the address is always offered, even before it has been saved to the list.
+  const years = storedYears.includes(year) ? storedYears : [...storedYears, year].sort((a, b) => a - b);
   const yearIndex = years.indexOf(year);
   const prevYear = yearIndex > 0 ? years[yearIndex - 1] : null;
   const nextYear = yearIndex >= 0 && yearIndex < years.length - 1 ? years[yearIndex + 1] : null;

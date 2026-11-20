@@ -439,7 +439,9 @@ const MonthRow = memo(function MonthRow({
         const stintStart = Boolean(
           covering &&
             (iso === covering.from ||
-              (site && (dayIndex > 0 ? siteAt[dayIndex - 1] : null) !== site)),
+              // First box on screen (e.g. 1 Jan): look at the real day before, so a stay
+              // that carries over from last year is not shown as a fresh IN.
+              (site && (dayIndex > 0 ? siteAt[dayIndex - 1] : siteOnDay(person, addDays(iso, -1))) !== site)),
         );
         const stintEnd = Boolean(stayLastDay && iso === stayLastDay);
         // Today's box on a stay: "day / length" (e.g. 18/42), length grows when the stay is stretched.

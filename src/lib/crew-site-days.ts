@@ -21,6 +21,11 @@ export function siteOnDay(person: CrewPerson, iso: string) {
     if (stint.from <= iso && iso < out) {
       const segment = segmentOn(stint.segments, iso);
       if (segment) return segment.kind === "site" ? worksiteFromMark(segment.site || "") || null : null;
+      // Open stay (no OUT yet) past its last known piece: still at the last site they were at.
+      const lastPiece = stint.segments?.length ? stint.segments[stint.segments.length - 1] : null;
+      if (!stint.out && lastPiece && iso >= lastPiece.out && lastPiece.kind === "site") {
+        return worksiteFromMark(lastPiece.site || "") || null;
+      }
       const site = worksiteFromMark(stint.site) || stint.sites.map(worksiteFromMark).find(Boolean);
       return site || null;
     }

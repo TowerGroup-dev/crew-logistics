@@ -7,10 +7,15 @@ function calendarYear() {
   return new Date().getFullYear();
 }
 
+/** From 2027 the app is the master: next year is always open for planning ahead. */
+function planningYear() {
+  return calendarYear() + 1;
+}
+
 /** Years managed in the app (Excel is not required going forward). */
 export function loadScheduleYears(): number[] {
   const base = [...CREW_AVAILABLE_YEARS];
-  const rolling = [CREW_SCHEDULE.year, calendarYear()];
+  const rolling = [CREW_SCHEDULE.year, calendarYear(), planningYear()];
   if (typeof window === "undefined") {
     return [...new Set([...base, ...rolling])].sort((a, b) => a - b);
   }
