@@ -251,7 +251,7 @@ export function CrewBoard({
   const [selectedRotationId, setSelectedRotationId] = useState<string | null>(null);
   const [rotationBook, setRotationBook] = useState<RotationBook>(() => loadRotations());
   /** Which trip to open on the Travel tab when a stay drawer opens from the Flights list. */
-  const [openTravelFor, setOpenTravelFor] = useState<"outbound" | "return" | null>(null);
+  const [openTravelFor, setOpenTravelFor] = useState<"outbound" | "return" | "moves" | null>(null);
   // Calendar draws both flight records and trips typed on stays (route, legs, overnight stops).
   const calendarFlightBook = useMemo<FlightBook>(
     () => ({ bookings: [...flightBook.bookings, ...bookingsFromRotations(rotationBook)] }),
@@ -510,7 +510,7 @@ export function CrewBoard({
     return `${scheduleYear}-01-01`;
   }, [scheduleYear, today]);
 
-  function openPersonRotation(personId: string, iso = asOf, travel: "outbound" | "return" | null = null) {
+  function openPersonRotation(personId: string, iso = asOf, travel: "outbound" | "return" | "moves" | null = null) {
     setOpenTravelFor(travel);
     // Prefer the stay covering the clicked day, else current/next from today, never a past rotation.
     const hit =

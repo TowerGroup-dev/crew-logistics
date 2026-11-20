@@ -2,7 +2,7 @@
 
 import { CrewTripForm } from "@/components/crew-trip-form";
 import { useEffect, useMemo, useState } from "react";
-import { BedDouble, PlaneLanding, PlaneTakeoff, X } from "lucide-react";
+import { BedDouble, PlaneLanding, PlaneTakeoff, Plus, Repeat, Trash2, X } from "lucide-react";
 import { roleLabel, scheduleYearOutExclusive, type CrewPerson } from "@/lib/crew-schedule";
 import {
   daysLeftOnRotation,
@@ -21,7 +21,10 @@ import {
   type RotationTravel,
   type TravelDirection,
   ASSUMED_PNR,
+  movesFromStint,
+  newMove,
   travelIsBooked,
+  type RotationMove,
 } from "@/lib/crew-rotations";
 import {
   DEFAULT_ROTATION_DAYS,
@@ -56,7 +59,7 @@ export function CrewRotationDrawer({
 }: {
   roster?: CrewRosterBook;
   /** Open straight on the Travel tab for this trip (from the Flights list). */
-  openTravel?: TravelDirection | null;
+  openTravel?: TravelDirection | "moves" | null;
   rotation: CrewRotation;
   person: CrewPerson;
   people: CrewPerson[];
@@ -76,7 +79,15 @@ export function CrewRotationDrawer({
   const [section, setSection] = useState<"overview" | "travel" | "stay" | "replacement">(
     openTravel ? "travel" : "overview",
   );
-  const [travelDir, setTravelDir] = useState<TravelDirection>(openTravel || "outbound");
+  const [travelDir, setTravelDir] = useState<TravelDirection | "moves">(openTravel || "outbound");
+  // Moves the Excel shows inside this stay (e.g. KUG, then YK, then IQA), until one is saved for it.
+  const stint = person.stints?.find((row) => row.from === rotation.plannedIn) ?? null;
+  const suggestedMoves = movesFromStint(stint).filter(
+    (row) =>
+      !(draft.moves ?? []).some(
+        (saved) => saved.fromSite === row.fromSite && saved.toSite === row.toSite && saved.date === row.date,
+      ),
+  );
   const [replaceOpen, setReplaceOpen] = useState(false);
   const [extendOut, setExtendOut] = useState(() => inclusiveOut(rotation));
 
@@ -190,7 +201,7 @@ export function CrewRotationDrawer({
 
           {section === "travel" ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setTravelDir("outbound")}
@@ -206,6 +217,26 @@ export function CrewRotationDrawer({
                     <span className="block">Outbound</span>
                     <span className={cn("block text-xs font-normal", travelDir === "outbound" ? "text-primary-foreground/80" : "text-muted-foreground")}>
                       {tripLabel(draft.outbound)}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTravelDir("moves")}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition",
+                    travelDir === "moves"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border hover:bg-muted",
+                  )}
+                >
+                  <Repeat className="size-4 shrink-0" />
+                  <span className="min-w-0">
+                    <span className="block">Moves</span>
+                    <span className={cn("block text-xs font-normal", travelDir === "moves" ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                      {(draft.moves?.length ?? 0) + suggestedMoves.length
+                        ? `${(draft.moves?.length ?? 0) + suggestedMoves.length} between sites`
+                        : "None"}
                     </span>
                   </span>
                 </button>
@@ -228,6 +259,19 @@ export function CrewRotationDrawer({
                   </span>
                 </button>
               </div>
+              {travelDir === "moves" ? (
+                <MovesPanel
+                  moves={draft.moves ?? []}
+                  suggested={suggestedMoves}
+                  sites={siteOptions}
+                  stayFrom={draft.plannedIn}
+                  stayTo={outInclusive}
+                  personId={draft.personId}
+                  book={book}
+                  onChange={(moves) => commit({ ...draft, moves })}
+                />
+              ) : (
+              <>
               <p className="text-sm text-muted-foreground">
                 {travelDir === "outbound"
                   ? draft.outbound.bookedOn && travelIsBooked(draft.outbound)
@@ -271,6 +315,8 @@ export function CrewRotationDrawer({
                 book={book}
                 onChange={(patch) => patchTravel(travelDir, patch)}
               />
+              </>
+              )}
             </div>
           ) : null}
 
@@ -452,6 +498,7 @@ export function CrewRotationDrawer({
                       handoverTo,
                       notes: "",
                       source: "app",
+                      moves: [],
                     };
                     onSaveRoster((roster) =>
                       addNextRotation(roster, personId, {
@@ -643,6 +690,175 @@ function ReturnWindowEditor({
           Clear window
         </button>
       ) : null}
+    </div>
+  );
+}
+
+/** Flights between sites during a stay: from the Excel, or added here. Each one opens as a full trip. */
+function MovesPanel({
+  moves,
+  suggested,
+  sites,
+  stayFrom,
+  stayTo,
+  personId,
+  book,
+  onChange,
+}: {
+  moves: RotationMove[];
+  suggested: { fromSite: string; toSite: string; date: string }[];
+  sites: string[];
+  stayFrom: string;
+  stayTo: string;
+  personId: string;
+  book: RotationBook;
+  onChange: (moves: RotationMove[]) => void;
+}) {
+  const [openId, setOpenId] = useState<string | null>(moves.length === 1 ? moves[0]!.id : null);
+  const [adding, setAdding] = useState(false);
+  const [fromSite, setFromSite] = useState(sites[0] || "IQA");
+  const [toSite, setToSite] = useState(sites[1] || "POND");
+  const [date, setDate] = useState(stayFrom);
+  const sorted = [...moves].sort((a, b) => a.date.localeCompare(b.date));
+
+  function add(row: { fromSite: string; toSite: string; date: string }) {
+    const move = newMove(row.fromSite, row.toSite, row.date);
+    onChange([...moves, move]);
+    setOpenId(move.id);
+  }
+
+  return (
+    <div className="space-y-3 text-sm">
+      <p className="text-muted-foreground">
+        Flights between sites up north during this stay, like Iqaluit to Pond. Book each one like any trip.
+      </p>
+
+      {suggested.map((row) => (
+        <div
+          key={`${row.fromSite}-${row.toSite}-${row.date}`}
+          className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-violet-300 bg-violet-50/60 px-3 py-2.5"
+        >
+          <div>
+            <p className="font-semibold">
+              {row.fromSite} → {row.toSite}
+              <span className="ml-2 font-normal text-muted-foreground">{formatMedium(row.date)}</span>
+            </p>
+            <p className="text-xs text-muted-foreground">On the Excel, not booked yet</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => add(row)}
+            className="h-8 shrink-0 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:opacity-90"
+          >
+            Book
+          </button>
+        </div>
+      ))}
+
+      {sorted.map((move) => {
+        const open = openId === move.id;
+        return (
+          <div key={move.id} className="rounded-xl border border-border">
+            <button
+              type="button"
+              onClick={() => setOpenId(open ? null : move.id)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-muted/40"
+            >
+              <span>
+                <span className="font-semibold">
+                  {move.fromSite} → {move.toSite}
+                </span>
+                <span className="ml-2 text-muted-foreground">{formatMedium(move.date)}</span>
+              </span>
+              <span className="text-xs font-medium text-muted-foreground">{tripLabel(move.travel)}</span>
+            </button>
+            {open ? (
+              <div className="space-y-3 border-t border-border p-3">
+                <CrewTripForm
+                  key={move.id}
+                  value={move.travel}
+                  direction="outbound"
+                  site={move.toSite}
+                  travelDate={move.date}
+                  personId={personId}
+                  book={book}
+                  move={{ fromSite: move.fromSite, toSite: move.toSite }}
+                  onChange={(patch) =>
+                    onChange(moves.map((row) => (row.id === move.id ? { ...row, travel: { ...row.travel, ...patch } } : row)))
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={() => onChange(moves.filter((row) => row.id !== move.id))}
+                  className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-input text-xs text-rose-700 hover:bg-rose-50"
+                >
+                  <Trash2 className="size-3.5" /> Remove this move
+                </button>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+
+      {adding ? (
+        <div className="grid grid-cols-3 gap-2 rounded-xl border border-border p-3">
+          <label className="grid min-w-0 gap-1">
+            <span className="text-xs text-muted-foreground">From site</span>
+            <select value={fromSite} onChange={(event) => setFromSite(event.target.value)} className="h-9 rounded-lg border border-input bg-card px-2">
+              {sites.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid min-w-0 gap-1">
+            <span className="text-xs text-muted-foreground">To site</span>
+            <select value={toSite} onChange={(event) => setToSite(event.target.value)} className="h-9 rounded-lg border border-input bg-card px-2">
+              {sites.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid min-w-0 gap-1">
+            <span className="text-xs text-muted-foreground">Date</span>
+            <input
+              type="date"
+              value={date}
+              min={stayFrom}
+              max={stayTo}
+              onChange={(event) => setDate(event.target.value)}
+              className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
+            />
+          </label>
+          <div className="col-span-3 flex gap-2">
+            <button
+              type="button"
+              disabled={!date || fromSite === toSite}
+              onClick={() => {
+                add({ fromSite, toSite, date });
+                setAdding(false);
+              }}
+              className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-40"
+            >
+              Add move
+            </button>
+            <button type="button" onClick={() => setAdding(false)} className="h-9 rounded-lg border border-input px-3 text-sm">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="inline-flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-input text-sm font-medium hover:bg-muted"
+        >
+          <Plus className="size-4" /> Add a move between sites
+        </button>
+      )}
     </div>
   );
 }

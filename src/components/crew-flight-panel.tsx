@@ -441,7 +441,7 @@ function FlightConfirmationForm({
             <p className="text-sm">
               <span className="text-muted-foreground">Usual route </span>
               <span className="font-semibold">{usualChain.join(" → ")}</span>
-              <span className="text-muted-foreground"> · {usualChain.map((code) => travelHubName(code, hubs)).join(" → ")}</span>
+              <span className="text-muted-foreground"> · {usualChain.map((code) => CAMP_AIRPORTS.find((row) => row.code === code)?.name || travelHubName(code, hubs)).join(" → ")}</span>
             </p>
             <button
               type="button"

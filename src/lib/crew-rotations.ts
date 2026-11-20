@@ -92,7 +92,58 @@ export type CrewRotation = {
   handoverTo: string | null;
   notes: string;
   source: "sheet" | "app";
+  /** Flights between sites during this stay (e.g. Iqaluit to Pond). */
+  moves: RotationMove[];
 };
+
+/** A flight between two sites up north, partway through a stay. */
+export type RotationMove = {
+  id: string;
+  fromSite: string;
+  toSite: string;
+  /** Travel day. */
+  date: string;
+  travel: RotationTravel;
+};
+
+export function newMove(fromSite: string, toSite: string, date: string): RotationMove {
+  return {
+    id: `move-${fromSite}-${toSite}-${date}`,
+    fromSite,
+    toSite,
+    date,
+    travel: emptyTravel("outbound"),
+  };
+}
+
+function readMove(value: unknown): RotationMove | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Partial<RotationMove>;
+  if (typeof row.fromSite !== "string" || typeof row.toSite !== "string" || typeof row.date !== "string") return null;
+  return {
+    id: typeof row.id === "string" ? row.id : `move-${row.fromSite}-${row.toSite}-${row.date}`,
+    fromSite: row.fromSite,
+    toSite: row.toSite,
+    date: row.date.slice(0, 10),
+    travel: readTravel(row.travel, "outbound"),
+  };
+}
+
+/**
+ * Moves between sites the Excel shows inside a stay (site A, travel days, site B).
+ * Travel day = first day after leaving A.
+ */
+export function movesFromStint(stint: CrewStint | null | undefined): { fromSite: string; toSite: string; date: string }[] {
+  const sites = (stint?.segments || []).filter((row) => row.kind === "site" && row.site);
+  const moves: { fromSite: string; toSite: string; date: string }[] = [];
+  for (let i = 1; i < sites.length; i += 1) {
+    const prev = sites[i - 1]!;
+    const next = sites[i]!;
+    if (prev.site === next.site) continue;
+    moves.push({ fromSite: prev.site!, toSite: next.site!, date: prev.out || next.from });
+  }
+  return moves;
+}
 
 export type RotationBook = {
   version: 1;
@@ -249,6 +300,9 @@ function readRotation(value: unknown): CrewRotation | null {
     handoverTo: typeof row.handoverTo === "string" ? row.handoverTo.slice(0, 10) : null,
     notes: typeof row.notes === "string" ? row.notes : "",
     source: row.source === "app" ? "app" : "sheet",
+    moves: Array.isArray(row.moves)
+      ? row.moves.map(readMove).filter((item): item is RotationMove => Boolean(item))
+      : [],
   };
 }
 
@@ -308,6 +362,7 @@ function stintToSeed(person: CrewPerson, stint: CrewStint): CrewRotation {
     handoverTo: null,
     notes: "",
     source,
+    moves: [],
   };
 }
 
@@ -356,6 +411,7 @@ export function mergeRotationBook(people: CrewPerson[], stored: RotationBook): R
         handoverTo: prev.handoverTo,
         notes: prev.notes,
         source: seed.source,
+        moves: prev.moves ?? [],
       });
       byId.delete(seed.id);
     }
@@ -480,11 +536,16 @@ function travelFromFlight(booking: FlightBooking, direction: TravelDirection): R
 export function bookingsFromRotations(book: RotationBook): FlightBooking[] {
   const rows: FlightBooking[] = [];
   for (const rotation of book.rotations) {
-    for (const travel of [rotation.outbound, rotation.returnTravel]) {
+    const trips = [
+      { key: "outbound", travel: rotation.outbound },
+      { key: "return", travel: rotation.returnTravel },
+      ...(rotation.moves ?? []).map((move) => ({ key: move.id, travel: move.travel })),
+    ];
+    for (const { key, travel } of trips) {
       const legs = travel.segments.filter((row) => row.departDate && (row.fromAirport || row.toAirport));
       if (!legs.length) continue;
       rows.push({
-        id: `rotation:${rotation.id}:${travel.direction}`,
+        id: `rotation:${rotation.id}:${key}`,
         personId: rotation.personId,
         direction: travel.direction,
         rotationDate: travel.direction === "outbound" ? rotation.plannedIn : addDays(rotation.plannedOut, -1),

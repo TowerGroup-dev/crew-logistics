@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import { BedDouble, Car, Plane, PlaneLanding, PlaneTakeoff, Repeat } from "lucide-react";
 import type { CrewOpsBook } from "@/lib/crew-ops";
 import { flightStatusLabel, type FlightBook, type FlightBooking, type FlightDirection } from "@/lib/crew-flights";
-import { lastStartAirport, loadRoutes, routeAirports } from "@/lib/crew-routes";
-import { ASSUMED_PNR, travelIsBooked, type RotationBook, type RotationTravel } from "@/lib/crew-rotations";
+import { lastStartAirport, loadRoutes, routeAirports, routeBetweenSites } from "@/lib/crew-routes";
+import { ASSUMED_PNR, movesFromStint, travelIsBooked, type RotationBook, type RotationTravel } from "@/lib/crew-rotations";
 import { siteLabel, type CrewPerson, type CrewSnapshot } from "@/lib/crew-schedule";
 import { formatJourneyPath } from "@/lib/crew-travel-hubs";
 import { addDays, daysBetween, formatMedium } from "@/lib/dates";
@@ -21,6 +21,8 @@ type Trip = {
   site: string;
   /** Transfers only: the camp they leave. */
   fromSite?: string;
+  /** Transfers only: first day of the stay, to open it. */
+  stayFrom?: string;
   booking: FlightBooking | null;
 };
 
@@ -29,8 +31,6 @@ const WINDOWS = [
   { days: 28, label: "4 weeks" },
   { days: 56, label: "8 weeks" },
 ] as const;
-
-const CAMPS = new Set(["IQA", "POND", "KUG", "ALRT"]);
 
 function tripDates(booking: FlightBooking) {
   const legs = booking.segments.filter((row) => row.departDate);
@@ -136,22 +136,24 @@ function tripsBetween(
           booking: find(person.id, "return", outDay),
         });
       }
-      // Camp to camp inside one stay (e.g. KUG → YK → IQA).
-      const campLegs = (stint.segments || []).filter((row) => row.kind === "site" && row.site && CAMPS.has(row.site));
-      for (let i = 1; i < campLegs.length; i += 1) {
-        const prev = campLegs[i - 1]!;
-        const next = campLegs[i]!;
-        if (prev.site === next.site) continue;
-        const leave = prev.out ? addDays(prev.out, 0) : next.from;
-        if (!inWindow(leave)) continue;
+      // Moves between sites inside one stay (e.g. IQA → POND): saved on the stay, plus any the Excel shows.
+      const rotation = rotationBook?.rotations.find((row) => row.personId === person.id && row.plannedIn === stint.from);
+      const saved = rotation?.moves ?? [];
+      const fromExcel = movesFromStint(stint).filter(
+        (row) => !saved.some((move) => move.fromSite === row.fromSite && move.toSite === row.toSite && move.date === row.date),
+      );
+      const allMoves: { fromSite: string; toSite: string; date: string; travel?: RotationTravel }[] = [...saved, ...fromExcel];
+      for (const move of allMoves) {
+        if (!inWindow(move.date)) continue;
         trips.push({
-          key: `${person.id}|move|${leave}`,
+          key: `${person.id}|move|${move.fromSite}|${move.toSite}|${move.date}`,
           person,
           kind: "transfer",
-          date: leave,
-          site: next.site!,
-          fromSite: prev.site!,
-          booking: null,
+          date: move.date,
+          stayFrom: stint.from,
+          site: move.toSite,
+          fromSite: move.fromSite,
+          booking: move.travel ? bookingFromTravel(move.travel, person.id, move.date) : null,
         });
       }
     }
@@ -180,7 +182,7 @@ export function CrewTravelDesk({
   rotationBook?: RotationBook;
   today: string;
   /** Opens the stay on the trip's day, on the Travel tab for that direction. */
-  onOpen: (personId: string, iso?: string, travel?: "outbound" | "return" | null) => void;
+  onOpen: (personId: string, iso?: string, travel?: "outbound" | "return" | "moves" | null) => void;
 }) {
   const [windowDays, setWindowDays] = useState<number>(28);
   const [onlyOpen, setOnlyOpen] = useState(false);
@@ -196,8 +198,8 @@ export function CrewTravelDesk({
   const openTrip = (trip: Trip) =>
     onOpen(
       trip.person.id,
-      trip.kind === "home" ? trip.date : trip.kind === "to_site" ? trip.date : addDays(trip.date, -1),
-      trip.kind === "to_site" ? "outbound" : trip.kind === "home" ? "return" : null,
+      trip.kind === "transfer" ? trip.stayFrom || trip.date : trip.date,
+      trip.kind === "to_site" ? "outbound" : trip.kind === "home" ? "return" : "moves",
     );
   const urgent = notBooked.filter((trip) => daysBetween(today, trip.date) <= 14).length;
 
@@ -268,7 +270,7 @@ export function CrewTravelDesk({
                   : "";
                 const usual =
                   trip.kind === "transfer"
-                    ? `${trip.fromSite} → ${trip.site}`
+                    ? routeBetweenSites(routes, trip.fromSite || "", trip.site).join(" → ")
                     : routeAirports(routes, trip.site, home || "HOME", trip.kind === "to_site" ? "outbound" : "return")
                         .join(" → ")
                         .replace("HOME", "home");

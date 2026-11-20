@@ -561,7 +561,7 @@ const MonthRow = memo(function MonthRow({
                 className="absolute bottom-0.5 left-0.5 z-[2] rounded bg-stone-900/85 px-0.5 text-[8px] font-bold leading-tight text-white"
                 title={travelHubLabel(hubMark, travelHubs)}
               >
-                {hubMark.slice(0, 3)}
+                {travelBoxCode(hubMark).slice(0, 4)}
               </span>
             ) : null}
             <span

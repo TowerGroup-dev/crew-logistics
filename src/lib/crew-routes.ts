@@ -17,17 +17,18 @@ export type CrewRoutesBook = {
   routes: SiteRoute[];
 };
 
-const STORAGE_KEY = "tower-arctic-crew-routes-v1";
+// v2: Pond goes through Iqaluit by default (v1 saved it as direct).
+const STORAGE_KEY = "tower-arctic-crew-routes-v2";
 
 export const ROUTE_SITES = ["IQA", "POND", "KUG", "ALRT"] as const;
 
 /**
- * Seeded only from what the 2026 Excel shows (Kugluktuk through Yellowknife).
- * The others start direct until the office fills them in under Settings.
+ * From the office (20 Nov 2026): Ottawa to Iqaluit direct, Pond through Iqaluit, Alert set.
+ * Kugluktuk through Yellowknife, as the 2026 Excel shows.
  */
 export const DEFAULT_ROUTES: SiteRoute[] = [
   { site: "IQA", via: [] },
-  { site: "POND", via: [] },
+  { site: "POND", via: ["IQA"] },
   { site: "KUG", via: ["YK"] },
   { site: "ALRT", via: [] },
 ];
@@ -100,6 +101,24 @@ export function routeAirports(book: CrewRoutesBook, site: string, from: string, 
   const start = cleanCode(from);
   const chain = direction === "outbound" ? [start, ...via, cleanCode(site)] : [cleanCode(site), ...[...via].reverse(), start];
   // Drop blanks and accidental repeats (e.g. From is YK and the route also goes through YK).
+  return chain.filter((code, index) => code && code !== chain[index - 1]);
+}
+
+/**
+ * Site to site up north: back down the first site's route, then up the second's.
+ * IQA → POND: IQA → POND. POND → IQA: POND → IQA. KUG → IQA: KUG → YK → IQA.
+ */
+export function routeBetweenSites(book: CrewRoutesBook, fromSite: string, toSite: string) {
+  const from = cleanCode(fromSite);
+  const to = cleanCode(toSite);
+  const down = [...(routeFor(book, from)?.via ?? [])].reverse();
+  const up = routeFor(book, to)?.via ?? [];
+  // If the destination is already on the way down (POND → IQA), stop there.
+  const stopAt = down.indexOf(to);
+  if (stopAt >= 0) return [from, ...down.slice(0, stopAt), to];
+  // If the start is on the way up (IQA → POND), start from there.
+  const startAt = up.indexOf(from);
+  const chain = startAt >= 0 ? [from, ...up.slice(startAt + 1), to] : [from, ...down, ...up, to];
   return chain.filter((code, index) => code && code !== chain[index - 1]);
 }
 

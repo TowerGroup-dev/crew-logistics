@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { BedDouble, Car, Plus, Route, Trash2 } from "lucide-react";
 import { AirportSelect, CAMP_AIRPORTS, useTravelHubs } from "@/components/crew-airport-select";
 import { emptyHotel, emptySegment, type FlightHotel, type FlightSegment } from "@/lib/crew-flights";
-import { legsForRoute, loadRoutes, routeAirports } from "@/lib/crew-routes";
+import { legsForRoute, loadRoutes, routeAirports, routeBetweenSites } from "@/lib/crew-routes";
 import { ASSUMED_PNR, type RotationBook, type RotationTravel } from "@/lib/crew-rotations";
 import { travelHubName } from "@/lib/crew-travel-hubs";
 import { cn } from "@/lib/cn";
@@ -24,6 +24,11 @@ function usualHomeAirport(book: RotationBook, personId: string) {
   return "";
 }
 
+/** Full place name: sites (Iqaluit, Pond Inlet...) and airports from Settings. */
+function placeName(code: string, hubs: Parameters<typeof travelHubName>[1]) {
+  return CAMP_AIRPORTS.find((row) => row.code === code)?.name || travelHubName(code, hubs);
+}
+
 /** Fields that mirror the legs, so older screens and reports keep working. */
 function summaryFromLegs(legs: FlightSegment[]): Partial<RotationTravel> {
   const first = legs[0];
@@ -39,7 +44,7 @@ function summaryFromLegs(legs: FlightSegment[]): Partial<RotationTravel> {
   };
 }
 
-/** One trip (to site or home): route, legs, booking, hotels and car service. */
+/** One trip (to site, home, or between sites): route, legs, booking, hotels and car service. */
 export function CrewTripForm({
   value,
   direction,
@@ -47,15 +52,18 @@ export function CrewTripForm({
   travelDate,
   personId,
   book,
+  move,
   onChange,
 }: {
   value: RotationTravel;
   direction: "outbound" | "return";
   site: string;
-  /** IN day (outbound) or OUT day (return). */
+  /** IN day (outbound), OUT day (return) or the move day. */
   travelDate: string;
   personId: string;
   book: RotationBook;
+  /** Set for a flight between two sites up north; the route is site to site. */
+  move?: { fromSite: string; toSite: string };
   onChange: (patch: Partial<RotationTravel>) => void;
 }) {
   const hubs = useTravelHubs();
@@ -71,13 +79,21 @@ export function CrewTripForm({
     const end = direction === "outbound" ? legs[0]?.fromAirport : legs[legs.length - 1]?.toAirport;
     return end || usualHomeAirport(book, personId);
   });
-  const chain = home && camp ? routeAirports(routes, camp, home, direction) : [];
+  const chain = move
+    ? routeBetweenSites(routes, move.fromSite, move.toSite)
+    : home && camp
+      ? routeAirports(routes, camp, home, direction)
+      : [];
 
   function setLegs(next: FlightSegment[]) {
     onChange(summaryFromLegs(next));
   }
 
   function fillRoute(nextHome = home, nextCamp = camp) {
+    if (move) {
+      setLegs(legsForRoute(chain, travelDate));
+      return;
+    }
     if (!nextHome || !nextCamp) return;
     setLegs(legsForRoute(routeAirports(routes, nextCamp, nextHome, direction), travelDate));
   }
@@ -102,6 +118,14 @@ export function CrewTripForm({
         <p className="flex items-center gap-2 font-semibold">
           <Route className="size-4 text-sky-700" /> Route
         </p>
+        {move ? (
+          <p className="mt-2 text-base font-semibold">
+            {move.fromSite} → {move.toSite}
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              {placeName(move.fromSite, hubs)} to {placeName(move.toSite, hubs)}
+            </span>
+          </p>
+        ) : (
         <div className="mt-2 grid grid-cols-2 gap-2">
           <label className="grid min-w-0 gap-1">
             <span className="text-muted-foreground">{direction === "outbound" ? "Flying from" : "Going home to"}</span>
@@ -134,13 +158,14 @@ export function CrewTripForm({
             </select>
           </label>
         </div>
+        )}
         {chain.length > 1 ? (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <p>
               <span className="text-muted-foreground">Usual route </span>
               <span className="font-semibold">{chain.join(" → ")}</span>
               <span className="block text-xs text-muted-foreground">
-                {chain.map((code) => travelHubName(code, hubs)).join(" → ")}
+                {chain.map((code) => placeName(code, hubs)).join(" → ")}
               </span>
             </p>
             <button

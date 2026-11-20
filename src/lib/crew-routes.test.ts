@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyRoutesBook, flightPlaceOnDay, legsForRoute, readRoutesBook, routeAirports, setRouteVia } from "./crew-routes";
+import { emptyRoutesBook, flightPlaceOnDay, legsForRoute, readRoutesBook, routeAirports, routeBetweenSites, setRouteVia } from "./crew-routes";
 import type { FlightSegment } from "./crew-flights";
 import { dropAssumedFlights, emptyTravel, type RotationBook } from "./crew-rotations";
 
@@ -19,6 +19,15 @@ describe("usual routes", () => {
     expect(routeAirports(book, "KUG", "YOW", "outbound")).toEqual(["YOW", "YK", "KUG"]);
     expect(routeAirports(book, "KUG", "YOW", "return")).toEqual(["KUG", "YK", "YOW"]);
     expect(routeAirports(book, "IQA", "YOW", "outbound")).toEqual(["YOW", "IQA"]);
+    expect(routeAirports(book, "POND", "YOW", "outbound")).toEqual(["YOW", "IQA", "POND"]);
+  });
+
+  it("moves between sites up north", () => {
+    const book = emptyRoutesBook();
+    expect(routeBetweenSites(book, "IQA", "POND")).toEqual(["IQA", "POND"]);
+    expect(routeBetweenSites(book, "POND", "IQA")).toEqual(["POND", "IQA"]);
+    expect(routeBetweenSites(book, "KUG", "IQA")).toEqual(["KUG", "YK", "IQA"]);
+    expect(routeBetweenSites(book, "IQA", "KUG")).toEqual(["IQA", "YK", "KUG"]);
   });
 
   it("does not repeat a stop when the person starts there", () => {
@@ -26,9 +35,9 @@ describe("usual routes", () => {
   });
 
   it("keeps edits and survives a reload", () => {
-    const book = setRouteVia(emptyRoutesBook(), "POND", ["IQA"]);
+    const book = setRouteVia(emptyRoutesBook(), "ALRT", ["YOW"]);
     const again = readRoutesBook(JSON.parse(JSON.stringify(book)));
-    expect(routeAirports(again, "POND", "YUL", "outbound")).toEqual(["YUL", "IQA", "POND"]);
+    expect(routeAirports(again, "ALRT", "YUL", "outbound")).toEqual(["YUL", "YOW", "ALRT"]);
   });
 
   it("makes one leg per hop", () => {
