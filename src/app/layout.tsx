@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Source_Sans_3 } from "next/font/google";
 import { CrewAppShell } from "@/components/crew-app-shell";
 import "./globals.css";
@@ -19,6 +19,14 @@ export const metadata: Metadata = {
     template: "%s · Crew Logistics",
   },
   description: "Tower Arctic crew rotations, travel, and site assignments.",
+};
+
+// Phones: fit the screen, no pinch-zoom on tap, room for the notch and home bar.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -4,7 +4,7 @@ import { SYNC_CHANGE_EVENT } from "@/lib/crew-sync";
 import { siteOnDay } from "@/lib/crew-site-days";
 import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, SlidersHorizontal, X } from "lucide-react";
 import { useCrewUndo } from "@/components/crew-undo-provider";
 import {
   buildCrewBriefing,
@@ -250,10 +250,13 @@ export function CrewBoard({
   const [site, setSite] = useState("");
   const [scheduleYear, setScheduleYear] = useState<number>(CREW_SCHEDULE.year);
   const [scheduleYears, setScheduleYears] = useState<number[]>(() => [...loadScheduleYears()]);
-  const [monthCursor, setMonthCursor] = useState(() => `${CREW_SCHEDULE.year || new Date().getFullYear()}-01-01`);
   /** Only set when jumping from Year tape, keeps Month free-scroll starting at January. */
   const [monthScrollTo, setMonthScrollTo] = useState<string | null>(null);
+  /** Month picked in the address or from the Year view (null: follow today). */
+  const [monthCursor, setMonthCursor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  /** Phones: Role / Site / Add employee folded away behind a Filters button. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedRotationId, setSelectedRotationId] = useState<string | null>(null);
   const [rotationBook, setRotationBook] = useState<RotationBook>(() => loadRotations());
@@ -846,12 +849,12 @@ export function CrewBoard({
     [rolesBook.extras],
   );
 
+  // Reports open on the month you picked, else this month (it was always January).
+  // A past year opens on December, a future one on January (asOf handles that).
   const reportMonth = useMemo(() => {
-    const iso = monthCursor.slice(0, 7);
-    const year = Number(iso.slice(0, 4)) || scheduleYear;
-    const month = Number(iso.slice(5, 7)) || 1;
-    return { year, month };
-  }, [monthCursor, scheduleYear]);
+    const iso = monthCursor && Number(monthCursor.slice(0, 4)) === scheduleYear ? monthCursor : asOf;
+    return { year: scheduleYear, month: Number(iso.slice(5, 7)) || 1 };
+  }, [asOf, monthCursor, scheduleYear]);
 
   const selected = overview.rows.find((row) => row.person.id === selectedId) ?? null;
   const selectedOps = selected ? opsFor(opsBook, selected.person.id) : null;
@@ -900,17 +903,31 @@ export function CrewBoard({
         )}
       >
         {boardView !== "overview" && boardView !== "settings" && boardView !== "reports" ? (
-          <div className="flex flex-wrap items-end gap-3 border-b border-border px-3 py-3 sm:px-4">
-            <label className="grid gap-1 text-sm text-muted-foreground">
-              <span>Search</span>
+          <div className="flex flex-wrap items-end gap-2 border-b border-border px-2 py-2 sm:gap-3 sm:px-4 sm:py-3">
+            <label className="grid min-w-0 flex-1 gap-1 text-sm text-muted-foreground sm:flex-none">
+              <span className="hidden sm:inline">Search</span>
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Name or role"
-                className="h-9 w-44 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+                placeholder="Search name or role"
+                aria-label="Search"
+                type="search"
+                className="h-10 w-full rounded-lg border border-input bg-card px-2 text-sm text-foreground sm:h-9 sm:w-44"
               />
             </label>
-            <label className="grid gap-1 text-sm text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((open) => !open)}
+              aria-expanded={filtersOpen}
+              className={cn(
+                "flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium sm:hidden",
+                filtersOpen || role || site ? "border-primary bg-primary/10 text-primary" : "border-input bg-card text-foreground",
+              )}
+            >
+              <SlidersHorizontal className="size-4" />
+              Filters{role || site ? ` · ${[role, site].filter(Boolean).length}` : ""}
+            </button>
+            <label className={cn("gap-1 text-sm text-muted-foreground sm:grid", filtersOpen ? "grid flex-1" : "hidden")}>
               <span>Role</span>
               <select
                 value={role}
@@ -925,7 +942,7 @@ export function CrewBoard({
                 ))}
               </select>
             </label>
-            <label className="grid gap-1 text-sm text-muted-foreground">
+            <label className={cn("gap-1 text-sm text-muted-foreground sm:grid", filtersOpen ? "grid flex-1" : "hidden")}>
               <span>Site</span>
               <select
                 value={site}
@@ -940,7 +957,7 @@ export function CrewBoard({
                 ))}
               </select>
             </label>
-            <div className="ml-auto flex flex-wrap items-end gap-2 pb-0.5">
+            <div className={cn("ml-auto flex-wrap items-end gap-2 pb-0.5 sm:flex", filtersOpen ? "flex w-full justify-between sm:w-auto" : "hidden")}>
               <p className="pb-2 text-sm text-muted-foreground">{rows.length} people</p>
               <button
                 type="button"
@@ -1499,7 +1516,7 @@ export function CrewBoard({
           className={cn("min-w-0 overflow-auto", boardView !== "list" && "hidden")}
           style={{ maxHeight: "var(--app-board-max-h)" }}
         >
-          <div className="sticky top-0 z-10 grid min-w-[56rem] grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] gap-2 border-b border-border bg-card px-4 py-2 text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">
+          <div className="sticky top-0 z-10 hidden min-w-[56rem] sm:grid grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] gap-2 border-b border-border bg-card px-4 py-2 text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">
             <span>Crew</span>
             <span>Site</span>
             <span>Status</span>
@@ -1532,16 +1549,43 @@ export function CrewBoard({
                     <button
                       type="button"
                       onClick={() => openPersonRotation(row.person.id)}
-                      className="grid min-w-[56rem] w-full grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] items-center gap-2 px-4 py-3 text-left hover:bg-muted/50"
+                      className="block w-full px-3 py-2.5 text-left hover:bg-muted/50 sm:grid sm:min-w-[56rem] sm:grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] sm:items-center sm:gap-2 sm:px-4 sm:py-3"
                     >
-                      <span className="min-w-0">
+                      {/* Phone: one card per person instead of a wide table. */}
+                      <span className="flex flex-col gap-1 sm:hidden">
+                        <span className="flex items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{row.person.name}</span>
+                          {row.site ? (
+                            <span className={cn("inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold", siteTone(row.site, sitesBook))}>
+                              {row.site}
+                            </span>
+                          ) : null}
+                          <span className={cn("inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold", statusTone(row.duty))}>
+                            {dutyLabel(row.duty)}
+                          </span>
+                        </span>
+                        <span className="flex flex-wrap gap-x-3 text-[13px] tabular-nums text-muted-foreground">
+                          <span>IN {row.plannedIn ? formatMedium(row.plannedIn) : "-"}</span>
+                          <span>OUT {row.plannedOut ? formatMedium(row.plannedOut) : "-"}</span>
+                          {row.rotationDay != null ? <span>Day {row.rotationDay}/{stayLength(row)}</span> : null}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[13px]",
+                            row.overdue ? "font-semibold text-rose-700" : row.dueSoon ? "font-medium text-amber-800" : "text-muted-foreground",
+                          )}
+                        >
+                          {departureLabel(row)} · {travelLabel(ops, row)}
+                        </span>
+                      </span>
+                      <span className="max-sm:hidden min-w-0">
                         <span className="block truncate text-sm font-medium">{row.person.name}</span>
                         <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                           {row.site ? catalogSiteLabel(row.site, sitesBook) : "Off site"}
                           {row.fourWeeksOut ? " · 4 weeks out" : ""}
                         </span>
                       </span>
-                      <span>
+                      <span className="max-sm:hidden">
                         {row.site ? (
                           <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-semibold", siteTone(row.site, sitesBook))}>
                             {row.site}
@@ -1550,23 +1594,24 @@ export function CrewBoard({
                           <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </span>
-                      <span>
+                      <span className="max-sm:hidden">
                         <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-semibold", statusTone(row.duty))}>
                           {dutyLabel(row.duty)}
                         </span>
                       </span>
-                      <span className="text-sm tabular-nums text-muted-foreground">
+                      <span className="max-sm:hidden text-sm tabular-nums text-muted-foreground">
                         {row.plannedIn ? formatMedium(row.plannedIn) : "-"}
                       </span>
-                      <span className="text-sm tabular-nums text-muted-foreground">
+                      <span className="max-sm:hidden text-sm tabular-nums text-muted-foreground">
                         {row.plannedOut ? formatMedium(row.plannedOut) : "-"}
                       </span>
-                      <span className="text-sm tabular-nums text-muted-foreground">
+                      <span className="max-sm:hidden text-sm tabular-nums text-muted-foreground">
                         {row.rotationDay == null ? "-" : `Day ${row.rotationDay} of ${stayLength(row)}`}
                         {progress != null ? <span className="mt-0.5 block text-[0.8125rem]">{progress}%</span> : null}
                       </span>
                       <span
                         className={cn(
+                          "max-sm:hidden",
                           "text-sm tabular-nums",
                           row.overdue && "font-semibold text-rose-700",
                           row.dueSoon && !row.overdue && "font-medium text-amber-800",
@@ -1575,8 +1620,8 @@ export function CrewBoard({
                       >
                         {departureLabel(row)}
                       </span>
-                      <span className="text-xs text-muted-foreground">{travelLabel(ops, row)}</span>
-                      <span className="text-xs font-medium text-primary">{row.alerts.length ? "Resolve" : "Open"}</span>
+                      <span className="max-sm:hidden text-xs text-muted-foreground">{travelLabel(ops, row)}</span>
+                      <span className="max-sm:hidden text-xs font-medium text-primary">{row.alerts.length ? "Resolve" : "Open"}</span>
                     </button>
                   </li>
                 );

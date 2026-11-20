@@ -131,7 +131,7 @@ export function CrewRotationDrawer({
     <div className="fixed inset-0 z-50 flex justify-end bg-foreground/25">
       <button type="button" aria-label="Close" className="absolute inset-0" onClick={onClose} />
       <aside className="relative flex h-full w-full max-w-lg flex-col border-l border-border bg-card shadow-2xl">
-        <header className="border-b border-border bg-card px-6 py-5">
+        <header className="border-b border-border bg-card px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 sm:px-6 sm:py-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">Rotation</p>
@@ -176,7 +176,7 @@ export function CrewRotationDrawer({
           </nav>
         </header>
 
-        <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5 text-sm">
+        <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] text-sm sm:px-6 sm:py-5">
           {section === "overview" ? (
             <div className="space-y-6">
               <ReadinessStrip readiness={readiness} />

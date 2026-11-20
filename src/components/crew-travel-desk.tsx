@@ -246,7 +246,7 @@ export function CrewTravelDesk({
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2">
         <Stat label="Trips" value={trips.length} />
         <Stat label="Not booked yet" value={notBooked.length} tone={notBooked.length ? "amber" : undefined} />
         <Stat label="Within 2 weeks, not booked" value={urgent} tone={urgent ? "rose" : undefined} />
@@ -257,7 +257,96 @@ export function CrewTravelDesk({
           {onlyOpen ? "Everything in this window is booked." : "No one travels in this window."}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+        <>
+        {/* Phone: one card per trip, big Book / Open button. */}
+        <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card sm:hidden">
+          {shown.map((trip) => {
+            const home = lastStartAirport(flightBook, trip.person.id);
+            const usual =
+              trip.kind === "transfer"
+                ? routeBetweenSites(routes, trip.fromSite || "", trip.site).join(" → ")
+                : routeAirports(routes, trip.site, home || "HOME", trip.kind === "to_site" ? "outbound" : "return")
+                    .join(" → ")
+                    .replace("HOME", "home");
+            const away = daysBetween(today, trip.date);
+            const hotels = trip.booking?.hotels ?? [];
+            return (
+              <li key={trip.key} className="px-3 py-3">
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-baseline gap-2 text-[13px] tabular-nums text-muted-foreground">
+                      <span className="font-semibold text-foreground">{formatMedium(trip.date)}</span>
+                      {away === 0 ? "Today" : away === 1 ? "Tomorrow" : away < 0 ? `${-away} days ago` : `in ${away} days`}
+                    </p>
+                    <button type="button" onClick={() => openTrip(trip)} className="mt-0.5 block max-w-full truncate text-left text-[15px] font-semibold">
+                      {trip.person.name}
+                    </button>
+                    <p className="mt-0.5 flex items-center gap-1.5 text-[13px] font-medium">
+                      {trip.kind === "to_site" ? (
+                        <PlaneLanding className="size-4 shrink-0 text-emerald-700" />
+                      ) : trip.kind === "home" ? (
+                        <PlaneTakeoff className="size-4 shrink-0 text-sky-700" />
+                      ) : (
+                        <Repeat className="size-4 shrink-0 text-violet-700" />
+                      )}
+                      <span className="truncate">
+                        {trip.kind === "to_site"
+                          ? `IN to ${trip.site}`
+                          : trip.kind === "home"
+                            ? `OUT from ${trip.site}`
+                            : `Transfer ${trip.fromSite} → ${trip.site}`}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", statusTone(trip, today))}>
+                      {trip.booking ? flightStatusLabel(trip.booking.status) : "Not booked"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openTrip(trip)}
+                      className={cn(
+                        "h-9 rounded-lg px-4 text-sm font-semibold",
+                        trip.booking ? "border border-input" : "bg-primary text-primary-foreground",
+                      )}
+                    >
+                      {trip.booking ? "Open" : "Book"}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2 text-[13px] text-muted-foreground">
+                  {trip.booking?.segments.length ? (
+                    <CrewTripPlan compact legs={trip.booking.segments} hotels={hotels} />
+                  ) : (
+                    <p>
+                      <span className="text-xs">Usual </span>
+                      {usual}
+                    </p>
+                  )}
+                  {trip.booking?.pnr ? <p className="mt-1 tabular-nums">PNR {trip.booking.pnr}</p> : null}
+                  {hotels.length || trip.booking?.carService ? (
+                    <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      {hotels.map((hotel, index) => (
+                        <span key={index} className="inline-flex items-center gap-1">
+                          <BedDouble className="size-3.5 shrink-0" />
+                          {hotel.name || "Hotel"}
+                          {hotel.place ? ` · ${hotel.place}` : ""}
+                        </span>
+                      ))}
+                      {trip.booking?.carService ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Car className="size-3.5 shrink-0" />
+                          {trip.booking.carService}
+                        </span>
+                      ) : null}
+                    </p>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="hidden overflow-x-auto rounded-2xl border border-border bg-card sm:block">
           <table className="w-full min-w-[52rem] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">
@@ -370,6 +459,7 @@ export function CrewTravelDesk({
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );
@@ -379,12 +469,12 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "am
   return (
     <div
       className={cn(
-        "rounded-xl border px-4 py-3",
+        "rounded-xl border px-2.5 py-2 sm:px-4 sm:py-3",
         tone === "rose" ? "border-rose-200 bg-rose-50" : tone === "amber" ? "border-amber-200 bg-amber-50" : "border-border bg-card",
       )}
     >
-      <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+      <p className="text-[10px] leading-tight font-medium tracking-wide text-muted-foreground uppercase sm:text-xs">{label}</p>
+      <p className="mt-1 text-xl sm:text-2xl font-semibold tabular-nums">{value}</p>
     </div>
   );
 }

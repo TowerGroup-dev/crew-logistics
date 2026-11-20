@@ -55,6 +55,13 @@
   --app-board-max-h: min(100dvh - 12rem, 90rem);
 }
 
+/* Phones: the board can use nearly the whole screen (bottom tab bar ~4rem). */
+@media (max-width: 639px) {
+  :root {
+    --app-board-max-h: calc(100dvh - 9.5rem);
+  }
+}
+
 @media (min-width: 1600px) {
   :root {
     --app-shell-max: min(100%, 120rem);
@@ -81,6 +88,14 @@
 @layer base {
   * {
     @apply border-border;
+  }
+  /* Phones: 16px inputs so iPhone doesn't zoom in when you tap a field. */
+  @media (max-width: 639px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
   }
   html {
     font-size: clamp(var(--app-type-min), 0.3vw + 12.4px, var(--app-type-max));

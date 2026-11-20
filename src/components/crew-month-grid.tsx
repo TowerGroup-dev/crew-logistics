@@ -71,6 +71,7 @@ import { addDays, daysBetween, formatDate, formatMedium, formatWeekdayNarrow, to
 import { cn } from "@/lib/cn";
 import { roleOnDay, siteOnDay, travelSegmentOnDay } from "@/lib/crew-site-days";
 import { CrewUndoButton } from "@/components/crew-undo-provider";
+import { useIsPhone } from "@/lib/use-phone";
 
 type StaySelection = {
   personId: string;
@@ -918,10 +919,12 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   }, [year]);
 
   /** Fixed rem widths so month bands line up exactly with day columns (1st → last). */
-  const typeColRem = 4.5;
-  const nameColRem = 13;
+  // Phones: no Type column, a narrow name column and smaller day boxes, so you see a week or more.
+  const phone = useIsPhone();
+  const typeColRem = phone ? 0 : 4.5;
+  const nameColRem = phone ? 7.5 : 13;
   const listColRem = typeColRem + nameColRem;
-  const dayColRem = 2.85;
+  const dayColRem = phone ? 2.5 : 2.85;
   const daysTrackWidth = `${days.length * dayColRem}rem`;
   const dayTracks = `repeat(${days.length}, ${dayColRem}rem)`;
 
@@ -1128,7 +1131,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       </div>
       <div className="flex min-h-14">
         <div
-          className="flex items-center border-r border-border px-1.5"
+          className={cn("flex items-center border-r border-border px-1.5", phone && "hidden")}
           style={{ width: `${typeColRem}rem` }}
         >
           <span className="truncate text-sm font-medium tracking-wide text-muted-foreground uppercase">
@@ -1671,20 +1674,21 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
 
   return (
     <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="border-b border-border px-4 py-3">
+      <div className="border-b border-border px-2 py-2 sm:px-4 sm:py-3">
         {flash ? (
           // Floating, so the rows never jump under the mouse after an action.
           <p
             role="status"
-            className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-stone-900 px-4 py-2 text-sm font-medium text-white shadow-lg tabular-nums"
+            className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 truncate rounded-full bg-stone-900 px-4 py-2 text-sm font-medium text-white shadow-lg tabular-nums sm:bottom-6"
           >
             {flash}
           </p>
         ) : null}
-        <div className="flex flex-wrap items-center gap-2 text-[0.8125rem]">
+        {/* Phones: colour key scrolls sideways on one line, View / Edit stays on the right. */}
+        <div className="flex flex-nowrap items-center gap-2 text-xs sm:flex-wrap sm:text-[0.8125rem]">
           <div
             className={cn(
-              "flex flex-wrap items-center gap-2",
+              "flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto [scrollbar-width:none] sm:flex-none sm:flex-wrap sm:gap-2 sm:overflow-visible [&::-webkit-scrollbar]:hidden",
               !canEdit && "pointer-events-none opacity-50",
             )}
           >
@@ -1699,7 +1703,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                   title={`${site.code}: drag empty days · first = IN · last = OUT`}
                   onClick={() => setPaintBrush({ kind: "site", code: site.code })}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold transition-colors",
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 font-semibold transition-colors sm:px-2.5",
                     active
                       ? cn(tone.chip, "border-transparent ring-2 ring-inset ring-black/10")
                       : "border-border bg-card text-muted-foreground hover:bg-muted",
@@ -1721,7 +1725,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                 })
               }
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold transition-colors",
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 font-semibold transition-colors sm:px-2.5",
                 paintBrush.kind === "travel"
                   ? "border-stone-400 bg-stone-200 text-stone-900 ring-2 ring-inset ring-stone-400/40"
                   : "border-border bg-card text-muted-foreground hover:bg-muted",
@@ -1730,12 +1734,12 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               <span className="size-2.5 rounded-sm bg-stone-500" aria-hidden />
               Travel
             </button>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-950">
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-950">
               <span className="size-2 rounded-sm bg-[#FFD600]" aria-hidden />
               Return
             </span>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <div
               className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5"
               role="group"
@@ -1743,7 +1747,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             >
               <button
                 type="button"
-                title="Browse and scroll without changing the schedule"
+                title="Browse and scroll without changing the schedule" aria-label="View"
                 onClick={() => onInteractionModeChange?.("view")}
                 className={cn(
                   "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors",
@@ -1751,11 +1755,11 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                 )}
               >
                 <Eye className="size-3.5" aria-hidden />
-                View
+                <span className="hidden min-[400px]:inline">View</span>
               </button>
               <button
                 type="button"
-                title="Drag to place stays and return windows"
+                title="Drag to place stays and return windows" aria-label="Edit"
                 onClick={() => onInteractionModeChange?.("edit")}
                 className={cn(
                   "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors",
@@ -1763,7 +1767,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                 )}
               >
                 <Pencil className="size-3.5" aria-hidden />
-                Edit
+                <span className="hidden min-[400px]:inline">Edit</span>
               </button>
             </div>
             {canEdit && onTryPerson ? (
@@ -1774,7 +1778,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                   setTryOpen((open) => !open);
                   setTryDraft({ name: "", role: "Labourer" });
                 }}
-                className="inline-flex h-8 items-center rounded-lg border border-input bg-card px-2.5 text-xs font-semibold hover:bg-muted"
+                className="hidden h-8 sm:inline-flex items-center rounded-lg border border-input bg-card px-2.5 text-xs font-semibold hover:bg-muted"
               >
                 Simulate
               </button>
@@ -1996,7 +2000,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                           className="flex h-11 items-stretch border-b border-border bg-card"
                         >
                           <div
-                            className="flex items-center overflow-hidden border-r border-border px-1.5"
+                            className={cn("flex items-center overflow-hidden border-r border-border px-1.5", phone && "hidden")}
                             style={{ width: `${typeColRem}rem` }}
                             title={
                               category === "Subcontractor"
@@ -2107,7 +2111,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                                   onHidePerson(person.id, group.role);
                                   showFlash(`Hidden · ${person.name}`);
                                 }}
-                                className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                className="hidden shrink-0 rounded-md sm:block p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                               >
                                 <EyeOff className="size-3.5" />
                               </button>

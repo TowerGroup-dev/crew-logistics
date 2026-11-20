@@ -158,17 +158,18 @@ export function CrewYearTape({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="border-b border-border bg-[#356dbd] px-4 py-4 text-white sm:px-5">
-        <h2 className="text-xl font-semibold tracking-tight">{year}</h2>
-        <p className="mt-1 text-sm text-white/85">
+      <div className="border-b border-border bg-[#356dbd] px-3 py-2.5 text-white sm:px-5 sm:py-4">
+        <h2 className="text-lg font-semibold tracking-tight sm:text-xl">{year}</h2>
+        <p className="mt-1 hidden text-sm text-white/85 sm:block">
           Click a month on a person to place them (standard 6 weeks; can extend past). Header months open Month view.
         </p>
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[72rem]">
-          <div className="sticky top-0 z-20 grid grid-cols-[minmax(0,13rem)_minmax(0,1fr)] border-b border-border bg-card shadow-sm">
-            <div className="flex items-end overflow-hidden px-3 py-3 pl-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        {/* Phones: the whole year fits the screen (one letter per month). */}
+        <div className="sm:min-w-[72rem]">
+          <div className="sticky top-0 z-20 grid grid-cols-[6.5rem_minmax(0,1fr)] sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)] border-b border-border bg-card shadow-sm">
+            <div className="flex items-end overflow-hidden px-2 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase sm:px-3 sm:py-3 sm:pl-5">
               <span className="truncate">List · {year}</span>
             </div>
             <div className="grid grid-cols-12 border-l border-border">
@@ -181,14 +182,15 @@ export function CrewYearTape({
                     title={`Open ${month.long} ${year}`}
                     onClick={() => onMonthClick?.(year, index + 1)}
                     className={cn(
-                      "overflow-hidden border-r border-border px-1 py-3 text-center last:border-r-0 hover:bg-primary/10",
+                      "overflow-hidden border-r border-border px-0 py-2 text-center last:border-r-0 hover:bg-primary/10 sm:px-1 sm:py-3",
                       active && "bg-rose-50",
                     )}
                   >
                     <p className={cn("truncate text-[0.8125rem] font-bold tracking-wide", active ? "text-rose-700" : "text-foreground")}>
-                      {month.short}
+                      <span className="sm:hidden">{month.short.slice(0, 1)}</span>
+                      <span className="hidden sm:inline">{month.short}</span>
                     </p>
-                    <p className={cn("mt-0.5 truncate text-xs", active ? "font-medium text-rose-600" : "text-muted-foreground")}>
+                    <p className={cn("mt-0.5 hidden truncate text-xs sm:block", active ? "font-medium text-rose-600" : "text-muted-foreground")}>
                       {year}
                     </p>
                   </button>
@@ -227,13 +229,13 @@ export function CrewYearTape({
                       return (
                         <li
                           key={`${person.id}::${group.role}`}
-                          className="grid grid-cols-[minmax(0,13rem)_minmax(0,1fr)] hover:bg-muted/40"
+                          className="grid grid-cols-[6.5rem_minmax(0,1fr)] sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)] hover:bg-muted/40"
                         >
-                          <div className="flex min-w-0 items-center gap-0.5 py-2 pr-1 pl-4">
+                          <div className="flex min-w-0 items-center gap-0.5 py-2 pr-1 pl-1 sm:pl-4">
                             <button
                               type="button"
                               onClick={() => onOpen(person.id)}
-                              className="min-w-0 flex-1 px-2 py-1 text-left"
+                              className="min-w-0 flex-1 px-1 py-1 text-left sm:px-2"
                             >
                               <span className="block truncate text-sm font-medium">{person.name}</span>
                             </button>
@@ -243,7 +245,7 @@ export function CrewYearTape({
                                 title={`Hide ${person.name}`}
                                 aria-label={`Hide ${person.name}`}
                                 onClick={() => onHidePerson(person.id, group.role)}
-                                className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                className="hidden shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground sm:block"
                               >
                                 <EyeOff className="size-3.5" />
                               </button>
@@ -270,7 +272,7 @@ export function CrewYearTape({
                                 style={{ left: `${todayPct}%` }}
                                 title={`Today · ${formatMedium(today)}`}
                               >
-                                <span className="absolute top-0 left-1 rounded bg-rose-600 px-1 py-px text-[9px] font-bold text-white">
+                                <span className="absolute top-0 left-1 hidden rounded bg-rose-600 px-1 py-px text-[9px] font-bold text-white sm:inline">
                                   Today
                                 </span>
                               </div>
@@ -282,7 +284,7 @@ export function CrewYearTape({
                                   key={`${person.id}-${bar.from}-${bar.site}`}
                                   title={`${label} · ${siteLabel(bar.site)} · ${formatMedium(bar.from)} – ${formatMedium(bar.to)}`}
                                   className={cn(
-                                    "pointer-events-none absolute top-3 z-[1] flex h-8 items-center overflow-hidden rounded-md px-1.5 text-xs font-semibold text-white",
+                                    "pointer-events-none absolute top-3 z-[1] flex h-8 items-center overflow-hidden rounded-md px-0.5 text-[10px] font-semibold text-white sm:px-1.5 sm:text-xs",
                                     siteBarTone(bar.site, siteList),
                                   )}
                                   style={{ left: `${bar.leftPct}%`, width: `${bar.widthPct}%` }}

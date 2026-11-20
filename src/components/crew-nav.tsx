@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ListChecks,
   Menu,
+  MoreHorizontal,
   Plane,
 } from "lucide-react";
 import { CREW_SCHEDULE } from "@/lib/crew-schedule";
@@ -72,6 +73,7 @@ export function CrewNav({
   const monthParam = search.get("month");
   const [storedYears, setYears] = useState<number[]>(() => [...loadScheduleYears()]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const year =
     yearParam && Number.isInteger(yearParam) ? yearParam : CREW_SCHEDULE.year || new Date().getFullYear();
@@ -94,6 +96,7 @@ export function CrewNav({
 
   useEffect(() => {
     setMenuOpen(false);
+    setMoreOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -118,10 +121,14 @@ export function CrewNav({
   const prevYear = yearIndex > 0 ? years[yearIndex - 1] : null;
   const nextYear = yearIndex >= 0 && yearIndex < years.length - 1 ? years[yearIndex + 1] : null;
 
+  const moreActive = MENU_ITEMS.some((item) => item.match(pathname));
+
   return (
+    <>
     <nav className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 py-2">
-        <div className="-mb-px flex flex-wrap items-center gap-1">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 py-1.5 sm:py-2">
+        {/* Phones use the tab bar at the bottom instead. */}
+        <div className="-mb-px hidden flex-wrap items-center gap-1 sm:flex">
           {PRIMARY.map((section) => (
             <NavTab
               key={section.key}
@@ -132,6 +139,12 @@ export function CrewNav({
           ))}
         </div>
 
+        {/* Phones: the page name sits where the tabs were. */}
+        {!inCalendar ? (
+          <h1 className="text-base font-semibold sm:hidden">
+            {[...PRIMARY, ...MENU_ITEMS].find((item) => item.match(pathname))?.label ?? ""}
+          </h1>
+        ) : null}
         {inCalendar ? (
           <div className="flex rounded-lg border border-input bg-card p-0.5" role="group" aria-label="Calendar view">
             {CALENDAR_VIEWS.map((view) => {
@@ -156,8 +169,10 @@ export function CrewNav({
           </div>
         ) : null}
 
-        <div className="ml-auto flex items-center gap-2">
-          <CrewSyncStatus />
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <span className="hidden sm:contents">
+            <CrewSyncStatus />
+          </span>
           {onOpenReminders ? (
             <button
               type="button"
@@ -210,7 +225,7 @@ export function CrewNav({
             </button>
           </div>
 
-          <div className="relative" ref={menuRef}>
+          <div className="relative hidden sm:block" ref={menuRef}>
             <button
               type="button"
               onClick={() => setMenuOpen((open) => !open)}
@@ -262,6 +277,77 @@ export function CrewNav({
         </div>
       </div>
     </nav>
+
+    {/* Phone tab bar: big thumb targets, always at the bottom. */}
+    <div
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
+      role="navigation"
+      aria-label="Main"
+    >
+      {moreOpen ? (
+        <div className="absolute inset-x-2 bottom-full mb-2 overflow-hidden rounded-2xl border border-border bg-card shadow-xl" role="menu">
+          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+            <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">More</span>
+            <CrewSyncStatus />
+          </div>
+          {MENU_ITEMS.map((item) => {
+            const active = item.match(pathname);
+            return (
+              <Link
+                key={item.key}
+                role="menuitem"
+                href={hrefFor(item.href)}
+                scroll={false}
+                aria-current={active ? "page" : undefined}
+                onClick={() => setMoreOpen(false)}
+                className={cn(
+                  "block border-b border-border/70 px-4 py-3.5 text-base last:border-b-0",
+                  active ? "bg-sky-100 font-semibold text-sky-950" : "text-foreground active:bg-sky-50",
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
+      <div className="grid grid-cols-4">
+        {PRIMARY.map((section) => {
+          const Icon = section.icon;
+          const active = section.match(pathname) && !moreOpen;
+          return (
+            <Link
+              key={section.key}
+              href={hrefFor(section.href)}
+              scroll={false}
+              aria-current={active ? "page" : undefined}
+              onClick={() => setMoreOpen(false)}
+              className={cn(
+                "flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium",
+                active ? "text-primary" : "text-slate-500",
+              )}
+            >
+              <Icon className={cn("size-5", active && "stroke-[2.25]")} />
+              {section.label}
+            </Link>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => setMoreOpen((open) => !open)}
+          aria-expanded={moreOpen}
+          className={cn(
+            "flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium",
+            moreOpen || moreActive ? "text-primary" : "text-slate-500",
+          )}
+        >
+          <MoreHorizontal className="size-5" />
+          More
+        </button>
+      </div>
+    </div>
+    {moreOpen ? <div className="fixed inset-0 z-30 bg-black/20 sm:hidden" onClick={() => setMoreOpen(false)} aria-hidden /> : null}
+    </>
   );
 }
 
