@@ -923,6 +923,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   const listColRem = typeColRem + nameColRem;
   const dayColRem = 2.85;
   const daysTrackWidth = `${days.length * dayColRem}rem`;
+  const dayTracks = `repeat(${days.length}, ${dayColRem}rem)`;
 
   const dayColPx = useMemo(() => {
     if (typeof window === "undefined") return dayColRem * 16;
@@ -1151,19 +1152,17 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
         spanned tracks drift from per-day columns and throw the blue month rule off.
       */}
       <div
-        className="relative h-8 border-b border-border bg-muted/40"
-        style={{ width: daysTrackWidth, minWidth: daysTrackWidth }}
+        className="grid h-8 border-b border-border bg-muted/40"
+        style={{ width: daysTrackWidth, minWidth: daysTrackWidth, gridTemplateColumns: dayTracks }}
       >
         {monthBands.map((band) => (
           <div
             key={band.key}
             title={`${band.label}: 1–${band.count}`}
-            style={{
-              left: `${band.startIndex * dayColRem}rem`,
-              width: `${band.count * dayColRem}rem`,
-            }}
+            // Grid columns (not rem maths) so the month edge sits exactly on the day boxes at any zoom.
+            style={{ gridColumn: `${band.startIndex + 1} / span ${band.count}`, gridRow: 1 }}
             className={cn(
-              "absolute inset-y-0 flex items-center justify-center overflow-hidden border-l-2 border-l-primary px-1 text-center text-xs font-semibold tracking-wide text-foreground",
+              "flex min-w-0 items-center justify-center overflow-hidden border-l-2 border-l-primary px-1 text-center text-xs font-semibold tracking-wide text-foreground",
               Number(band.key.slice(5, 7)) % 2 === 0 && "bg-sky-50/80",
             )}
           >
@@ -2145,17 +2144,24 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
           >
           <div className="sticky top-0 z-30 border-b border-border bg-card">{daysHeader}</div>
           <div className="relative">
-          {/* Month rule: one straight blue line from the header to the bottom, over rows and role bars. */}
-          {monthBands.map((band) =>
-            band.startIndex > 0 ? (
-              <div
-                key={`rule-${band.key}`}
-                aria-hidden
-                className="pointer-events-none absolute inset-y-0 z-[25] w-0.5 bg-primary"
-                style={{ left: `${band.startIndex * dayColRem}rem` }}
-              />
-            ) : null,
-          )}
+          {/* Month rule: one straight blue line from the header to the bottom, over rows and role bars.
+              Laid out on the same grid columns as the day boxes so it lines up at any zoom. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 left-0 z-[25] grid"
+            style={{ width: daysTrackWidth, gridTemplateColumns: dayTracks }}
+          >
+            {monthBands.map((band) =>
+              band.startIndex > 0 ? (
+                <div
+                  key={`rule-${band.key}`}
+                  data-month-rule
+                  className="h-full w-0.5 bg-primary"
+                  style={{ gridColumn: band.startIndex + 1, gridRow: 1 }}
+                />
+              ) : null,
+            )}
+          </div>
           {groups.length === 0 ? (
             <p className="px-4 py-8 text-sm text-muted-foreground">No crew match these filters.</p>
           ) : (
