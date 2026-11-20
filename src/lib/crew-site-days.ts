@@ -64,3 +64,30 @@ export function roleOnDay(person: CrewPerson, iso: string) {
   }
   return null;
 }
+
+/**
+ * Moves between sites exactly as the calendar shows them during a stay: every time
+ * the person turns up at a different site. `date` is the first day after they left
+ * the old site (the travel day), `arrive` the first day at the new one.
+ */
+export function movesOnCalendar(person: CrewPerson, from: string, outExclusive: string) {
+  const moves: { fromSite: string; toSite: string; date: string; arrive: string }[] = [];
+  let lastSite: string | null = null;
+  let lastDay = "";
+  for (let d = from; d < outExclusive; d = addOneDay(d)) {
+    const site = siteOnDay(person, d);
+    if (!site) continue;
+    if (lastSite && site !== lastSite) {
+      moves.push({ fromSite: lastSite, toSite: site, date: addOneDay(lastDay), arrive: d });
+    }
+    lastSite = site;
+    lastDay = d;
+  }
+  return moves;
+}
+
+function addOneDay(iso: string) {
+  const date = new Date(`${iso}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}

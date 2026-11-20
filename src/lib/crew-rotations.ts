@@ -96,6 +96,8 @@ export type CrewRotation = {
   source: "sheet" | "app";
   /** Flights between sites during this stay (e.g. Iqaluit to Pond). */
   moves: RotationMove[];
+  /** To-do items ticked off in the side panel (by id). */
+  todoDone?: string[];
 };
 
 /** A flight between two sites up north, partway through a stay. */
@@ -305,6 +307,7 @@ function readRotation(value: unknown): CrewRotation | null {
     moves: Array.isArray(row.moves)
       ? row.moves.map(readMove).filter((item): item is RotationMove => Boolean(item))
       : [],
+    todoDone: Array.isArray(row.todoDone) ? row.todoDone.filter((item): item is string => typeof item === "string") : [],
   };
 }
 
@@ -414,6 +417,7 @@ export function mergeRotationBook(people: CrewPerson[], stored: RotationBook): R
         notes: prev.notes,
         source: seed.source,
         moves: prev.moves ?? [],
+        todoDone: prev.todoDone ?? [],
       });
       byId.delete(seed.id);
     }
@@ -745,8 +749,9 @@ export function evaluateReadiness(
   const endingSoon = onOrUpcoming && left <= thresholds.planDays;
   const returnDue = day >= thresholds.returnBookDay || left <= thresholds.planDays;
 
-  const travelOutbound = rotation.outbound.confirmed;
-  const travelReturn = !returnDue ? true : rotation.returnTravel.confirmed;
+  // Booked = confirmed, or real booking details on file (same rule as the Travel tab).
+  const travelOutbound = rotation.outbound.confirmed || travelIsBooked(rotation.outbound);
+  const travelReturn = !returnDue ? true : rotation.returnTravel.confirmed || travelIsBooked(rotation.returnTravel);
   const stay = rotation.stay.confirmed;
   const replacement: RotationReadiness["replacement"] = endingSoon
     ? rotation.replacedByRotationId

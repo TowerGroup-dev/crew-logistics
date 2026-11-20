@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyRoutesBook, flightPlaceOnDay, legsForRoute, readRoutesBook, routeAirports, routeBetweenSites, setRouteVia, tripPlan } from "./crew-routes";
+import { emptyRoutesBook, flightPlaceOnDay, legsForRoute, readRoutesBook, routeAirports, routeBetweenSites, setRouteVia, suggestRoutes, tripPlan } from "./crew-routes";
 import type { FlightSegment } from "./crew-flights";
 import { applyRotationMoves, dropAssumedFlights, emptyTravel, newMove, type RotationBook, type RotationMove } from "./crew-rotations";
 import { siteOnDay, travelSegmentOnDay } from "./crew-site-days";
@@ -158,5 +158,26 @@ describe("open stays carry into the next year", () => {
     expect(siteOnDay(out!, "2026-12-31")).toBe("KUG");
     expect(siteOnDay(out!, "2027-01-01")).toBe("KUG");
     expect(siteOnDay(out!, "2027-03-15")).toBe("KUG");
+  });
+});
+
+describe("route suggestions", () => {
+  const leg = (fromAirport: string, toAirport: string, mode: "flight" | "road" = "flight") =>
+    ({ fromAirport, toAirport, departDate: "2026-12-01", departTime: "", arriveDate: "2026-12-01", arriveTime: "", flightNumber: "", mode });
+  it("puts the usual route first, then routes people took, then direct", () => {
+    const out = suggestRoutes({
+      from: "KUG",
+      to: "IQA",
+      usual: ["KUG", "YK", "IQA"],
+      trips: [[leg("KUG", "YK"), leg("YK", "YEG", "road"), leg("YEG", "IQA")]],
+      routeTexts: ["KUG → YK → IQA", "KUG → YK → IQA", "YOW → KUG → YK → IQA"],
+    });
+    expect(out[0]).toMatchObject({ airports: ["KUG", "YK", "IQA"], usual: true, uses: 3 });
+    expect(out[1]).toMatchObject({ airports: ["KUG", "YK", "YEG", "IQA"], modes: ["flight", "road", "flight"] });
+    expect(out[out.length - 1]!.airports).toEqual(["KUG", "IQA"]);
+  });
+  it("uses part of a longer journey", () => {
+    const out = suggestRoutes({ from: "IQA", to: "POND", trips: [], routeTexts: ["YOW → IQA → POND"] });
+    expect(out[0]!.airports).toEqual(["IQA", "POND"]);
   });
 });

@@ -5,7 +5,15 @@ import { BedDouble, Car, Plane, Plus, Route, Trash2 } from "lucide-react";
 import { CrewTripPlan } from "@/components/crew-trip-plan";
 import { AirportSelect, CAMP_AIRPORTS, useTravelHubs } from "@/components/crew-airport-select";
 import { emptyHotel, emptySegment, type FlightHotel, type FlightSegment } from "@/lib/crew-flights";
-import { legsForRoute, loadRoutes, routeAirports, routeBetweenSites } from "@/lib/crew-routes";
+import {
+  legsForRoute,
+  loadRoutes,
+  routeAirports,
+  routeBetweenSites,
+  suggestRoutes,
+  type RouteSuggestion,
+} from "@/lib/crew-routes";
+import { CREW_SCHEDULE } from "@/lib/crew-schedule";
 import { ASSUMED_PNR, type RotationBook, type RotationTravel } from "@/lib/crew-rotations";
 import { travelHubName } from "@/lib/crew-travel-hubs";
 import { cn } from "@/lib/cn";
@@ -23,6 +31,22 @@ function usualHomeAirport(book: RotationBook, personId: string) {
     if (back) return back;
   }
   return "";
+}
+
+/** Journeys the Excel recorded on travel days (e.g. "KUG → YK → IQA"), for route suggestions. */
+const EXCEL_ROUTES: string[] = CREW_SCHEDULE.people.flatMap((person) =>
+  (person.stints || []).flatMap((stint) =>
+    (stint.excelSegments || stint.segments || []).map((piece) => piece.route || "").filter(Boolean),
+  ),
+);
+
+/** Every trip already on file (to site, home, and moves), as legs. */
+function pastTrips(book: RotationBook): FlightSegment[][] {
+  return book.rotations.flatMap((rotation) => [
+    rotation.outbound.segments,
+    rotation.returnTravel.segments,
+    ...(rotation.moves ?? []).map((move) => move.travel.segments),
+  ]);
 }
 
 /** Full place name: sites (Iqaluit, Pond Inlet...) and airports from Settings. */
@@ -85,6 +109,37 @@ export function CrewTripForm({
     : home && camp
       ? routeAirports(routes, camp, home, direction)
       : [];
+
+  // Ways to do this trip, best first: usual route, routes people took before, then direct.
+  const tripEnds = move
+    ? { from: move.fromSite, to: move.toSite }
+    : direction === "outbound"
+      ? { from: home, to: camp }
+      : { from: camp, to: home };
+  const suggestions = useMemo(
+    () =>
+      // Both ends needed (no guessing where someone flies from).
+      !tripEnds.from || !tripEnds.to
+        ? []
+        : suggestRoutes({
+        from: tripEnds.from,
+        to: tripEnds.to,
+        usual: chain.length > 1 ? chain : null,
+        trips: pastTrips(book),
+        routeTexts: EXCEL_ROUTES,
+      }),
+    // chain is derived from the same inputs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [book, tripEnds.from, tripEnds.to, chain.join(">")],
+  );
+
+  function applySuggestion(suggestion: RouteSuggestion) {
+    const next = legsForRoute(suggestion.airports, travelDate).map((leg, index) => ({
+      ...leg,
+      mode: suggestion.modes[index] ?? "flight",
+    }));
+    setLegs(next);
+  }
 
   function setLegs(next: FlightSegment[]) {
     onChange(summaryFromLegs(next));
@@ -160,25 +215,50 @@ export function CrewTripForm({
           </label>
         </div>
         )}
-        {chain.length > 1 ? (
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <p>
-              <span className="text-muted-foreground">Usual route </span>
-              <span className="font-semibold">{chain.join(" → ")}</span>
-              <span className="block text-xs text-muted-foreground">
-                {chain.map((code) => placeName(code, hubs)).join(" → ")}
-              </span>
+        {suggestions.length ? (
+          <div className="mt-3 space-y-1.5">
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Suggested routes {legs.length ? "(click to replace the legs)" : "(click to fill the legs)"}
             </p>
-            <button
-              type="button"
-              onClick={() => fillRoute()}
-              className="h-8 rounded-lg bg-sky-700 px-3 text-xs font-semibold text-white hover:opacity-90"
-            >
-              {legs.length ? "Use usual route" : "Fill legs"}
-            </button>
+            {suggestions.map((suggestion) => (
+              <button
+                key={`${suggestion.airports.join(">")}|${suggestion.modes.join(",")}`}
+                type="button"
+                onClick={() => applySuggestion(suggestion)}
+                className="flex w-full items-center justify-between gap-2 rounded-lg border border-sky-200 bg-card px-3 py-2 text-left hover:border-sky-400 hover:bg-sky-50"
+              >
+                <span className="min-w-0">
+                  <span className="flex flex-wrap items-center gap-1 font-semibold">
+                    {suggestion.airports.map((code, index) => (
+                      <span key={`${code}-${index}`} className="inline-flex items-center gap-1">
+                        {index > 0 ? (
+                          suggestion.modes[index - 1] === "road" ? (
+                            <Car className="size-3.5 text-amber-700" aria-label="by road" />
+                          ) : (
+                            <Plane className="size-3.5 text-sky-700" aria-label="by air" />
+                          )
+                        ) : null}
+                        {code}
+                      </span>
+                    ))}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {suggestion.airports.map((code) => placeName(code, hubs)).join(" → ")}
+                    {suggestion.airports.length > 2
+                      ? ` · ${suggestion.airports.length - 2} stop${suggestion.airports.length > 3 ? "s" : ""}`
+                      : " · direct"}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-900">
+                  {suggestion.usual ? "Usual" : suggestion.uses ? `Used ${suggestion.uses}×` : "Direct"}
+                </span>
+              </button>
+            ))}
           </div>
         ) : (
-          <p className="mt-2 text-xs text-muted-foreground">Pick both ends to fill the legs from Settings → Usual routes.</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Pick both ends to see suggested routes (the usual one, ones used before, and direct).
+          </p>
         )}
       </section>
 

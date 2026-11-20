@@ -5,7 +5,8 @@ import { BedDouble, Car, Plane, PlaneLanding, PlaneTakeoff, Repeat } from "lucid
 import type { CrewOpsBook } from "@/lib/crew-ops";
 import { flightStatusLabel, type FlightBook, type FlightBooking, type FlightDirection } from "@/lib/crew-flights";
 import { lastStartAirport, loadRoutes, routeAirports, routeBetweenSites } from "@/lib/crew-routes";
-import { ASSUMED_PNR, movesFromStint, travelIsBooked, type RotationBook, type RotationTravel } from "@/lib/crew-rotations";
+import { ASSUMED_PNR, travelIsBooked, type RotationBook, type RotationTravel } from "@/lib/crew-rotations";
+import { movesOnCalendar } from "@/lib/crew-site-days";
 import { siteLabel, type CrewPerson, type CrewSnapshot } from "@/lib/crew-schedule";
 import { formatJourneyPath } from "@/lib/crew-travel-hubs";
 import { addDays, daysBetween, formatMedium } from "@/lib/dates";
@@ -137,11 +138,16 @@ function tripsBetween(
           booking: find(person.id, "return", outDay),
         });
       }
-      // Moves between sites inside one stay (e.g. IQA → POND): saved on the stay, plus any the Excel shows.
+      // Moves between sites inside one stay (e.g. IQA → POND): saved on the stay, plus any the calendar shows.
       const rotation = rotationBook?.rotations.find((row) => row.personId === person.id && row.plannedIn === stint.from);
       const saved = rotation?.moves ?? [];
-      const fromExcel = movesFromStint(stint).filter(
-        (row) => !saved.some((move) => move.fromSite === row.fromSite && move.toSite === row.toSite && move.date === row.date),
+      const stayEnd = stint.out || `${Number(stint.from.slice(0, 4)) + 1}-01-01`;
+      const fromExcel = movesOnCalendar(person, stint.from, stayEnd).filter(
+        (row) =>
+          !saved.some(
+            (move) =>
+              move.fromSite === row.fromSite && move.toSite === row.toSite && Math.abs(daysBetween(move.date, row.date)) <= 3,
+          ),
       );
       const allMoves: { fromSite: string; toSite: string; date: string; travel?: RotationTravel }[] = [...saved, ...fromExcel];
       for (const move of allMoves) {

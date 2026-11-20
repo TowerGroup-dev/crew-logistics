@@ -228,3 +228,73 @@ export function tripPlan(
   });
   return { steps, warnings };
 }
+
+export type RouteSuggestion = {
+  airports: string[];
+  /** How each leg is travelled (one per hop). */
+  modes: ("flight" | "road")[];
+  /** How many past trips used it. */
+  uses: number;
+  usual: boolean;
+};
+
+const CODE = /^[A-Z]{2,5}$/;
+
+/**
+ * Ways to get from `from` to `to`, best first: the usual route, then routes people
+ * actually took (from bookings, moves and the Excel's travel days), then direct.
+ * `from` may be empty (home airport unknown): then any route ending at `to` counts.
+ */
+export function suggestRoutes(input: {
+  from: string;
+  to: string;
+  usual?: string[] | null;
+  /** Legs of every trip on file. */
+  trips: FlightSegment[][];
+  /** Journeys written as text, e.g. "KUG → YK → IQA" (from the Excel). */
+  routeTexts?: string[];
+  limit?: number;
+}): RouteSuggestion[] {
+  const from = input.from.trim().toUpperCase();
+  const to = input.to.trim().toUpperCase();
+  if (!to || from === to) return [];
+  const found = new Map<string, RouteSuggestion>();
+  const consider = (airports: string[], modes: ("flight" | "road")[]) => {
+    const end = airports.lastIndexOf(to);
+    if (end <= 0) return;
+    const start = from ? airports.lastIndexOf(from, end - 1) : 0;
+    if (start < 0) return;
+    const chain = airports.slice(start, end + 1);
+    const legModes = modes.slice(start, end);
+    if (chain.length < 2 || new Set(chain).size !== chain.length) return;
+    const key = `${chain.join(">")}|${legModes.join(",")}`;
+    const row = found.get(key) ?? { airports: chain, modes: legModes, uses: 0, usual: false };
+    row.uses += 1;
+    found.set(key, row);
+  };
+  for (const legs of input.trips) {
+    const rows = legs.filter((row) => row.fromAirport && row.toAirport);
+    if (!rows.length) continue;
+    const airports = [rows[0]!.fromAirport, ...rows.map((row) => row.toAirport)].map((code) => code.toUpperCase());
+    consider(airports, rows.map((row) => (row.mode === "road" ? "road" : "flight")));
+  }
+  for (const text of input.routeTexts ?? []) {
+    const airports = text
+      .split(/→|->|>/)
+      .map((part) => part.trim().toUpperCase())
+      .filter((code) => CODE.test(code));
+    consider(airports, airports.slice(1).map(() => "flight"));
+  }
+  const list = [...found.values()].sort((a, b) => b.uses - a.uses || a.airports.length - b.airports.length);
+  if (input.usual && input.usual.length > 1) {
+    const usualKey = input.usual.join(">");
+    const hit = list.find((row) => row.airports.join(">") === usualKey && row.modes.every((mode) => mode === "flight"));
+    if (hit) hit.usual = true;
+    else list.unshift({ airports: input.usual, modes: input.usual.slice(1).map(() => "flight"), uses: 0, usual: true });
+    list.sort((a, b) => Number(b.usual) - Number(a.usual));
+  }
+  if (from && !list.some((row) => row.airports.length === 2)) {
+    list.push({ airports: [from, to], modes: ["flight"], uses: 0, usual: false });
+  }
+  return list.slice(0, input.limit ?? 5);
+}

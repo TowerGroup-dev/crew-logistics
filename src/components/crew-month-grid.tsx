@@ -444,11 +444,8 @@ const MonthRow = memo(function MonthRow({
               (site && (dayIndex > 0 ? siteAt[dayIndex - 1] : siteOnDay(person, addDays(iso, -1))) !== site)),
         );
         const stintEnd = Boolean(stayLastDay && iso === stayLastDay);
-        // Today's box on a stay: "day / length" (e.g. 18/42), length grows when the stay is stretched.
-        const dayCount =
-          day.isToday && site && covering
-            ? `${daysBetween(covering.from, iso) + 1}/${daysBetween(covering.from, covering.out || addDays(scheduleYearLastDay(year), 1))}`
-            : "";
+        // No day counts in the boxes (asked to keep the calendar clean); progress shows in the side panel.
+        const dayCount = "";
         const work = site ? workLabelForAssignment(person, site, iso, iso) : "";
         const inDraft =
           Boolean(draftRange && iso >= draftRange.from && iso <= draftRange.to);

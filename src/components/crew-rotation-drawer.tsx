@@ -1,5 +1,6 @@
 "use client";
 
+import { movesOnCalendar } from "@/lib/crew-site-days";
 import { CrewTripForm } from "@/components/crew-trip-form";
 import { useEffect, useMemo, useState } from "react";
 import { BedDouble, PlaneLanding, PlaneTakeoff, Plus, Repeat, Trash2, X } from "lucide-react";
@@ -21,7 +22,6 @@ import {
   type RotationTravel,
   type TravelDirection,
   ASSUMED_PNR,
-  movesFromStint,
   newMove,
   travelIsBooked,
   type RotationMove,
@@ -80,12 +80,15 @@ export function CrewRotationDrawer({
     openTravel ? "travel" : "overview",
   );
   const [travelDir, setTravelDir] = useState<TravelDirection | "moves">(openTravel || "outbound");
-  // Moves the Excel shows inside this stay (e.g. KUG, then YK, then IQA), until one is saved for it.
-  const stint = person.stints?.find((row) => row.from === rotation.plannedIn) ?? null;
-  const suggestedMoves = movesFromStint(stint).filter(
+  // Every site change the calendar shows during this stay (from the Excel, painted, or moved),
+  // listed until a move is saved for it, so this tab always matches the calendar.
+  const suggestedMoves = movesOnCalendar(person, draft.plannedIn, draft.plannedOut).filter(
     (row) =>
       !(draft.moves ?? []).some(
-        (saved) => saved.fromSite === row.fromSite && saved.toSite === row.toSite && saved.date === row.date,
+        (saved) =>
+          saved.fromSite === row.fromSite &&
+          saved.toSite === row.toSite &&
+          Math.abs(daysBetween(saved.date, row.date)) <= 3,
       ),
   );
   const [replaceOpen, setReplaceOpen] = useState(false);
@@ -195,7 +198,16 @@ export function CrewRotationDrawer({
                 roster={roster}
                 onSaveRoster={onSaveRoster}
               />
-              <ChecklistHints readiness={readiness} day={day} personOps={personOps} />
+              <ChecklistHints
+                readiness={readiness}
+                day={day}
+                personOps={personOps}
+                done={draft.todoDone ?? []}
+                onToggle={(id) => {
+                  const current = draft.todoDone ?? [];
+                  commit({ ...draft, todoDone: current.includes(id) ? current.filter((row) => row !== id) : [...current, id] });
+                }}
+              />
             </div>
           ) : null}
 
@@ -588,12 +600,17 @@ function ChecklistHints({
   readiness,
   day,
   personOps,
+  done,
+  onToggle,
 }: {
   readiness: ReturnType<typeof evaluateReadiness>;
   day: number;
   personOps?: CrewPersonOps | null;
+  done: string[];
+  onToggle: (id: string) => void;
 }) {
-  const hints: string[] = [];
+  const hints: { id: string; text: string }[] = [];
+  const add = (id: string, text: string) => hints.push({ id, text });
   if (
     personOps?.returnWindowPainted &&
     personOps.returnBookFrom &&
@@ -601,7 +618,8 @@ function ChecklistHints({
     personOps.returnFlight !== "booked" &&
     personOps.returnFlight !== "confirmed"
   ) {
-    hints.push(
+    add(
+      "return-window",
       `Return window set (${formatMedium(personOps.returnBookFrom)} to ${formatMedium(personOps.returnBookTo)}): book return flight`,
     );
   }
@@ -612,27 +630,47 @@ function ChecklistHints({
     personOps.outboundFlight !== "booked" &&
     personOps.outboundFlight !== "confirmed"
   ) {
-    hints.push(
+    add(
+      "outbound-window",
       `Booking window set (${formatMedium(personOps.outboundBookFrom)} to ${formatMedium(personOps.outboundBookTo)}): book flight to site`,
     );
   }
-  if (!readiness.travelOutbound) hints.push("Book outbound flight to site");
-  if (!readiness.stay) hints.push("Book accommodation for the whole stay");
-  if (day >= 28 && !readiness.travelReturn) hints.push("4 weeks in: book return flight");
-  if (readiness.replacement === "missing") hints.push("Extend rotation or add another person");
-  if (readiness.handover === "not_planned") hints.push("Set handover / overlap dates");
+  if (!readiness.travelOutbound) add("outbound", "Book outbound flight to site");
+  if (!readiness.stay) add("stay", "Book accommodation for the whole stay");
+  if (day >= 28 && !readiness.travelReturn) add("return", "4 weeks in: book return flight");
+  if (readiness.replacement === "missing") add("replacement", "Extend rotation or add another person");
+  if (readiness.handover === "not_planned") add("handover", "Set handover / overlap dates");
   if (!hints.length) {
     return <p className="text-sm text-muted-foreground">Nothing open on this rotation.</p>;
   }
+  // Open items first, ticked ones underneath (kept so they can be unticked).
+  const sorted = [...hints].sort((a, b) => Number(done.includes(a.id)) - Number(done.includes(b.id)));
+  const openCount = hints.filter((hint) => !done.includes(hint.id)).length;
   return (
     <div>
-      <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">To do</p>
-      <ul className="mt-2 space-y-2 border-t border-border pt-3">
-        {hints.map((hint) => (
-          <li key={hint} className="text-sm text-foreground">
-            {hint}
-          </li>
-        ))}
+      <div className="flex items-baseline justify-between">
+        <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">To do</p>
+        <p className="text-xs text-muted-foreground">
+          {openCount ? `${openCount} open` : "All done"}
+        </p>
+      </div>
+      <ul className="mt-2 space-y-1 border-t border-border pt-2">
+        {sorted.map((hint) => {
+          const checked = done.includes(hint.id);
+          return (
+            <li key={hint.id}>
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1.5 text-sm hover:bg-muted/50">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onToggle(hint.id)}
+                  className="mt-0.5 size-4 shrink-0 accent-primary"
+                />
+                <span className={cn(checked ? "text-muted-foreground line-through" : "text-foreground")}>{hint.text}</span>
+              </label>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -743,7 +781,7 @@ function MovesPanel({
               {row.fromSite} → {row.toSite}
               <span className="ml-2 font-normal text-muted-foreground">{formatMedium(row.date)}</span>
             </p>
-            <p className="text-xs text-muted-foreground">On the Excel, not booked yet</p>
+            <p className="text-xs text-muted-foreground">On the calendar, not booked yet</p>
           </div>
           <button
             type="button"
