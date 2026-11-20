@@ -836,6 +836,29 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     };
   }, []);
   const mainScrollRef = useRef<HTMLDivElement>(null);
+  /** Height of the day pane's horizontal scrollbar (the names column gets the same space at the bottom). */
+  const [hScrollbarPx, setHScrollbarPx] = useState(0);
+  useEffect(() => {
+    const main = mainScrollRef.current;
+    if (!main || typeof ResizeObserver === "undefined") return;
+    const measure = () => setHScrollbarPx(Math.max(0, main.offsetHeight - main.clientHeight));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(main);
+    return () => observer.disconnect();
+  }, []);
+  const cellMenuRef = useRef<HTMLDivElement>(null);
+  // Keep the right-click menu fully on screen: move it up / left when it would run off the edge.
+  useLayoutEffect(() => {
+    const menu = cellMenuRef.current;
+    if (!menu || !cellMenu) return;
+    const margin = 8;
+    const rect = menu.getBoundingClientRect();
+    const top = Math.max(margin, Math.min(cellMenu.y, window.innerHeight - rect.height - margin));
+    const left = Math.max(margin, Math.min(cellMenu.x, window.innerWidth - rect.width - margin));
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+  }, [cellMenu]);
   const didScrollToToday = useRef(false);
   /**
    * Wide day window + hysteresis so horizontal scrubbing stays native-smooth.
@@ -1754,7 +1777,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             {listHeader}
             <div
               ref={leftScrollRef}
-              className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+              // No scrollbar of its own: it follows the day pane (which owns the scrollbars).
+              className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               onScroll={() => syncVerticalScroll("left")}
             >
             {groups.length === 0 ? (
@@ -2031,6 +2055,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                 );
               })
             )}
+            {/* Same height as the day pane's bottom scrollbar, so names and boxes line up all the way down. */}
+            <div aria-hidden style={{ height: hScrollbarPx }} />
             </div>
           </div>
 
@@ -2204,8 +2230,9 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
           }}
         >
           <div
+            ref={cellMenuRef}
             role="menu"
-            className="absolute max-h-[min(70vh,28rem)] w-[min(20rem,calc(100vw-1rem))] overflow-auto rounded-xl border border-border bg-card p-2 shadow-xl"
+            className="absolute max-h-[calc(100vh-1rem)] w-[min(20rem,calc(100vw-1rem))] overflow-auto rounded-xl border border-border bg-card p-2 shadow-xl"
             style={{
               left: Math.min(cellMenu.x, typeof window !== "undefined" ? window.innerWidth - 340 : cellMenu.x),
               top: Math.min(cellMenu.y, typeof window !== "undefined" ? window.innerHeight - 320 : cellMenu.y),
