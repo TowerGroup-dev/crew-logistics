@@ -13,7 +13,7 @@ export function CrewAppShell({ children }: { children: ReactNode }) {
           style={{ maxWidth: "var(--app-shell-max)" }}
         >
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold tracking-[0.16em] text-primary uppercase sm:text-xs">Tower Arctic</p>
+            <p className="text-[10px] font-semibold tracking-[0.16em] text-primary uppercase sm:text-xs">Tower Arctic Ltd.</p>
             <p className="font-heading text-xl leading-tight tracking-tight sm:text-4xl">Crew Schedule</p>
           </div>
           <CrewAuthBar />

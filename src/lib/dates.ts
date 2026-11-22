@@ -5,7 +5,7 @@ export function toISODate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-/** Tower Arctic ops day, same on server and browser (avoids SSR hydration mismatches). */
+/** Tower Arctic Ltd. ops day, same on server and browser (avoids SSR hydration mismatches). */
 export const CREW_TIME_ZONE = "America/Iqaluit";
 
 export function todayInZone(timeZone = CREW_TIME_ZONE, at = new Date()) {

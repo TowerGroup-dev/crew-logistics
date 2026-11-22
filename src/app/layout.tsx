@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     default: "Crew Logistics",
     template: "%s · Crew Logistics",
   },
-  description: "Tower Arctic crew rotations, travel, and site assignments.",
+  description: "Tower Arctic Ltd. crew rotations, travel, and site assignments.",
 };
 
 // Phones: fit the screen, no pinch-zoom on tap, room for the notch and home bar.

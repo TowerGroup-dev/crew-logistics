@@ -240,7 +240,7 @@ export function CrewMonthlyReportPanel({
     <div className="crew-report space-y-5 p-4 sm:p-5" data-print-root>
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Crew report</p>
+          <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Tower Arctic Ltd. · Crew report</p>
           <h2 className="mt-1 font-heading text-2xl tracking-tight">{summary.label}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {formatMedium(summary.from)} to {formatMedium(summary.last)} · active crew only · produced{" "}

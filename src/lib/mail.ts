@@ -57,7 +57,7 @@ async function sendWithGraph(input: MailInput, settings: NonNullable<ReturnType<
         message: {
           subject: input.subject,
           body: input.html ? { contentType: "HTML", content: input.html } : { contentType: "Text", content: input.text },
-          from: { emailAddress: { address: from, name: "Tower Arctic Crew Logistics" } },
+          from: { emailAddress: { address: from, name: "Tower Arctic Ltd. Crew Logistics" } },
           toRecipients: [{ emailAddress: { address: input.to } }],
         },
         saveToSentItems: true,
