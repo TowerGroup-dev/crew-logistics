@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Cloud, CloudOff, Loader2, TriangleAlert } from "lucide-react";
+import { Cloud, CloudOff, FlaskConical, Loader2, TriangleAlert } from "lucide-react";
 import { getSyncStatus, subscribeSync, type SyncStatus } from "@/lib/crew-sync";
 import { cn } from "@/lib/cn";
 
@@ -17,7 +17,9 @@ export function CrewSyncStatus() {
   const status = useSyncExternalStore(subscribeSync, getSyncStatus, () => SERVER_STATUS);
   const last = status.lastAt ? `Last change ${time(status.lastAt)}${status.lastBy && status.lastBy !== "Office" ? ` by ${status.lastBy}` : ""}` : "";
   const view =
-    status.state === "saving"
+    status.state === "test"
+      ? { icon: <FlaskConical className="size-3.5" />, text: "Test Mode · not saved", tone: "border-amber-300 bg-amber-50 text-amber-900" }
+      : status.state === "saving"
       ? { icon: <Loader2 className="size-3.5 animate-spin" />, text: "Saving…", tone: "text-muted-foreground" }
       : status.state === "offline"
         ? { icon: <CloudOff className="size-3.5" />, text: "Offline, will sync", tone: "border-amber-300 bg-amber-50 text-amber-900" }

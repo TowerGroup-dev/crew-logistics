@@ -3,10 +3,12 @@
 import type { ReactNode } from "react";
 import { CrewAuthBar } from "@/components/crew-auth-bar";
 import { CrewUndoProvider } from "@/components/crew-undo-provider";
+import { CrewTestMode } from "@/components/crew-test-mode";
 
 export function CrewAppShell({ children }: { children: ReactNode }) {
   return (
     <CrewUndoProvider>
+      <CrewTestMode />
       <header className="border-b border-border bg-card">
         <div
           className="mx-auto flex w-full items-center gap-3 px-3 py-2 sm:px-8 sm:py-4 xl:px-10"

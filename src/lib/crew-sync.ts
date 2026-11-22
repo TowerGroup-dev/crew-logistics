@@ -9,6 +9,7 @@
  */
 import { fillMissing, merge3 } from "@/lib/crew-merge";
 import { SHARED_KEYS, isSharedKey, type SharedDoc, type SharedKey } from "@/lib/crew-sync-keys";
+import { enterTestModeFromUrl, installTestStorage, isTestMode, loadLiveCopy } from "@/lib/crew-test-mode";
 
 export const SYNC_CHANGE_EVENT = "crew-sync-change";
 const POLL_MS = 15_000;
@@ -16,7 +17,7 @@ const PUSH_DELAY_MS = 600;
 const META = "crew-sync:";
 
 export type SyncStatus = {
-  state: "starting" | "saved" | "saving" | "offline" | "error";
+  state: "starting" | "saved" | "saving" | "offline" | "error" | "test";
   /** Last time this browser's change reached the server (ISO). */
   savedAt: string | null;
   /** Latest save on the server by anyone. */
@@ -226,6 +227,14 @@ let started: Promise<void> | null = null;
 export function startSync(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
   if (started) return started;
+
+  // Test Mode: read a fresh copy of live data once, then never push or pull again.
+  enterTestModeFromUrl();
+  if (isTestMode()) {
+    installTestStorage();
+    started = loadLiveCopy(SHARED_KEYS).then(() => setStatus({ state: "test", error: null }));
+    return started;
+  }
 
   const proto = Storage.prototype;
   const originalSet = proto.setItem;
