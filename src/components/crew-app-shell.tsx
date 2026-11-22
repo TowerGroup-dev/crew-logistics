@@ -9,7 +9,9 @@ export function CrewAppShell({ children }: { children: ReactNode }) {
   return (
     <CrewUndoProvider>
       <CrewTestMode />
-      <header className="border-b border-border bg-card">
+      {/* Phone turned sideways (short screen): no title bar, every pixel goes to the schedule.
+          Sign out is under More in the tab bar. */}
+      <header className="border-b border-border bg-card [@media(max-height:511px)]:hidden">
         <div
           className="mx-auto flex w-full items-center gap-3 px-3 py-2 sm:px-8 sm:py-4 xl:px-10"
           style={{ maxWidth: "var(--app-shell-max)" }}

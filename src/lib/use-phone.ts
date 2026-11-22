@@ -2,8 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 
-/** Same edge as Tailwind's `sm:` (640px): below it we lay things out for a phone. */
-const PHONE_QUERY = "(max-width: 639px)";
+/** Same edges as `sm:` in globals.css: narrow (under 640px) or short (under 512px, a phone turned sideways). */
+const PHONE_QUERY = "(max-width: 639px), (max-height: 511px)";
 
 function subscribe(onChange: () => void) {
   if (typeof window === "undefined" || !window.matchMedia) return () => {};

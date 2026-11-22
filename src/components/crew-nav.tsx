@@ -309,6 +309,13 @@ export function CrewNav({
               </Link>
             );
           })}
+          <a
+            role="menuitem"
+            href="/api/auth/logout"
+            className="block border-t border-border px-4 py-3.5 text-base text-rose-700 active:bg-rose-50"
+          >
+            Sign out
+          </a>
         </div>
       ) : null}
       <div className="grid grid-cols-4">
@@ -323,7 +330,7 @@ export function CrewNav({
               aria-current={active ? "page" : undefined}
               onClick={() => setMoreOpen(false)}
               className={cn(
-                "flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium",
+                "flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium [@media(max-height:511px)]:h-10 [@media(max-height:511px)]:flex-row [@media(max-height:511px)]:gap-1.5 [@media(max-height:511px)]:text-xs",
                 active ? "text-primary" : "text-slate-500",
               )}
             >
@@ -337,7 +344,7 @@ export function CrewNav({
           onClick={() => setMoreOpen((open) => !open)}
           aria-expanded={moreOpen}
           className={cn(
-            "flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium",
+            "flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium [@media(max-height:511px)]:h-10 [@media(max-height:511px)]:flex-row [@media(max-height:511px)]:gap-1.5 [@media(max-height:511px)]:text-xs",
             moreOpen || moreActive ? "text-primary" : "text-slate-500",
           )}
         >

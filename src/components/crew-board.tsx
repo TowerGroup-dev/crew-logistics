@@ -1578,14 +1578,14 @@ export function CrewBoard({
                           {departureLabel(row)} · {travelLabel(ops, row)}
                         </span>
                       </span>
-                      <span className="max-sm:hidden min-w-0">
+                      <span className="phone:hidden min-w-0">
                         <span className="block truncate text-sm font-medium">{row.person.name}</span>
                         <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                           {row.site ? catalogSiteLabel(row.site, sitesBook) : "Off site"}
                           {row.fourWeeksOut ? " · 4 weeks out" : ""}
                         </span>
                       </span>
-                      <span className="max-sm:hidden">
+                      <span className="phone:hidden">
                         {row.site ? (
                           <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-semibold", siteTone(row.site, sitesBook))}>
                             {row.site}
@@ -1594,24 +1594,24 @@ export function CrewBoard({
                           <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </span>
-                      <span className="max-sm:hidden">
+                      <span className="phone:hidden">
                         <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-semibold", statusTone(row.duty))}>
                           {dutyLabel(row.duty)}
                         </span>
                       </span>
-                      <span className="max-sm:hidden text-sm tabular-nums text-muted-foreground">
+                      <span className="phone:hidden text-sm tabular-nums text-muted-foreground">
                         {row.plannedIn ? formatMedium(row.plannedIn) : "-"}
                       </span>
-                      <span className="max-sm:hidden text-sm tabular-nums text-muted-foreground">
+                      <span className="phone:hidden text-sm tabular-nums text-muted-foreground">
                         {row.plannedOut ? formatMedium(row.plannedOut) : "-"}
                       </span>
-                      <span className="max-sm:hidden text-sm tabular-nums text-muted-foreground">
+                      <span className="phone:hidden text-sm tabular-nums text-muted-foreground">
                         {row.rotationDay == null ? "-" : `Day ${row.rotationDay} of ${stayLength(row)}`}
                         {progress != null ? <span className="mt-0.5 block text-[0.8125rem]">{progress}%</span> : null}
                       </span>
                       <span
                         className={cn(
-                          "max-sm:hidden",
+                          "phone:hidden",
                           "text-sm tabular-nums",
                           row.overdue && "font-semibold text-rose-700",
                           row.dueSoon && !row.overdue && "font-medium text-amber-800",
@@ -1620,8 +1620,8 @@ export function CrewBoard({
                       >
                         {departureLabel(row)}
                       </span>
-                      <span className="max-sm:hidden text-xs text-muted-foreground">{travelLabel(ops, row)}</span>
-                      <span className="max-sm:hidden text-xs font-medium text-primary">{row.alerts.length ? "Resolve" : "Open"}</span>
+                      <span className="phone:hidden text-xs text-muted-foreground">{travelLabel(ops, row)}</span>
+                      <span className="phone:hidden text-xs font-medium text-primary">{row.alerts.length ? "Resolve" : "Open"}</span>
                     </button>
                   </li>
                 );
