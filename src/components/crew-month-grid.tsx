@@ -1273,25 +1273,45 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     didScrollToToday.current = false;
   }, [year, scrollToIso]);
 
-  useEffect(() => {
-    if (didScrollToToday.current) return;
-    const main = mainScrollRef.current;
-    if (!main || days.length === 0) return;
-    // Open on this week (today a few days in from the left); a Year-tape deep link wins.
-    const explicitMonth =
-      scrollToIso &&
-      (days.includes(scrollToIso) || days.some((iso) => iso.startsWith(scrollToIso.slice(0, 7))));
-    const preferred = explicitMonth
-      ? days.includes(scrollToIso!)
-        ? scrollToIso!
-        : days.find((iso) => iso.startsWith(scrollToIso!.slice(0, 7)))!
-      : days.includes(today)
-        ? addDays(today, -3)
-        : days[0]!;
-    const idx = Math.max(0, days.indexOf(preferred) >= 0 ? days.indexOf(preferred) : days.indexOf(today) - 3);
-    setDaysScrollLeft(Math.max(0, idx * dayColPx));
-    didScrollToToday.current = true;
-  }, [days, scrollToIso, dayColPx, today]);
+  useLayoutEffect(() => {
+    // Prefetch / KeepAlive mounts Month while hidden (Overview → Calendar). Don't
+    // burn the "open on today" scroll until the pane is actually visible.
+    if (!active || didScrollToToday.current || days.length === 0) return;
+
+    function applyScrollToOpenDay() {
+      if (didScrollToToday.current) return true;
+      const main = mainScrollRef.current;
+      if (!main || main.clientWidth < 40) return false;
+      // Open on this week (today a few days in from the left); a Year-tape deep link wins.
+      const explicitMonth =
+        scrollToIso &&
+        (days.includes(scrollToIso) || days.some((iso) => iso.startsWith(scrollToIso.slice(0, 7))));
+      const preferred = explicitMonth
+        ? days.includes(scrollToIso!)
+          ? scrollToIso!
+          : days.find((iso) => iso.startsWith(scrollToIso!.slice(0, 7)))!
+        : days.includes(today)
+          ? addDays(today, -3)
+          : days[0]!;
+      const idx = Math.max(0, days.indexOf(preferred) >= 0 ? days.indexOf(preferred) : days.indexOf(today) - 3);
+      setDaysScrollLeft(Math.max(0, idx * dayColPx));
+      didScrollToToday.current = true;
+      return true;
+    }
+
+    if (applyScrollToOpenDay()) return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      if (applyScrollToOpenDay()) return;
+      raf2 = requestAnimationFrame(() => {
+        applyScrollToOpenDay();
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [active, days, scrollToIso, dayColPx, today]);
 
   useEffect(() => {
     if (!active) return;
