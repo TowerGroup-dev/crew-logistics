@@ -68,6 +68,10 @@ import {
 } from "@/lib/crew-journey-legs";
 import { stayNoteBarLayout } from "@/lib/crew-stay-notes";
 import {
+  CrewJourneyPlanner,
+  type JourneyPlannerApply,
+} from "@/components/crew-journey-planner";
+import {
   stopoverDatesFor,
   stopoverOnDay,
   travelPlanForStay,
@@ -710,6 +714,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onSetBookWindow,
   onToggleStopover,
   onPaintStopovers,
+  onApplyJourney,
   onAddRotation,
   onExtendStay,
   onMoveStayIn,
@@ -762,6 +767,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onToggleStopover?: (personId: string, iso: string, hub: string) => void;
   /** Paint a travel hub across several days (legend Travel brush). */
   onPaintStopovers?: (personId: string, dates: string[], hub: string) => void;
+  /** From → stops → To planner: write legs + overnight hubs onto the calendar. */
+  onApplyJourney?: (personId: string, plan: JourneyPlannerApply) => void;
   /** Returns the new plan id when known (so Delete can target it immediately). */
   onAddRotation: (personId: string, input: PlaceRotationInput) => string | void;
   /** Extend or shorten a stay's exclusive OUT (sheet + app). */
@@ -856,6 +863,12 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   const [rowMenu, setRowMenu] = useState<RowMenu | null>(null);
   const [roleHiddenOpen, setRoleHiddenOpen] = useState<string | null>(null);
   const [hubDraft, setHubDraft] = useState({ code: "", name: "" });
+  const [journeyPlanner, setJourneyPlanner] = useState<{
+    personId: string;
+    personName: string;
+    iso: string;
+    site: string | null;
+  } | null>(null);
   /** Legend chip → drag empty days. Sheet rule: every IN has an OUT (first / last day). */
   const [paintBrush, setPaintBrush] = useState<PaintBrush>(() => ({
     kind: "site",
@@ -2798,6 +2811,27 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               </button>
             ) : null}
 
+            {onApplyJourney ? (
+              <button
+                type="button"
+                role="menuitem"
+                className="mt-1 flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-sky-50"
+                onClick={() => {
+                  const person = peopleById.get(cellMenu.personId);
+                  setJourneyPlanner({
+                    personId: cellMenu.personId,
+                    personName: person?.name || cellMenu.personId,
+                    iso: cellMenu.iso,
+                    site: person ? siteOnDay(person, cellMenu.iso) : null,
+                  });
+                  setCellMenu(null);
+                  setStaySelection(null);
+                }}
+              >
+                Plan journey (From → stops → To)
+              </button>
+            ) : null}
+
             {onToggleStopover ? (
               <div className="mt-1 border-t border-border pt-2">
                 <p className="px-2 pb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -2873,6 +2907,21 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             ) : null}
           </div>
         </div>
+      ) : null}
+
+      {journeyPlanner && onApplyJourney ? (
+        <CrewJourneyPlanner
+          personName={journeyPlanner.personName}
+          initialDate={journeyPlanner.iso}
+          initialTo={journeyPlanner.site || "IQA"}
+          initialFrom="YOW"
+          onClose={() => setJourneyPlanner(null)}
+          onApply={(plan) => {
+            onApplyJourney(journeyPlanner.personId, plan);
+            showFlash(`${plan.pathLabel} · ${formatMedium(plan.startDate)}`);
+            setJourneyPlanner(null);
+          }}
+        />
       ) : null}
 
       {canEdit && draft && draftDays != null && dragTip ? (

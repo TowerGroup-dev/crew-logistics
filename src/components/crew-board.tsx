@@ -109,6 +109,7 @@ import {
 import { autoSeedTravelOps } from "@/lib/crew-auto-ops";
 import { clearStayBooking } from "@/lib/crew-clear-booking";
 import {
+  activeBookingFor,
   clearFlightsForPerson,
   loadFlights,
   saveFlights,
@@ -122,6 +123,7 @@ import {
   saveStopovers,
   clearStopoversForPerson,
   paintStopoverDays,
+  setStopover,
   toggleStopover,
   type CrewStopoverBook,
 } from "@/lib/crew-stopovers";
@@ -1183,6 +1185,61 @@ export function CrewBoard({
                   saveStopovers(next);
                   return next;
                 });
+              }}
+              onApplyJourney={(personId, plan) => {
+                captureHistory();
+                setFlightBook((prev) => {
+                  const existing = activeBookingFor(prev, personId, plan.direction);
+                  const now = new Date().toISOString();
+                  const status =
+                    existing?.status === "booked" || existing?.status === "confirmed"
+                      ? existing.status
+                      : ("pending_booking" as const);
+                  const booking: FlightBooking = {
+                    id: existing?.id || `journey-${personId}-${plan.direction}-${plan.startDate}`,
+                    personId,
+                    direction: plan.direction,
+                    rotationDate: plan.startDate,
+                    airline: existing?.airline || "Canadian North",
+                    pnr: existing?.pnr || "",
+                    ticketNumber: existing?.ticketNumber || "",
+                    segments: plan.segments,
+                    status,
+                    bookedOn: existing?.bookedOn ?? null,
+                    enteredBy: existing?.enteredBy || "",
+                    enteredAt: existing?.enteredAt || now,
+                    confirmationName: existing?.confirmationName || "",
+                    confirmationDataUrl: existing?.confirmationDataUrl || "",
+                    notes: existing?.notes || plan.pathLabel,
+                    hotels: existing?.hotels || [],
+                    carService: existing?.carService || "",
+                    history: [
+                      { at: now, by: "", text: `Journey planned · ${plan.pathLabel}` },
+                      ...(existing?.history || []),
+                    ],
+                  };
+                  const next = upsertFlightBooking(prev, booking);
+                  saveFlights(next);
+                  setOpsBook((opsPrev) => {
+                    const synced = {
+                      ...opsPrev,
+                      [personId]: syncOpsFromFlights(opsPrev, next, personId),
+                    };
+                    saveCrewOps(synced);
+                    return synced;
+                  });
+                  return next;
+                });
+                if (plan.stopoverDays.length) {
+                  setStopoverBook((prev) => {
+                    let next = prev;
+                    for (const row of plan.stopoverDays) {
+                      next = setStopover(next, personId, row.iso, row.hub);
+                    }
+                    saveStopovers(next);
+                    return next;
+                  });
+                }
               }}
               onAddRotation={(personId, input) => {
                 let planId = "";
