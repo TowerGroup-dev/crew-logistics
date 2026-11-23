@@ -554,7 +554,13 @@ const MonthRow = memo(function MonthRow({
                   ? `${stintEnd ? "OUT · " : ""}${hubJourneyTitle}`
                   : site
                     ? `${stintEnd ? "OUT · " : ""}${assignmentRole ? `${assignmentRole} · ` : ""}${work ? `${work} · ` : ""}${siteLabel(site)} · ${formatMedium(iso)}${stayNote ? ` · ${stayNote}` : ""}${legCaption ? ` · ${legCaption}` : travelDisplay ? ` · Travel ${travelDisplay}` : ""}${covering?.unsure ? " · No site code on the Excel for this stay, please confirm" : ""}`
-                    : `Empty · ${formatMedium(iso)} · drag ${paintBrush.kind === "site" ? paintBrush.code : `Travel ${paintBrush.hub}`} · IN → OUT`
+                    : `Empty · ${formatMedium(iso)} · drag ${
+                        paintBrush.kind === "site"
+                          ? paintBrush.code
+                          : paintBrush.kind === "travel"
+                            ? `Travel ${paintBrush.hub}`
+                            : "Return on a stay"
+                      } · IN → OUT`
             }
             onClick={() => actions.click(person.id, iso)}
             onPointerDown={(event) => actions.pointerDown(event, person.id, iso, Boolean(site))}
