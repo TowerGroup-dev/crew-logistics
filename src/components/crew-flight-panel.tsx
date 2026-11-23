@@ -144,7 +144,7 @@ function DirectionCard({
         <span
           className={cn(
             "rounded-full px-2 py-0.5 text-[0.8125rem] font-semibold",
-            arranged ? "bg-emerald-100 text-emerald-950" : "bg-amber-100 text-amber-950",
+            arranged ? "bg-slate-100 text-slate-800" : "bg-amber-100 text-amber-950",
           )}
         >
           {booking ? flightStatusLabel(booking.status) : "Not arranged"}

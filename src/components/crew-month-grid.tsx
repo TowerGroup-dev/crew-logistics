@@ -567,7 +567,7 @@ const MonthRow = memo(function MonthRow({
               placePreview &&
                 paintBrush.kind === "travel" &&
                 "bg-stone-500/55 text-white ring-1 ring-inset ring-stone-700/50",
-              extendPreview && "bg-emerald-500/40 text-emerald-950 ring-1 ring-inset ring-emerald-600/40",
+              extendPreview && "bg-primary/25 text-foreground ring-1 ring-inset ring-primary/50",
               trimPreview && "opacity-25",
               staySelected && "ring-2 ring-inset ring-stone-900/70",
             )}

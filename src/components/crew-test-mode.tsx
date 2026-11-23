@@ -191,7 +191,7 @@ function PageFeedback({ path }: { path: string }) {
     >
       <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
         <MessageSquare className="size-3.5" /> Feedback on this page
-        {sent ? <span className="ml-auto font-medium normal-case text-emerald-700">Sent{sent > 1 ? ` (${sent})` : ""} · thank you</span> : null}
+        {sent ? <span className="ml-auto font-medium normal-case text-muted-foreground">Sent{sent > 1 ? ` (${sent})` : ""} · thank you</span> : null}
       </p>
       <div className="flex gap-1">
         {kinds.map((row) => (
@@ -322,7 +322,7 @@ function TestGuide() {
               <span
                 className={cn(
                   "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border text-[11px] font-bold",
-                  ticks[step.id] ? "border-emerald-600 bg-emerald-600 text-white" : "border-input text-muted-foreground",
+                  ticks[step.id] ? "border-[#1b2433] bg-[#1b2433] text-white" : "border-input text-muted-foreground",
                 )}
               >
                 {ticks[step.id] ? <Check className="size-3" strokeWidth={3} /> : i + 1}

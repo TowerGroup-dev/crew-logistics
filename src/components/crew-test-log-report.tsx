@@ -28,7 +28,7 @@ const PAGE_NAMES: Record<string, string> = {
 const pageName = (p: string) => PAGE_NAMES[p] ?? p;
 const FEEDBACK_LABEL: Record<string, string> = { works: "Works well", problem: "Problem", suggestion: "Suggestion", overall: "Overall" };
 const FEEDBACK_TONE: Record<string, string> = {
-  works: "bg-emerald-50 text-emerald-800",
+  works: "bg-slate-100 text-slate-800",
   problem: "bg-rose-50 text-rose-800",
   suggestion: "bg-sky-50 text-sky-800",
   overall: "bg-muted text-foreground",
@@ -114,12 +114,6 @@ export function CrewTestLogReport() {
   }, [lines]);
 
   const freezes = r.pageRows.reduce((n, p) => n + p.freezes, 0);
-  const verdict =
-    !lines?.length
-      ? null
-      : r.errors.length === 0 && median(r.loads) <= 1500 && freezes <= 3
-        ? { tone: "border-emerald-300 bg-emerald-50 text-emerald-900", text: "Fast and working well: no errors, pages show quickly." }
-        : { tone: "border-amber-300 bg-amber-50 text-amber-900", text: `Needs a look: ${r.errors.length} error${r.errors.length === 1 ? "" : "s"}, ${freezes} freeze${freezes === 1 ? "" : "s"}, typical page ${secs(median(r.loads))}.` };
 
   return (
     <div className="flex flex-col gap-5 py-5">
@@ -153,7 +147,6 @@ export function CrewTestLogReport() {
 
       {lines && lines.length > 0 ? (
         <>
-          {verdict ? <p className={cn("rounded-xl border px-4 py-3 text-sm font-medium", verdict.tone)}>{verdict.text}</p> : null}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <Kpi icon={<Users className="size-4" />} label="Testers" value={String(new Set(r.sessions.map(([, s]) => s.tester)).size)} />
             <Kpi icon={<Clock className="size-4" />} label="Time testing" value={minutes(r.time)} />

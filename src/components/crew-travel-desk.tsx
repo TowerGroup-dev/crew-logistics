@@ -170,7 +170,7 @@ function tripsBetween(
 
 function statusTone(trip: Trip, today: string) {
   const status = trip.booking?.status;
-  if (status === "confirmed" || status === "completed") return "bg-emerald-100 text-emerald-900";
+  if (status === "confirmed" || status === "completed") return "bg-slate-100 text-slate-800";
   if (status === "booked" || status === "changed") return "bg-sky-100 text-sky-900";
   if (status === "pending_booking") return "bg-amber-100 text-amber-950";
   return daysBetween(today, trip.date) <= 14 ? "bg-rose-100 text-rose-900" : "bg-amber-100 text-amber-950";

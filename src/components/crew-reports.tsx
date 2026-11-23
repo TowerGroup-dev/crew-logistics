@@ -152,7 +152,7 @@ const SITE_HEX: Record<string, string> = {
 const FALLBACK_HEX = ["#0ea5e9", "#10b981", "#f59e0b", "#8b5cf6", "#f43f5e", "#14b8a6", "#f97316", "#78716c"];
 
 const STATUS_TONE: Record<BookingStatus, string> = {
-  Confirmed: "bg-emerald-100 text-emerald-900",
+  Confirmed: "bg-slate-100 text-slate-800",
   Booked: "bg-sky-100 text-sky-900",
   "Not booked": "bg-rose-100 text-rose-900",
   "No record": "bg-stone-100 text-stone-600",

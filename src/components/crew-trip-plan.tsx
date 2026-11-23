@@ -88,7 +88,7 @@ export function CrewTripPlan({
               <span
                 className={cn(
                   "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded",
-                  step.hotel ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800",
+                  step.hotel ? "bg-slate-100 text-slate-800" : "bg-amber-100 text-amber-800",
                 )}
               >
                 <BedDouble className="size-3.5" />
