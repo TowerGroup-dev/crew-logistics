@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Activity, AlertTriangle, Clock, Gauge, Mail, RefreshCw, Snail, Users } from "lucide-react";
+import { Activity, AlertTriangle, Clock, Gauge, Mail, MessageSquare, RefreshCw, Snail, Users } from "lucide-react";
 import type { TestLogLine } from "@/lib/crew-test-log";
 import { cn } from "@/lib/cn";
 
@@ -26,6 +26,13 @@ const PAGE_NAMES: Record<string, string> = {
   "/alerts": "Alerts",
 };
 const pageName = (p: string) => PAGE_NAMES[p] ?? p;
+const FEEDBACK_LABEL: Record<string, string> = { works: "Works well", problem: "Problem", suggestion: "Suggestion", overall: "Overall" };
+const FEEDBACK_TONE: Record<string, string> = {
+  works: "bg-emerald-50 text-emerald-800",
+  problem: "bg-rose-50 text-rose-800",
+  suggestion: "bg-sky-50 text-sky-800",
+  overall: "bg-muted text-foreground",
+};
 
 function minutes(ms: number) {
   const m = Math.round(ms / 60000);
@@ -100,9 +107,10 @@ export function CrewTestLogReport() {
     const errors = all.filter((l) => l.t === "error") as Extract<TestLogLine, { t: "error" }>[];
     const requests = all.filter((l) => l.t === "request") as Extract<TestLogLine, { t: "request" }>[];
     const emails = all.filter((l) => l.t === "email") as Extract<TestLogLine, { t: "email" }>[];
+    const feedback = all.filter((l) => l.t === "feedback") as Extract<TestLogLine, { t: "feedback" }>[];
     const loads = all.filter((l) => l.t === "page" && l.ms != null).map((l) => (l as Extract<TestLogLine, { t: "page" }>).ms as number);
     const time = [...sessions.values()].reduce((n, s) => n + (Date.parse(s.last) - Date.parse(s.first)), 0);
-    return { sessions: [...sessions.entries()].sort((a, b) => b[1].last.localeCompare(a[1].last)), pageRows, errors, requests, emails, loads, time };
+    return { sessions: [...sessions.entries()].sort((a, b) => b[1].last.localeCompare(a[1].last)), pageRows, errors, requests, emails, feedback, loads, time };
   }, [lines]);
 
   const freezes = r.pageRows.reduce((n, p) => n + p.freezes, 0);
@@ -118,7 +126,7 @@ export function CrewTestLogReport() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold">Test log</h1>
-          <p className="text-sm text-muted-foreground">What testers ran into in Test Mode: speed, freezes, errors and emails. Nothing here touches the real schedule.</p>
+          <p className="text-sm text-muted-foreground">What testers said and ran into in Test Mode: feedback, suggestions, speed and errors. Nothing here touches the real schedule.</p>
         </div>
         <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="h-9 rounded-lg border border-input bg-card px-2 text-sm">
           {[1, 7, 14, 30, 90].map((d) => (
@@ -153,6 +161,22 @@ export function CrewTestLogReport() {
             <Kpi icon={<Snail className="size-4" />} label="Freezes" value={String(freezes)} />
             <Kpi icon={<AlertTriangle className="size-4" />} label="Errors" value={String(r.errors.length)} />
           </div>
+
+          <Section title={`Feedback and suggestions (${r.feedback.length})`} icon={<MessageSquare className="size-4" />}>
+            {r.feedback.length === 0 ? <p className="text-sm text-muted-foreground">No feedback written yet.</p> : null}
+            <ul className="flex flex-col gap-2 text-sm">
+              {r.feedback.slice().reverse().map((f, i) => (
+                <li key={i} className="rounded-lg border border-border px-3 py-2">
+                  <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span className={cn("rounded-full px-2 py-0.5 font-semibold", FEEDBACK_TONE[f.kind] ?? "bg-muted text-foreground")}>{FEEDBACK_LABEL[f.kind] ?? f.kind}</span>
+                    {f.tester} · {f.kind === "overall" ? "when leaving" : pageName(f.path)} ·{" "}
+                    {new Date(f.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                  </span>
+                  <span className="mt-1 block whitespace-pre-wrap">{f.text}</span>
+                </li>
+              ))}
+            </ul>
+          </Section>
 
           <Section title="Speed by page" icon={<Gauge className="size-4" />}>
             <table className="w-full text-sm">

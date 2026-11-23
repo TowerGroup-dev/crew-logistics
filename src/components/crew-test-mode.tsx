@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Check, ChevronDown, ChevronRight, ClipboardList, ExternalLink, FlaskConical, LogOut, Mail, RotateCcw, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ClipboardList, ExternalLink, FlaskConical, LogOut, MessageSquare, RotateCcw, X } from "lucide-react";
 import {
   TEST_EMAIL_EVENT,
   enterTestModeFromUrl,
@@ -10,10 +10,17 @@ import {
   isTestMode,
   leaveTestMode,
   resetTest,
-  testEmails,
   type TestEmail,
 } from "@/lib/crew-test-mode";
-import { logPageView, logTest, setTesterName, startTestLog, testerName } from "@/lib/crew-test-log";
+import {
+  flushTestLog,
+  logPageView,
+  logTest,
+  setTesterName,
+  startTestLog,
+  testerName,
+  type FeedbackKind,
+} from "@/lib/crew-test-log";
 import { TEST_GUIDE, sectionForPath } from "@/lib/crew-test-guide";
 import { cn } from "@/lib/cn";
 
@@ -22,13 +29,11 @@ const RESULTS_URL = process.env.NEXT_PUBLIC_TEST_RESULTS_URL || "";
 const TICK = "crew-test-guide:";
 const GUIDE_OPEN = "crew-test-guide-open";
 
-/** Amber bar across the top + the Test guide panel. Only ever shows in Test Mode. */
+/** Amber bar across the top + the Test guide panel (with feedback). Only ever shows in Test Mode. */
 export function CrewTestMode() {
   const pathname = usePathname();
   const [on, setOn] = useState(false);
-  const [emails, setEmails] = useState<TestEmail[]>([]);
-  const [viewing, setViewing] = useState<TestEmail | null>(null);
-  const [toast, setToast] = useState<TestEmail | null>(null);
+  const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
     enterTestModeFromUrl();
@@ -36,13 +41,10 @@ export function CrewTestMode() {
     installTestStorage();
     startTestLog();
     setOn(true);
-    setEmails(testEmails());
+    // Emails are never sent in Test Mode. They are only noted in the test log (no pop-ups).
     function onEmail(e: Event) {
       const email = (e as CustomEvent<TestEmail>).detail;
-      setEmails(testEmails());
-      setToast(email);
       logTest({ t: "email", path: window.location.pathname, kind: email.kind, subject: email.subject });
-      window.setTimeout(() => setToast((t) => (t === email ? null : t)), 9000);
     }
     window.addEventListener(TEST_EMAIL_EVENT, onEmail);
     return () => window.removeEventListener(TEST_EMAIL_EVENT, onEmail);
@@ -59,17 +61,8 @@ export function CrewTestMode() {
         <div className="mx-auto flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 text-sm sm:px-8 xl:px-10" style={{ maxWidth: "var(--app-shell-max)" }}>
           <FlaskConical className="size-4 shrink-0" />
           <p className="min-w-0 flex-1">
-            <b>Test Mode:</b> nothing you do here is saved. Try anything. It all disappears when you close this tab.
+            <b>Test Mode:</b> nothing you do here is saved.
           </p>
-          <button
-            type="button"
-            onClick={() => emails[0] && setViewing(emails[0])}
-            disabled={!emails.length}
-            title={emails.length ? "See the emails that would have been sent" : "No emails yet. Alerts and briefings show here instead of being sent."}
-            className="inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-white/70 px-2.5 py-1 text-xs font-semibold hover:bg-white disabled:opacity-50"
-          >
-            <Mail className="size-3.5" /> Emails ({emails.length})
-          </button>
           <button
             type="button"
             onClick={() => {
@@ -81,9 +74,7 @@ export function CrewTestMode() {
           </button>
           <button
             type="button"
-            onClick={() => {
-              if (confirm("Leave Test Mode? You'll be back on the real schedule, where changes ARE saved.")) leaveTestMode();
-            }}
+            onClick={() => setLeaving(true)}
             className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold hover:bg-amber-200"
           >
             <LogOut className="size-3.5" /> Leave Test Mode
@@ -91,73 +82,146 @@ export function CrewTestMode() {
         </div>
       </div>
       <TestGuide />
-      {toast && !viewing ? (
-        <div className="fixed bottom-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-3 rounded-xl bg-[#1b2433] px-4 py-3 text-sm text-white shadow-2xl">
-          <Mail className="size-4" />
-          <span>
-            An email would have been sent: <b>{toast.subject}</b>
-          </span>
-          <button type="button" className="rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-[#1b2433]" onClick={() => setViewing(toast)}>
-            View
-          </button>
-          <button type="button" aria-label="Dismiss" onClick={() => setToast(null)}>
-            <X className="size-4" />
-          </button>
-        </div>
-      ) : null}
-      {viewing ? <EmailPreview emails={emails} current={viewing} onPick={setViewing} onClose={() => setViewing(null)} /> : null}
+      {leaving ? <LeaveDialog onStay={() => setLeaving(false)} /> : null}
     </>
   );
 }
 
-/** Shows an email exactly as it would arrive, without sending it. */
-function EmailPreview({ emails, current, onPick, onClose }: { emails: TestEmail[]; current: TestEmail; onPick: (e: TestEmail) => void; onClose: () => void }) {
-  const [plain, setPlain] = useState(false);
+/** Before leaving: overall feedback and suggestions (both optional), then back to the real schedule. */
+function LeaveDialog({ onStay }: { onStay: () => void }) {
+  const [overall, setOverall] = useState("");
+  const [ideas, setIdeas] = useState("");
+  const [name, setName] = useState(() => testerName());
+  function leave(send: boolean) {
+    if (send) {
+      if (name.trim() && !testerName()) setTesterName(name);
+      const path = window.location.pathname;
+      if (overall.trim()) logTest({ t: "feedback", path, kind: "overall", text: overall.trim().slice(0, 2000) });
+      if (ideas.trim()) logTest({ t: "feedback", path, kind: "suggestion", text: ideas.trim().slice(0, 2000) });
+      flushTestLog(true);
+    }
+    leaveTestMode();
+  }
+  const hasText = Boolean(overall.trim() || ideas.trim());
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/30 p-3 sm:p-8" onMouseDown={onClose}>
-      <div className="flex max-h-full w-full max-w-4xl overflow-hidden rounded-2xl bg-card shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
-        {emails.length > 1 ? (
-          <div className="hidden w-56 shrink-0 overflow-y-auto border-r border-border sm:block">
-            <p className="px-3 pt-3 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">This test ({emails.length})</p>
-            {emails.map((e, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => onPick(e)}
-                className={cn("block w-full px-3 py-2 text-left text-sm hover:bg-muted", e === current && "bg-muted font-semibold")}
-              >
-                <span className="block truncate">{e.subject}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {e.kind === "briefing" ? "Daily briefing" : "Instant alert"} · {e.at ? new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : ""}
-                </span>
-              </button>
-            ))}
-          </div>
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/30 p-3 sm:items-center" onMouseDown={onStay}>
+      <div
+        role="dialog"
+        aria-label="Before you leave Test Mode"
+        className="w-full max-w-lg rounded-2xl bg-card p-5 shadow-2xl"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <p className="text-lg font-semibold">Before you go</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Your feedback helps make the app better. Both boxes are optional. After this you are back on the real schedule, where changes are saved.
+        </p>
+        {!testerName() ? (
+          <label className="mt-4 grid gap-1 text-sm">
+            <span className="font-medium">Your name</span>
+            <input value={name} onChange={(event) => setName(event.target.value)} className="h-10 rounded-lg border border-input px-3" />
+          </label>
         ) : null}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-start gap-3 border-b border-border px-5 py-3">
-            <div className="min-w-0 flex-1 text-sm">
-              <p className="text-[11px] font-semibold tracking-wide text-amber-700 uppercase">Preview only · not sent (Test Mode)</p>
-              <p className="truncate text-base font-semibold">{current.subject}</p>
-              <p className="text-muted-foreground">
-                To: {current.to || "(no recipient set in Settings)"} · {current.kind === "briefing" ? "Daily briefing" : "Instant alert"}
-              </p>
-            </div>
-            <button type="button" onClick={() => setPlain((p) => !p)} className="rounded-md border border-input px-2.5 py-1 text-xs font-semibold hover:bg-muted">
-              {plain ? "Show email" : "Show plain text"}
-            </button>
-            <button type="button" onClick={onClose} aria-label="Close" className="rounded-md p-1 hover:bg-muted">
-              <X className="size-4" />
-            </button>
-          </div>
-          {plain ? (
-            <pre className="min-h-[60vh] flex-1 overflow-auto bg-muted/40 p-5 text-sm whitespace-pre-wrap">{current.text}</pre>
-          ) : (
-            <iframe title="Email preview" sandbox="" srcDoc={current.html} className="min-h-[60vh] w-full flex-1 bg-white" />
-          )}
+        <label className="mt-4 grid gap-1 text-sm">
+          <span className="font-medium">How was it? What worked, what didn&apos;t?</span>
+          <textarea
+            autoFocus
+            value={overall}
+            onChange={(event) => setOverall(event.target.value)}
+            rows={3}
+            className="rounded-lg border border-input px-3 py-2"
+            placeholder="e.g. Booking a flight was easy, but I couldn't find where to add a hotel."
+          />
+        </label>
+        <label className="mt-3 grid gap-1 text-sm">
+          <span className="font-medium">Suggestions</span>
+          <textarea
+            value={ideas}
+            onChange={(event) => setIdeas(event.target.value)}
+            rows={3}
+            className="rounded-lg border border-input px-3 py-2"
+            placeholder="Anything you'd add, remove or change."
+          />
+        </label>
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={onStay} className="h-10 rounded-lg px-3 text-sm font-medium hover:bg-muted">
+            Keep testing
+          </button>
+          <button type="button" onClick={() => leave(false)} className="h-10 rounded-lg border border-input px-3 text-sm font-medium hover:bg-muted">
+            Leave without feedback
+          </button>
+          <button
+            type="button"
+            onClick={() => leave(true)}
+            disabled={!hasText}
+            className="h-10 rounded-lg bg-[#1b2433] px-4 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            Send and leave
+          </button>
         </div>
       </div>
     </div>
+  );
+}
+
+/** "Your feedback on this page": works well / problem / suggestion, written on the page itself. */
+function PageFeedback({ path }: { path: string }) {
+  const [kind, setKind] = useState<Exclude<FeedbackKind, "overall">>("problem");
+  const [text, setText] = useState("");
+  const [sent, setSent] = useState(0);
+  useEffect(() => {
+    setText("");
+    setSent(0);
+  }, [path]);
+  const kinds: { key: Exclude<FeedbackKind, "overall">; label: string }[] = [
+    { key: "works", label: "Works well" },
+    { key: "problem", label: "Problem" },
+    { key: "suggestion", label: "Suggestion" },
+  ];
+  return (
+    <form
+      className="grid gap-2 border-t border-border bg-muted/30 px-4 py-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!text.trim()) return;
+        logTest({ t: "feedback", path, kind, text: text.trim().slice(0, 2000) });
+        flushTestLog();
+        setText("");
+        setSent((n) => n + 1);
+      }}
+    >
+      <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        <MessageSquare className="size-3.5" /> Feedback on this page
+        {sent ? <span className="ml-auto font-medium normal-case text-emerald-700">Sent{sent > 1 ? ` (${sent})` : ""} · thank you</span> : null}
+      </p>
+      <div className="flex gap-1">
+        {kinds.map((row) => (
+          <button
+            key={row.key}
+            type="button"
+            onClick={() => setKind(row.key)}
+            aria-pressed={kind === row.key}
+            className={cn(
+              "rounded-full border px-2.5 py-1 text-xs font-semibold",
+              kind === row.key ? "border-[#1b2433] bg-[#1b2433] text-white" : "border-input bg-card hover:bg-muted",
+            )}
+          >
+            {row.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-end gap-2">
+        <textarea
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          rows={2}
+          placeholder={kind === "works" ? "What worked well?" : kind === "problem" ? "What went wrong or was confusing?" : "What would make it better?"}
+          className="min-w-0 flex-1 resize-none rounded-lg border border-input bg-card px-2.5 py-1.5 text-sm"
+        />
+        <button type="submit" disabled={!text.trim()} className="h-9 rounded-lg bg-[#1b2433] px-3 text-xs font-semibold text-white disabled:opacity-40">
+          Send
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -271,6 +335,8 @@ function TestGuide() {
           </li>
         ))}
       </ol>
+
+      <PageFeedback path={pathname} />
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3">
         <span className="text-xs text-muted-foreground">
