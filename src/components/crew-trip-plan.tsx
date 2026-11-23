@@ -56,7 +56,7 @@ export function CrewTripPlan({
   }
 
   return (
-    <section className="rounded-md border border-border p-3">
+    <section className="rounded-xl border border-border bg-muted/30 p-3">
       <p className="font-semibold">Trip plan</p>
       <ol className="mt-2 space-y-1.5">
         {steps.map((step, i) =>

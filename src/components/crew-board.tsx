@@ -175,21 +175,21 @@ export type CrewBoardView =
   | "settings";
 
 function siteTone(site: string | null, sitesBook?: CrewSitesBook) {
-  if (!site) return "text-muted-foreground";
+  if (!site) return "bg-muted text-muted-foreground";
   if (sitesBook) {
     const hit = sitesBook.sites.find(
       (row) => site.toUpperCase() === row.code || site.toUpperCase().includes(row.code),
     );
-    if (hit) return siteColour(hit).text;
+    if (hit) return siteColour(hit).chip;
   }
-  return siteColour(site).text;
+  return siteColour(site).chip;
 }
 
 function statusTone(duty: CrewDutyStatus) {
-  if (duty === "on_site") return "text-sky-700";
-  if (duty === "in_transit") return "text-amber-700";
-  if (duty === "upcoming") return "text-indigo-700";
-  if (duty === "unassigned") return "text-rose-700";
+  if (duty === "on_site") return "bg-sky-100 text-sky-950";
+  if (duty === "in_transit") return "bg-amber-100 text-amber-950";
+  if (duty === "upcoming") return "bg-indigo-100 text-indigo-950";
+  if (duty === "unassigned") return "bg-rose-50 text-rose-900";
   return "bg-muted text-muted-foreground";
 }
 
@@ -899,12 +899,11 @@ export function CrewBoard({
 
       <section
         className={cn(
-          // No box around the page: the filters and the content sit on the page itself.
-          "min-w-0",
+          boardView === "overview" ? "" : "overflow-hidden rounded-2xl border border-border bg-card",
         )}
       >
         {boardView !== "overview" && boardView !== "settings" && boardView !== "reports" ? (
-          <div className="flex flex-wrap items-end gap-2 pt-2 pb-3 sm:gap-3 sm:pt-4 sm:pb-4">
+          <div className="flex flex-wrap items-end gap-2 border-b border-border px-2 py-2 sm:gap-3 sm:px-4 sm:py-3">
             <label className="grid min-w-0 flex-1 gap-1 text-sm text-muted-foreground sm:flex-none">
               <span className="hidden sm:inline">Search</span>
               <input
@@ -1437,11 +1436,11 @@ export function CrewBoard({
                   // Only true hires (not sheet people with a profile overlay) can be deleted.
                   const canDelete = row.person.manual === true;
                   return (
-                    <li key={row.person.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 py-3 sm:px-4">
+                    <li key={row.person.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                       <button
                         type="button"
                         onClick={() => openEmployeeEdit(row.person.id)}
-                        className="min-w-0 basis-full text-left hover:opacity-80 sm:basis-0 sm:flex-1"
+                        className="min-w-0 flex-1 text-left hover:opacity-80"
                       >
                         <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                           <span>{row.person.name}</span>
@@ -1455,7 +1454,7 @@ export function CrewBoard({
                       </button>
                       <span
                         className={cn(
-                          "tag",
+                          "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
                           isActive ? "bg-slate-100 text-slate-800" : "bg-stone-200 text-stone-700",
                         )}
                       >
@@ -1464,14 +1463,14 @@ export function CrewBoard({
                       <button
                         type="button"
                         onClick={() => openEmployeeEdit(row.person.id)}
-                        className="h-8 px-1.5 text-xs font-medium text-primary hover:underline"
+                        className="h-8 rounded-lg border border-input px-3 text-xs font-medium hover:bg-muted"
                       >
                         Edit info
                       </button>
                       <button
                         type="button"
                         onClick={() => setSelectedId(row.person.id)}
-                        className="h-8 px-1.5 text-xs font-medium text-primary hover:underline"
+                        className="h-8 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90"
                       >
                         {isActive ? "Add rotation" : "Set active + add rotation"}
                       </button>
@@ -1482,7 +1481,7 @@ export function CrewBoard({
                             setEmploymentStatus(current, row.person.id, isActive ? "inactive" : "active"),
                           )
                         }
-                        className="h-8 px-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+                        className="h-8 rounded-lg border border-input px-3 text-xs font-medium hover:bg-muted"
                       >
                         {isActive ? "Set inactive" : "Set active"}
                       </button>
@@ -1557,11 +1556,11 @@ export function CrewBoard({
                         <span className="flex items-center gap-2">
                           <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{row.person.name}</span>
                           {row.site ? (
-                            <span className={cn("tag shrink-0", siteTone(row.site, sitesBook))}>
+                            <span className={cn("inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold", siteTone(row.site, sitesBook))}>
                               {row.site}
                             </span>
                           ) : null}
-                          <span className={cn("tag shrink-0", statusTone(row.duty))}>
+                          <span className={cn("inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold", statusTone(row.duty))}>
                             {dutyLabel(row.duty)}
                           </span>
                         </span>
@@ -1588,7 +1587,7 @@ export function CrewBoard({
                       </span>
                       <span className="phone:hidden">
                         {row.site ? (
-                          <span className={cn("tag", siteTone(row.site, sitesBook))}>
+                          <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-semibold", siteTone(row.site, sitesBook))}>
                             {row.site}
                           </span>
                         ) : (
@@ -1596,7 +1595,7 @@ export function CrewBoard({
                         )}
                       </span>
                       <span className="phone:hidden">
-                        <span className={cn("tag", statusTone(row.duty))}>
+                        <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-semibold", statusTone(row.duty))}>
                           {dutyLabel(row.duty)}
                         </span>
                       </span>
@@ -1844,11 +1843,11 @@ function PersonProfile({
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{roleLabel(snap.person)}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <span className={cn("tag", statusTone(snap.duty))}>
+            <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold", statusTone(snap.duty))}>
               {dutyLabel(snap.duty)}
             </span>
             {snap.site ? (
-              <span className={cn("tag", siteTone(snap.site))}>
+              <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold", siteTone(snap.site))}>
                 {siteLabel(snap.site)}
               </span>
             ) : null}
@@ -1869,7 +1868,7 @@ function PersonProfile({
             ) : null}
             <span
               className={cn(
-                "tag",
+                "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
                 isActive ? "bg-slate-100 text-slate-800" : "bg-stone-200 text-stone-700",
               )}
             >
@@ -1985,7 +1984,7 @@ function PersonProfile({
                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-2.5 py-2 text-sm"
                   >
                     <span className="inline-flex items-center gap-2">
-                      <span className="tag text-sky-900">
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-950">
                         {stint.site}
                       </span>
                       {stint.role ? (
@@ -2143,7 +2142,7 @@ function PersonProfile({
                 key={`${segment.from}-${segment.mark}`}
                 className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-2.5 py-1.5 text-sm"
               >
-                <span className={cn("tag", markTone(segment.mark))}>
+                <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", markTone(segment.mark))}>
                   {isOffRotation(segment.mark) ? "Out" : segment.mark}
                 </span>
                 <span className="text-muted-foreground">

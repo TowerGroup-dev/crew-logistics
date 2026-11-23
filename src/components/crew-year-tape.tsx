@@ -157,11 +157,10 @@ export function CrewYearTape({
   }
 
   return (
-    <section className="overflow-hidden rounded-lg border border-border bg-card">
-      {/* Plain title, no coloured banner. */}
-      <div className="flex flex-wrap items-baseline gap-x-3 border-b border-border px-3 py-2.5 sm:px-5 sm:py-3">
-        <h2 className="text-lg font-semibold tracking-tight">{year}</h2>
-        <p className="hidden text-xs text-muted-foreground sm:block">
+    <section className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="border-b border-border bg-[#356dbd] px-3 py-2.5 text-white sm:px-5 sm:py-4">
+        <h2 className="text-lg font-semibold tracking-tight sm:text-xl">{year}</h2>
+        <p className="mt-1 hidden text-sm text-white/85 sm:block">
           Click a month on a person to place them (standard 6 weeks; can extend past). Header months open Month view.
         </p>
       </div>

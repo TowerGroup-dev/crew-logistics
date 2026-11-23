@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BedDouble, Car, PlaneLanding, PlaneTakeoff, Repeat } from "lucide-react";
+import { BedDouble, Car, Plane, PlaneLanding, PlaneTakeoff, Repeat } from "lucide-react";
 import type { CrewOpsBook } from "@/lib/crew-ops";
 import { flightStatusLabel, type FlightBook, type FlightBooking, type FlightDirection } from "@/lib/crew-flights";
 import { lastStartAirport, loadRoutes, routeAirports, routeBetweenSites } from "@/lib/crew-routes";
@@ -170,10 +170,10 @@ function tripsBetween(
 
 function statusTone(trip: Trip, today: string) {
   const status = trip.booking?.status;
-  if (status === "confirmed" || status === "completed") return "text-slate-600";
-  if (status === "booked" || status === "changed") return "text-sky-700";
-  if (status === "pending_booking") return "text-amber-700";
-  return daysBetween(today, trip.date) <= 14 ? "text-rose-700" : "text-amber-700";
+  if (status === "confirmed" || status === "completed") return "bg-slate-100 text-slate-800";
+  if (status === "booked" || status === "changed") return "bg-sky-100 text-sky-900";
+  if (status === "pending_booking") return "bg-amber-100 text-amber-950";
+  return daysBetween(today, trip.date) <= 14 ? "bg-rose-100 text-rose-900" : "bg-amber-100 text-amber-950";
 }
 
 export function CrewTravelDesk({
@@ -215,7 +215,7 @@ export function CrewTravelDesk({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-            Travel to book
+            <Plane className="size-5 text-primary" /> Travel to book
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Everyone travelling in, home or between sites (by air or road), in date order. Open a name to plan the itinerary,
@@ -246,7 +246,7 @@ export function CrewTravelDesk({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 divide-x divide-border">
+      <div className="grid grid-cols-3 gap-2">
         <Stat label="Trips" value={trips.length} />
         <Stat label="Not booked yet" value={notBooked.length} />
         <Stat label="Within 2 weeks, not booked" value={urgent} />
@@ -299,7 +299,7 @@ export function CrewTravelDesk({
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <span className={cn("tag", statusTone(trip, today))}>
+                    <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", statusTone(trip, today))}>
                       {trip.booking ? flightStatusLabel(trip.booking.status) : "Not booked"}
                     </span>
                     <button
@@ -408,7 +408,7 @@ export function CrewTravelDesk({
                       )}
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
-                      <span className={cn("tag", statusTone(trip, today))}>
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", statusTone(trip, today))}>
                         {trip.booking ? flightStatusLabel(trip.booking.status) : "Not booked"}
                       </span>
                       {trip.booking?.pnr ? <p className="mt-1 px-2 text-xs tabular-nums text-muted-foreground">{trip.booking.pnr}</p> : null}
@@ -461,8 +461,13 @@ export function CrewTravelDesk({
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    // A plain figure with its label, no box (the row of figures is split by thin rules).
-    <div className="px-3 py-1 first:pl-0 sm:px-5">
+    <div
+      className={cn(
+        "rounded-xl border px-2.5 py-2 sm:px-4 sm:py-3",
+        // Plain tiles: the numbers speak for themselves (no yellow / red backgrounds).
+        "border-border bg-card",
+      )}
+    >
       <p className="text-[10px] leading-tight font-medium tracking-wide text-muted-foreground uppercase sm:text-xs">{label}</p>
       <p className="mt-1 text-xl sm:text-2xl font-semibold tabular-nums">{value}</p>
     </div>

@@ -28,9 +28,9 @@ const PAGE_NAMES: Record<string, string> = {
 const pageName = (p: string) => PAGE_NAMES[p] ?? p;
 const FEEDBACK_LABEL: Record<string, string> = { works: "Works well", problem: "Problem", suggestion: "Suggestion", overall: "Overall" };
 const FEEDBACK_TONE: Record<string, string> = {
-  works: "text-slate-600",
-  problem: "text-rose-700",
-  suggestion: "text-sky-700",
+  works: "bg-slate-100 text-slate-800",
+  problem: "bg-rose-50 text-rose-800",
+  suggestion: "bg-sky-50 text-sky-800",
   overall: "bg-muted text-foreground",
 };
 
@@ -161,7 +161,7 @@ export function CrewTestLogReport() {
               {r.feedback.slice().reverse().map((f, i) => (
                 <li key={i} className="rounded-lg border border-border px-3 py-2">
                   <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span className={cn("tag", FEEDBACK_TONE[f.kind] ?? "bg-muted text-foreground")}>{FEEDBACK_LABEL[f.kind] ?? f.kind}</span>
+                    <span className={cn("rounded-full px-2 py-0.5 font-semibold", FEEDBACK_TONE[f.kind] ?? "bg-muted text-foreground")}>{FEEDBACK_LABEL[f.kind] ?? f.kind}</span>
                     {f.tester} · {f.kind === "overall" ? "when leaving" : pageName(f.path)} ·{" "}
                     {new Date(f.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                   </span>

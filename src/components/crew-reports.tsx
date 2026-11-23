@@ -152,9 +152,9 @@ const SITE_HEX: Record<string, string> = {
 const FALLBACK_HEX = ["#0ea5e9", "#10b981", "#f59e0b", "#8b5cf6", "#f43f5e", "#14b8a6", "#f97316", "#78716c"];
 
 const STATUS_TONE: Record<BookingStatus, string> = {
-  Confirmed: "text-slate-600",
-  Booked: "text-sky-700",
-  "Not booked": "text-rose-700",
+  Confirmed: "bg-slate-100 text-slate-800",
+  Booked: "bg-sky-100 text-sky-900",
+  "Not booked": "bg-rose-100 text-rose-900",
   "No record": "bg-stone-100 text-stone-600",
 };
 
@@ -281,8 +281,7 @@ export function CrewMonthlyReportPanel({
 
       <ReportNarrative summary={summary} />
 
-      {/* Figures in a row, split by thin rules (no tiles). */}
-      <div className="grid grid-cols-2 gap-y-3 border-y border-border py-3 md:grid-cols-3 md:divide-x md:divide-border xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="People on site" value={summary.peopleOnSite.toLocaleString("en-CA")} hint="at least one day" />
         <Kpi label="Person-days" value={summary.personDays.toLocaleString("en-CA")} hint="days on site, all crew" />
         <Kpi label="Average per day" value={summary.averageHeadcount.toFixed(1)} hint="people on site" />
@@ -496,7 +495,7 @@ export function CrewMonthlyReportPanel({
 function ReportNarrative({ summary }: { summary: PeriodSummary }) {
   if (!summary.personDays) {
     return (
-      <p className="max-w-4xl text-sm leading-relaxed text-foreground/90">
+      <p className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm leading-relaxed">
         No one was scheduled on site in {summary.label}.
       </p>
     );
@@ -518,7 +517,7 @@ function ReportNarrative({ summary }: { summary: PeriodSummary }) {
       : "Every arrival and departure has its flights and rooms recorded.",
   ].filter(Boolean);
   return (
-    <p className="max-w-4xl text-sm leading-relaxed text-foreground/90">
+    <p className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm leading-relaxed">
       {sentences.join(" ")}
     </p>
   );
@@ -526,13 +525,13 @@ function ReportNarrative({ summary }: { summary: PeriodSummary }) {
 
 function Kpi({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: "alert" | "ok" }) {
   return (
-    <div className="px-4 py-2 break-inside-avoid first:pl-0">
+    <div className="rounded-xl border border-border bg-card px-4 py-3 break-inside-avoid">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p
         className={cn(
           "mt-1 text-2xl font-semibold tabular-nums",
           tone === "alert" && "text-rose-700",
-          tone === "ok" && "text-foreground",
+          tone === "ok" && "text-emerald-700",
         )}
       >
         {value}
@@ -544,9 +543,8 @@ function Kpi({ label, value, hint, tone }: { label: string; value: string; hint?
 
 function ReportSection({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
-    // Open section: a heading with a rule, no box.
-    <section className="break-inside-avoid">
-      <div className="border-b border-foreground/15 py-2.5">
+    <section className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
         {note ? <p className="mt-0.5 text-xs text-muted-foreground">{note}</p> : null}
       </div>
@@ -557,7 +555,7 @@ function ReportSection({ title, note, children }: { title: string; note?: string
 
 function StatusBadge({ status }: { status: BookingStatus }) {
   return (
-    <span className={cn("tag whitespace-nowrap", STATUS_TONE[status])}>
+    <span className={cn("inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold", STATUS_TONE[status])}>
       {status}
     </span>
   );

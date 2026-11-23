@@ -169,7 +169,7 @@ export function CrewRotationFill({
                   </span>
                   <span
                     className={cn(
-                      "tag shrink-0",
+                      "shrink-0 rounded-full px-2 py-0.5 text-[0.8125rem] font-medium",
                       row.duty === "unassigned" ? "bg-rose-50 text-rose-900" : "bg-muted text-muted-foreground",
                     )}
                   >

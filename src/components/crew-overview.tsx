@@ -352,17 +352,27 @@ function Panel({
   return (
     <section
       className={cn(
-        // Open section, no box: a heading with a rule under it.
-        "min-w-0",
+        "overflow-hidden rounded-xl border border-border bg-card transition-[box-shadow,border-color]",
+        grow && expanded && "border-amber-300 shadow-sm ring-1 ring-amber-200/70",
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-foreground/15 px-1 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
           className="flex min-w-0 flex-1 items-center gap-2.5 text-left hover:opacity-90"
           aria-expanded={expanded}
         >
+          <span
+            className={cn(
+              "h-4 w-1 rounded-full",
+              accent === "amber" && "bg-amber-500",
+              accent === "sky" && "bg-sky-500",
+              accent === "indigo" && "bg-indigo-500",
+            )}
+            aria-hidden
+          />
+          {icon}
           <h2 className="text-base font-semibold tracking-tight">{title}</h2>
           <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition", !expanded && "-rotate-90")} />
         </button>
@@ -849,7 +859,7 @@ function OnSiteTable({ rows, onOpen }: { rows: OnSiteRow[]; onOpen: (rotationId:
               </span>
               <Labelled label="Location">
                 {row.site ? (
-                  <span className="tag text-sky-900">
+                  <span className="inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-950">
                     {row.site}
                   </span>
                 ) : (

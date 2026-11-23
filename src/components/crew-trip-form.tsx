@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BedDouble, Car, Plane, Plus, Trash2 } from "lucide-react";
+import { BedDouble, Car, Plane, Plus, Route, Trash2 } from "lucide-react";
 import { CrewTripPlan } from "@/components/crew-trip-plan";
 import { AirportSelect, CAMP_AIRPORTS, useTravelHubs } from "@/components/crew-airport-select";
 import { emptyHotel, emptySegment, type FlightHotel, type FlightSegment } from "@/lib/crew-flights";
@@ -191,9 +191,9 @@ export function CrewTripForm({
         </p>
       ) : null}
 
-      <section className="border-t border-border pt-3">
+      <section className="rounded-xl border border-sky-200 bg-sky-50/50 p-3">
         <p className="flex items-center gap-2 font-semibold">
-          Route
+          <Route className="size-4 text-sky-700" /> Route
         </p>
         {move ? (
           <p className="mt-2 text-base font-semibold">
@@ -246,7 +246,7 @@ export function CrewTripForm({
                 key={`${suggestion.airports.join(">")}|${suggestion.modes.join(",")}`}
                 type="button"
                 onClick={() => applySuggestion(suggestion)}
-                className="flex w-full items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-left hover:border-sky-400 hover:bg-sky-50"
+                className="flex w-full items-center justify-between gap-2 rounded-lg border border-sky-200 bg-card px-3 py-2 text-left hover:border-sky-400 hover:bg-sky-50"
               >
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-1 font-semibold">
@@ -270,7 +270,7 @@ export function CrewTripForm({
                       : " · direct"}
                   </span>
                 </span>
-                <span className="tag shrink-0 text-sky-900">
+                <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-900">
                   {suggestion.usual ? "Usual" : suggestion.uses ? `Used ${suggestion.uses}×` : "Direct"}
                 </span>
               </button>

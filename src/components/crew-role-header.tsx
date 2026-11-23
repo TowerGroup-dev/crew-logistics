@@ -26,7 +26,7 @@ export function CrewRoleHeader({
   const classNames = cn(
     "flex w-full border-b border-border bg-slate-100 px-4 py-1.5 pl-5 text-left",
     spaced && "mt-3",
-    onClick && "cursor-pointer hover:bg-slate-100",
+    onClick && "cursor-pointer hover:bg-slate-200/80",
     className,
   );
   const body = (
