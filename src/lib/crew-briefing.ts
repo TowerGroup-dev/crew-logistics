@@ -215,7 +215,7 @@ export function buildCrewBriefing(input: {
     `Open Crew Logistics: ${appUrl}`,
     "",
     "Tower Arctic Ltd. · Crew Logistics",
-    "Sent automatically every Monday at 8:30 am (Montreal time).",
+    "This message is sent every Monday at 8:30 am.",
   ].join("\n");
 
   const html = emailFrame({
@@ -254,7 +254,7 @@ export function buildCrewBriefing(input: {
         : `<p style="margin:0 0 26px;font-size:13px;color:${MUTED}">No changes to crew dates, travel or accommodation.</p>`}
       ${button("Open Crew Logistics", appUrl)}
     `,
-    footer: "Sent automatically every Monday at 8:30 am (Montreal time). Recipients and timing can be changed in Settings.",
+    footer: "This message is sent every Monday at 8:30 am. Recipients can be changed in Settings.",
   });
 
   return {
@@ -379,10 +379,10 @@ function emailFrame(input: { kicker: string; date: string; body: string; footer:
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;border-collapse:collapse">
   <tr><td align="center" style="padding:24px 12px">
     <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="width:100%;max-width:640px;border-collapse:collapse;background:#ffffff;border:1px solid ${LINE};font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:${INK}">
-      <tr><td style="background:${NAVY};padding:22px 28px">
-        <p style="margin:0;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#a9c1dc;font-weight:600">Tower Arctic Ltd.</p>
-        <p style="margin:4px 0 0;font-size:20px;color:#ffffff;font-weight:600">Crew Logistics &middot; ${escapeHtml(input.kicker)}</p>
-        <p style="margin:6px 0 0;font-size:13px;color:#d6e2ef">${escapeHtml(input.date)}</p>
+      <tr><td style="padding:24px 28px 16px;border-bottom:2px solid ${ACCENT}">
+        <p style="margin:0;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:${ACCENT};font-weight:700">Tower Arctic Ltd.</p>
+        <p style="margin:4px 0 0;font-size:21px;color:${ACCENT};font-weight:600">Crew Logistics &middot; ${escapeHtml(input.kicker)}</p>
+        <p style="margin:6px 0 0;font-size:13px;color:${MUTED}">${escapeHtml(input.date)}</p>
       </td></tr>
       <tr><td style="padding:26px 28px 8px">${input.body}</td></tr>
       <tr><td style="padding:18px 28px 24px;border-top:1px solid ${LINE};font-size:11px;line-height:1.6;color:${MUTED}">
