@@ -15,7 +15,7 @@ import {
   type RotationTravel,
 } from "@/lib/crew-rotations";
 import { bookingNeedsAttention, opsFor, type CrewOpsBook } from "@/lib/crew-ops";
-import { roleLabel, type CrewSnapshot } from "@/lib/crew-schedule";
+import { roleLabel, type CrewSnapshot, type CrewStint } from "@/lib/crew-schedule";
 import { addDays, daysBetween, formatMedium, weekBounds } from "@/lib/dates";
 
 export { ASSUMED_BOOKED_BEFORE, BOOK_BEFORE_ARRIVAL_DAYS };
@@ -48,6 +48,27 @@ function whenPhrase(iso: string, asOf: string) {
   if (iso === asOf) return "today";
   if (iso === addDays(asOf, 1)) return "tomorrow";
   return formatMedium(iso);
+}
+
+/** Calendar stint for this rotation (live Month grid beats a stale travel-desk site). */
+function stintForRotation(row: CrewSnapshot | undefined, rotation: CrewRotation): CrewStint | null {
+  const stints = row?.person.stints || [];
+  return stints.find((stint) => stint.from === rotation.plannedIn) || null;
+}
+
+/** Last camp site on a stay (end of leave), ignoring TRV / hub travel pieces. */
+function leaveSiteFromStint(stint: CrewStint): string {
+  const segments = stint.segments || [];
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const piece = segments[i]!;
+    if (piece.kind === "site" && piece.site) return piece.site;
+  }
+  return stint.site || "";
+}
+
+/** Inclusive last on-site day from the calendar stay, or null if open-ended. */
+function inclusiveOutFromStint(stint: CrewStint): string | null {
+  return stint.out ? addDays(stint.out.slice(0, 10), -1) : null;
 }
 
 /**
@@ -131,6 +152,9 @@ export function buildWeekStory({
     // Unconfirmed tentatives stay in To do only; confirmed ones appear here.
     const showArrival = !stintTentative || confirmedTentativeIds.has(tentativeId);
 
+    const calendarStint = stintForRotation(row, rotation);
+    const arriveSite = calendarStint?.site || rotation.site;
+
     if (showArrival && rotation.plannedIn >= weekStart && rotation.plannedIn <= weekEnd) {
       movedThisWeek.add(rotation.personId);
       const when = whenPhrase(rotation.plannedIn, asOf);
@@ -138,8 +162,8 @@ export function buildWeekStory({
         id: `${rotation.id}:arrive`,
         kind: "arriving",
         sortDate: rotation.plannedIn,
-        text: rotation.site
-          ? `${name} arrives ${when} at ${rotation.site}.`
+        text: arriveSite
+          ? `${name} arrives ${when} at ${arriveSite}.`
           : `${name} arrives ${when}.`,
         personId: rotation.personId,
         rotationId: rotation.id,
@@ -166,7 +190,9 @@ export function buildWeekStory({
       }
     }
 
-    const out = inclusiveOut(rotation);
+    // Leave date + site from the Month calendar when we have a matching stay.
+    const out = (calendarStint && inclusiveOutFromStint(calendarStint)) || inclusiveOut(rotation);
+    const leaveSite = calendarStint ? leaveSiteFromStint(calendarStint) || rotation.site : rotation.site;
     if (out >= weekStart && out <= weekEnd) {
       movedThisWeek.add(rotation.personId);
       const when = whenPhrase(out, asOf);
@@ -174,8 +200,8 @@ export function buildWeekStory({
         id: `${rotation.id}:leave`,
         kind: "leaving",
         sortDate: out,
-        text: rotation.site
-          ? `${name} leaves ${rotation.site} ${when}.`
+        text: leaveSite
+          ? `${name} leaves ${leaveSite} ${when}.`
           : `${name} leaves ${when}.`,
         personId: rotation.personId,
         rotationId: rotation.id,
@@ -472,22 +498,26 @@ export function buildOverview({
     })
     .sort((a, b) => a.inDate.localeCompare(b.inDate) || a.name.localeCompare(b.name));
 
-  // Leaving: rotations whose last day falls between today and the horizon.
+  // Leaving: calendar stay OUT when present (same freshness as This week).
   const leaving: LeavingRow[] = book.rotations
-    .filter((rotation) => {
-      const out = inclusiveOut(rotation);
-      return activeIds.has(rotation.personId) && out >= asOf && out <= horizonEnd;
-    })
     .map((rotation) => {
+      const row = rows.find((r) => r.person.id === rotation.personId);
+      const calendarStint = stintForRotation(row, rotation);
+      const out = (calendarStint && inclusiveOutFromStint(calendarStint)) || inclusiveOut(rotation);
+      const site = calendarStint ? leaveSiteFromStint(calendarStint) || rotation.site : rotation.site;
+      return { rotation, out, site };
+    })
+    .filter(({ rotation, out }) => activeIds.has(rotation.personId) && out >= asOf && out <= horizonEnd)
+    .map(({ rotation, out, site }) => {
       const incoming = rotation.replacedByRotationId ? rotationById.get(rotation.replacedByRotationId) : null;
       return {
         personId: rotation.personId,
         name: nameOf(rotation.personId) || rotation.personId,
         role: roles.get(rotation.personId) || rotation.role,
-        site: rotation.site,
+        site,
         rotationId: rotation.id,
-        outDate: inclusiveOut(rotation),
-        daysUntil: daysBetween(asOf, inclusiveOut(rotation)),
+        outDate: out,
+        daysUntil: daysBetween(asOf, out),
         flightHome: travelState(rotation.returnTravel, true, rotation.plannedIn),
         replacement: incoming ? nameOf(incoming.personId) : null,
         replacementNeeded: rotation.replacementNeeded !== false,

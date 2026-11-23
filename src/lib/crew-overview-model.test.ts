@@ -125,6 +125,48 @@ describe("week story", () => {
     });
     expect(story.lines.some((line) => line.text.includes("moves"))).toBe(false);
   });
+
+  it("uses the calendar stay for leave site/date, not a stale travel-desk POND", () => {
+    const story = buildWeekStory({
+      rows: [
+        snap(
+          person({
+            id: "mike-reid-mechanic",
+            name: "Mike Reid",
+            role: "Mechanic",
+            roles: ["Mechanic"],
+            stints: [
+              {
+                site: "IQA",
+                sites: ["IQA"],
+                from: "2026-11-09",
+                out: "2026-12-21",
+                arrival: "marked",
+                departure: "marked",
+                tentative: false,
+              },
+            ],
+          }),
+        ),
+      ],
+      book: {
+        version: 1,
+        rotations: [
+          rotation({
+            id: "mike-stale",
+            personId: "mike-reid-mechanic",
+            plannedIn: "2026-11-09",
+            plannedOut: "2026-11-24",
+            site: "POND",
+          }),
+        ],
+      },
+      asOf: "2026-11-23",
+    });
+    const leave = story.lines.find((line) => line.kind === "leaving" && line.personId === "mike-reid-mechanic");
+    expect(leave).toBeUndefined();
+    expect(story.lines.some((line) => /leaves POND/i.test(line.text))).toBe(false);
+  });
 });
 
 describe("tentative confirm", () => {
