@@ -183,9 +183,14 @@ function hubOnDay(
 ) {
   const painted = stopoverOnDay(stopoverBook || {}, person.id, iso);
   if (painted) return painted;
-  // Travel legs typed on the sheet inside a stay (YK, IQA on the way to Pond, ...).
+  // Travel legs typed on the sheet inside a stay (YK, YOW, …). Skip generic TRV / prose.
   const sheetLeg = travelSegmentOnDay(person, iso);
-  if (sheetLeg?.label) return sheetLeg.label;
+  if (sheetLeg?.label) {
+    const hub = hubFromMark(sheetLeg.label, hubs);
+    if (hub) return hub;
+    const code = sheetLeg.label.replace(/^via\s+/i, "").trim().toUpperCase();
+    if (/^[A-Z0-9]{2,8}$/.test(code) && code !== "TRV" && code !== "TRAVEL") return code;
+  }
   for (const event of person.events || []) {
     if (event.date === iso) {
       const hub = hubFromMark(event.mark, hubs);
@@ -605,51 +610,43 @@ const MonthRow = memo(function MonthRow({
           >
             <span
               className={cn(
-                "relative z-[1] block max-w-full px-0.5",
+                "relative z-[1] flex max-w-full flex-col items-center justify-center gap-0 px-0.5 text-center leading-[1.05]",
                 (hub || legCaption) && !paintPreview && !flight && !returnWindow && !stintEnd
-                  ? "whitespace-normal text-center text-[8px] font-bold leading-[1.05]"
-                  : "truncate",
-                legCaption && (site || hub) && "pb-3",
+                  ? "text-[8px] font-bold"
+                  : "truncate text-[0.625rem] font-bold",
               )}
             >
-              {paintPreview
-                ? (() => {
-                    const dayNum = daysBetween(draftRange!.from, iso) + 1;
-                    const last = iso === draftRange!.to;
-                    if (dayNum === 1) return "IN";
-                    if (last) return `OUT ${dayNum}`;
-                    return dayNum % 7 === 0 ? String(dayNum) : "";
-                  })()
-                : stintStart
-                  ? covering?.unsure && iso === covering.from
-                    ? "IN?"
-                    : "IN"
-                  : stintEnd
-                    ? "OUT"
-                    : dayCount
-                      ? dayCount
-                      : hub && !site && !legCaption
-                        ? travelBoxCode(hub)
-                        : ""}
+              <span className={cn(legCaption && !paintPreview && !returnWindow && "truncate")}>
+                {paintPreview
+                  ? (() => {
+                      const dayNum = daysBetween(draftRange!.from, iso) + 1;
+                      const last = iso === draftRange!.to;
+                      if (dayNum === 1) return "IN";
+                      if (last) return `OUT ${dayNum}`;
+                      return dayNum % 7 === 0 ? String(dayNum) : "";
+                    })()
+                  : stintStart
+                    ? covering?.unsure && iso === covering.from
+                      ? "IN?"
+                      : "IN"
+                    : stintEnd
+                      ? "OUT"
+                      : dayCount
+                        ? dayCount
+                        : hub && !site && !legCaption
+                          ? travelBoxCode(hub)
+                          : ""}
+              </span>
+              {legCaption && !paintPreview && !returnWindow ? (
+                <span className="max-w-full truncate text-[7px] font-bold tracking-tight" title={legCaption}>
+                  {legCaption}
+                </span>
+              ) : travelOnStay && hubMark ? (
+                <span className="max-w-full truncate text-[7px] font-bold tracking-tight" title={travelHubLabel(hubMark, travelHubs)}>
+                  {travelBoxCode(hubMark).slice(0, 4)}
+                </span>
+              ) : null}
             </span>
-            {legCaption && !paintPreview && !returnWindow ? (
-              <span
-                className={cn(
-                  "absolute inset-x-0 bottom-0.5 z-[2] px-0.5 text-center text-[7px] font-bold leading-tight tracking-tight",
-                  site ? "text-white/95 drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]" : "text-white",
-                )}
-                title={legCaption}
-              >
-                <span className="block truncate">{legCaption}</span>
-              </span>
-            ) : travelOnStay && hubMark ? (
-              <span
-                className="absolute bottom-0.5 left-0.5 z-[2] rounded bg-stone-900/85 px-0.5 text-[8px] font-bold leading-tight text-white"
-                title={travelHubLabel(hubMark, travelHubs)}
-              >
-                {travelBoxCode(hubMark).slice(0, 4)}
-              </span>
-            ) : null}
           </div>
         );
       })}

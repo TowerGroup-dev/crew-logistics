@@ -4877,7 +4877,7 @@ export const CREW_SCHEDULE_DATA = {
               "out": "2026-12-21",
               "kind": "travel",
               "label": "TRV",
-              "route": "Leaving Iqaluit, 18 to 20 Dec, route not booked yet (confirmed by Yimika, 20 Nov 2026)"
+              "route": ""
             }
           ]
         }

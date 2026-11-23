@@ -20,10 +20,22 @@ export function siteOnDay(person: CrewPerson, iso: string) {
     const out = stint.out && stint.out < seasonExclusive ? stint.out : seasonExclusive;
     if (stint.from <= iso && iso < out) {
       const segment = segmentOn(stint.segments, iso);
-      if (segment) return segment.kind === "site" ? worksiteFromMark(segment.site || "") || null : null;
+      const lastSite = [...(stint.segments || [])].reverse().find((piece) => piece.kind === "site");
+      if (segment?.kind === "site") return worksiteFromMark(segment.site || "") || null;
+      if (segment?.kind === "travel") {
+        // Real hub stop (YK / YOW / …) → not a camp day. Generic "TRV" leave window
+        // stays camp-coloured until a booked → destination is painted in the box.
+        const hubMark = (segment.label || "").replace(/^via\s+/i, "").trim().toUpperCase();
+        const isRealHub =
+          Boolean(hubMark) &&
+          hubMark !== "TRV" &&
+          hubMark !== "TRAVEL" &&
+          !worksiteFromMark(hubMark);
+        if (isRealHub) return null;
+        return worksiteFromMark(lastSite?.site || stint.site || "") || null;
+      }
       // Past its last known piece (open stay, or a stay dragged longer): still at the last site they were at.
       const lastPiece = stint.segments?.length ? stint.segments[stint.segments.length - 1] : null;
-      const lastSite = [...(stint.segments || [])].reverse().find((piece) => piece.kind === "site");
       if (lastPiece && lastSite && iso >= lastPiece.out) {
         return worksiteFromMark(lastSite.site || "") || null;
       }

@@ -1,10 +1,11 @@
 /**
- * Per-day captions under Month calendar boxes for a journey.
+ * Per-day captions painted inside Month calendar boxes for a journey.
  *
  * Rules (codes only):
  * - Same-day hop with stops into camp: camp-coloured box, caption like `YUL → YK`
  *   (intermediates that day; final camp is the box colour, not repeated in the caption).
  * - Overnight: grey travel days show `YUL → YK`; arrival camp day shows `→ YK`.
+ * - Never show sheet prose ("Leaving… confirmed by…") — only airport codes.
  */
 
 import type { FlightSegment } from "@/lib/crew-flights";
@@ -18,6 +19,9 @@ export function normalizeAirportCode(code: string) {
   if (raw === "KU") return "KUG";
   if (raw === "IQ") return "IQA";
   if (raw === "PD" || raw === "PND") return "POND";
+  // Airport / hub codes only — reject sheet prose ("Leaving Iqaluit… confirmed by…").
+  if (!/^[A-Z0-9]{2,8}$/.test(raw)) return "";
+  if (raw === "TRV" || raw === "TRAVEL") return "";
   return raw;
 }
 

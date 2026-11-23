@@ -29,15 +29,33 @@ describe("normalizeAirportCode", () => {
     expect(normalizeAirportCode("PND")).toBe("POND");
     expect(normalizeAirportCode("via YK")).toBe("YK");
   });
+
+  it("rejects sheet prose and TRV placeholders", () => {
+    expect(
+      normalizeAirportCode("Leaving Iqaluit, 18 to 20 Dec, route not booked yet (confirmed by Yimika, 20 Nov 2026)"),
+    ).toBe("");
+    expect(normalizeAirportCode("TRV")).toBe("");
+  });
+});
+
+describe("captionFromSheetRoute prose", () => {
+  it("does not paint Leaving / confirmed-by notes into the day box", () => {
+    expect(
+      captionFromSheetRoute(
+        "Leaving Iqaluit, 18 to 20 Dec, route not booked yet (confirmed by Yimika, 20 Nov 2026)",
+        "2026-12-18",
+      ),
+    ).toBe("");
+  });
 });
 
 describe("same-day journey into camp", () => {
-  it("shows YUL → YK under the IQA-coloured arrival day", () => {
+  it("shows YUL → YK inside the IQA-coloured arrival day", () => {
     const segments = [leg("YUL", "YK", "2026-12-01"), leg("YK", "IQA", "2026-12-01")];
     expect(journeyDayCaption(segments, "2026-12-01", { siteOnIso: "IQA" })).toBe("YUL → YK");
   });
 
-  it("handles a direct hop as from-code under the camp box", () => {
+  it("handles a direct hop as from-code inside the camp box", () => {
     const segments = [leg("YOW", "IQA", "2026-12-01")];
     expect(journeyDayCaption(segments, "2026-12-01", { siteOnIso: "IQA" })).toBe("→ YOW");
   });
