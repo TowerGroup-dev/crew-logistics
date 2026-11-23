@@ -91,7 +91,8 @@ type StaySelection = {
 /** Legend paint brush, click a camp site on top, then drag In→Out on the grid. */
 type PaintBrush =
   | { kind: "site"; code: string }
-  | { kind: "travel"; hub: string };
+  | { kind: "travel"; hub: string }
+  | { kind: "return" };
 
 type CellMenu = {
   personId: string;
@@ -296,7 +297,7 @@ function overlapMessage(person: CrewPerson, from: string, to: string) {
   return null;
 }
 
-type DragMode = "place" | "clear" | "open" | "extend" | "moveIn";
+type DragMode = "place" | "clear" | "open" | "extend" | "moveIn" | "return";
 
 function stintCovering(person: CrewPerson, iso: string) {
   const seasonExclusive = scheduleYearOutExclusive(Number(iso.slice(0, 4)));
@@ -477,6 +478,7 @@ const MonthRow = memo(function MonthRow({
         // Yellow only on stay days; white (away) days stay white.
         const returnWindow = Boolean(site) && showReturnWindow(ops, iso);
         const placePreview = inDraft && draftMode === "place";
+        const returnPreview = inDraft && draftMode === "return";
         const stayDrag = draftMode === "extend" || draftMode === "moveIn";
         const extendPreview = inDraft && stayDrag;
         // Days this drag takes off the stay: faded until you let go.
@@ -603,6 +605,7 @@ const MonthRow = memo(function MonthRow({
               placePreview &&
                 paintBrush.kind === "travel" &&
                 "bg-stone-500/55 text-white ring-1 ring-inset ring-stone-700/50",
+              returnPreview && "bg-[#FFD600]/80 text-stone-900 ring-1 ring-inset ring-amber-700/40",
               extendPreview && "bg-primary/25 text-foreground ring-1 ring-inset ring-primary/50",
               trimPreview && "opacity-25",
               staySelected && "ring-2 ring-inset ring-stone-900/70",
@@ -1503,6 +1506,20 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       return;
     }
 
+    if (active.mode === "return") {
+      const person = peopleById.get(active.personId);
+      if (!person) return;
+      // Click (no drag): from that day through OUT. Drag: paint exactly the days you cover.
+      if (!active.moved) {
+        addReturnWindowAt(active.personId, active.anchor);
+        return;
+      }
+      const range = orderedRange(active.start, active.end);
+      setReturnWindow(active.personId, range.from, range.to);
+      showFlash(`Return window · ${formatMedium(range.from)} – ${formatMedium(range.to)}`);
+      return;
+    }
+
     if (active.mode === "extend") {
       const person = peopleById.get(active.personId);
       const stint = person ? stintCovering(person, active.anchor) : null;
@@ -1551,12 +1568,10 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       return;
     }
 
-    // Site brush (default) → place immediately. Sheet: every IN has an OUT.
-    const siteCode =
-      brush.kind === "site"
-        ? brush.code
-        : person?.homeSites?.[0] || siteList[0]?.code || "IQA";
-    placeStayNow(active.personId, finalRange.from, finalRange.to, siteCode);
+    if (brush.kind !== "site") return;
+
+    // Site brush → place immediately. Sheet: every IN has an OUT.
+    placeStayNow(active.personId, finalRange.from, finalRange.to, brush.code);
   }
 
   // Finish the drag even if the pointer is released outside the grid.
@@ -1644,7 +1659,13 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     if (!canEdit) return;
 
     if (siteOnDay(person, iso)) {
-      // Click opens; drag extends the stay (not yellow, yellow is right-click).
+      // Return brush: paint yellow booking window on stay days (click = that day → OUT).
+      if (paintBrushRef.current.kind === "return") {
+        dragRef.current = { personId, anchor: iso, start: iso, end: iso, mode: "return", moved: false };
+        setDraft({ personId, start: iso, end: iso, mode: "return" });
+        return;
+      }
+      // Click opens; drag extends the stay (yellow return is Return brush or right-click).
       dragRef.current = { personId, anchor: iso, start: iso, end: iso, mode: "open", moved: false };
       setDraft(null);
       return;
@@ -1657,6 +1678,11 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       return;
     }
 
+    if (paintBrushRef.current.kind === "return") {
+      showFlash("Return paints on a stay — click or drag camp days");
+      return;
+    }
+
     dragRef.current = { personId, anchor: iso, start: iso, end: iso, mode: "place", moved: false };
     setDraft({ personId, start: iso, end: iso, mode: "place" });
   }
@@ -1665,8 +1691,25 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     const active = dragRef.current;
     if (!active || active.personId !== personId || active.mode === "clear") return;
 
+    // Return brush: yellow only on days that are still on this stay.
+    if (active.mode === "return") {
+      const person = peopleById.get(personId);
+      const stint = person ? stintCovering(person, active.anchor) : null;
+      if (!stint) return;
+      const lastInclusive = stint.out ? addDays(stint.out, -1) : scheduleYearLastDay(year);
+      let from = active.anchor <= iso ? active.anchor : iso;
+      let to = active.anchor <= iso ? iso : active.anchor;
+      if (from < stint.from) from = stint.from;
+      if (to > lastInclusive) to = lastInclusive;
+      if (to < from) to = from;
+      dragRef.current = { ...active, start: from, end: to, moved: true };
+      setDraft({ personId, start: from, end: to, mode: "return" });
+      autoScrollToward(iso);
+      return;
+    }
+
     // Stay drag: grab the first box to move the IN, anywhere else to move the OUT.
-    // Both go either way (earlier or later). Yellow return window is right-click only.
+    // Both go either way (earlier or later).
     if (active.mode === "open" || active.mode === "extend" || active.mode === "moveIn") {
       const person = peopleById.get(personId);
       const stint = person ? stintCovering(person, active.anchor) : null;
@@ -1817,10 +1860,21 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               <span className="size-2.5 rounded-sm bg-stone-500" aria-hidden />
               Travel
             </button>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-950">
-              <span className="size-2 rounded-sm bg-[#FFD600]" aria-hidden />
+            <button
+              type="button"
+              disabled={!canEdit}
+              title="Return: click a stay day (that day → OUT), or drag the days to book"
+              onClick={() => setPaintBrush({ kind: "return" })}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 font-semibold transition-colors sm:px-2.5",
+                paintBrush.kind === "return"
+                  ? "border-amber-400 bg-amber-100 text-amber-950 ring-2 ring-inset ring-amber-500/40"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted",
+              )}
+            >
+              <span className="size-2.5 rounded-sm bg-[#FFD600]" aria-hidden />
               Return
-            </span>
+            </button>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <div

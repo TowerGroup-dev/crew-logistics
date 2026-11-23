@@ -4868,16 +4868,9 @@ export const CREW_SCHEDULE_DATA = {
           "segments": [
             {
               "from": "2026-11-09",
-              "out": "2026-12-18",
+              "out": "2026-12-21",
               "kind": "site",
               "site": "IQA"
-            },
-            {
-              "from": "2026-12-18",
-              "out": "2026-12-21",
-              "kind": "travel",
-              "label": "TRV",
-              "route": ""
             }
           ]
         }

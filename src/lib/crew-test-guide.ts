@@ -40,7 +40,7 @@ export const TEST_GUIDE: GuideSection[] = [
       { id: "month-open-person", do: "Click once on someone’s coloured bar.", expect: "Their rotation opens: dates, flights, room. Close it." },
       { id: "month-place", do: "Switch to the placing mode (hover the buttons above the grid to find it), then drag across empty days on someone’s row.", expect: "A stay appears: first day IN, last day OUT." },
       { id: "month-extend", do: "Drag from the end of a stay further right.", expect: "The OUT day moves later." },
-      { id: "month-return", do: "Right-click a stay → Return window.", expect: "Yellow from that day to OUT." },
+      { id: "month-return", do: "Click Return, then click a stay day (or drag the last few days).", expect: "Yellow return window on those days through OUT." },
       { id: "month-note", do: "Right-click a stay → Add note. Type “Linger for snow”.", expect: "The note shows on the bar." },
       { id: "month-stopover", do: "Right-click a day → pick a stopover (e.g. YOW).", expect: "The stopover code shows on that day." },
       { id: "month-undo", do: "Press Ctrl+Z a few times (or the Undo button).", expect: "Each change is undone, one at a time." },
