@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 /**
  * Weekly cron hook (Montreal Monday 8:30).
  * Ops data currently lives in the browser. This endpoint confirms the schedule window and
- * reminds operators that Katrina’s weekly briefing is sent from the Crew Logistics app
+ * reminds operators that Katrina’s weekly briefing is sent from the Crew Schedule app
  * after Monday 8:30 America/Montreal.
  */
 export async function GET(request: Request) {
@@ -38,6 +38,6 @@ export async function GET(request: Request) {
     montreal: `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`,
     inMorningWindow: inWindow,
     note:
-      "Open Crew Logistics after Monday 8:30 AM Montreal to auto-send Katrina’s weekly briefing from live roster data. Wire GRAPH_* env vars for delivery.",
+      "Open Crew Schedule after Monday 8:30 AM Montreal to auto-send Katrina’s weekly briefing from live roster data. Wire GRAPH_* env vars for delivery.",
   });
 }

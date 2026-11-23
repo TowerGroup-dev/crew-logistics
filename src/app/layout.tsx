@@ -15,8 +15,8 @@ const display = Fraunces({
 
 export const metadata: Metadata = {
   title: {
-    default: "Crew Logistics",
-    template: "%s · Crew Logistics",
+    default: "Crew Schedule",
+    template: "%s · Crew Schedule",
   },
   description: "Tower Arctic Ltd. crew rotations, travel, and site assignments.",
 };

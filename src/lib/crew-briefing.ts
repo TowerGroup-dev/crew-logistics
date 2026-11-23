@@ -191,7 +191,7 @@ export function buildCrewBriefing(input: {
 
   const text = [
     "TOWER ARCTIC LTD.",
-    "Crew Logistics · Weekly Briefing",
+    "Crew Schedule · Weekly Briefing",
     dateLine,
     "",
     `Good morning ${recipient},`,
@@ -212,9 +212,9 @@ export function buildCrewBriefing(input: {
     "CHANGES SINCE THE LAST BRIEFING",
     ...(realChanges.length ? realChanges.map((line) => `- ${line}`) : ["No changes to crew dates, travel or accommodation."]),
     "",
-    `Open Crew Logistics: ${appUrl}`,
+    `Open Crew Schedule: ${appUrl}`,
     "",
-    "Tower Arctic Ltd. · Crew Logistics",
+    "Tower Arctic Ltd. · Crew Schedule",
     "This message is sent every Monday at 8:30 am.",
   ].join("\n");
 
@@ -252,13 +252,13 @@ export function buildCrewBriefing(input: {
       ${realChanges.length
         ? `<ul style="margin:0 0 26px;padding-left:18px;font-size:13px;line-height:1.6;color:${INK}">${realChanges.map((line) => `<li style="margin:0 0 4px">${escapeHtml(line)}</li>`).join("")}</ul>`
         : `<p style="margin:0 0 26px;font-size:13px;color:${MUTED}">No changes to crew dates, travel or accommodation.</p>`}
-      ${button("Open Crew Logistics", appUrl)}
+      ${button("Open Crew Schedule", appUrl)}
     `,
     footer: "This message is sent every Monday at 8:30 am. Recipients can be changed in Settings.",
   });
 
   return {
-    title: `Crew Logistics · Weekly Briefing · ${emailDate(input.today)}`,
+    title: `Crew Schedule · Weekly Briefing · ${emailDate(input.today)}`,
     to: input.recipientEmail?.trim() || "",
     whenLabel,
     year: CREW_SCHEDULE.year,
@@ -278,8 +278,8 @@ export function buildCrewBriefing(input: {
 }
 
 // Email look: formal, plain, works in Outlook (tables and inline styles only).
-const NAVY = "#17324d";
-const ACCENT = "#2f6fb5";
+const NAVY = "#356dbd"; // section titles and totals use the app's blue too
+const ACCENT = "#356dbd"; // the app's blue
 const INK = "#1d2733";
 const MUTED = "#5b6675";
 const LINE = "#e3e8ef";
@@ -375,18 +375,20 @@ function summarySentence(leavingThisWeek: number, leavingNextWeek: number, fligh
 }
 
 function emailFrame(input: { kicker: string; date: string; body: string; footer: string }) {
-  return `<!doctype html><html><body style="margin:0;padding:0;background:#f4f6f9">
+  // Same look as the app's header: small blue "TOWER ARCTIC LTD.", "Crew Schedule" in the serif.
+  // Mail apps that block web fonts fall back to Georgia / Segoe UI.
+  return `<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet"></head><body style="margin:0;padding:0;background:#f4f6f9">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;border-collapse:collapse">
   <tr><td align="center" style="padding:24px 12px">
-    <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="width:100%;max-width:640px;border-collapse:collapse;background:#ffffff;border:1px solid ${LINE};font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:${INK}">
-      <tr><td style="padding:24px 28px 16px;border-bottom:2px solid ${ACCENT}">
-        <p style="margin:0;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:${ACCENT};font-weight:700">Tower Arctic Ltd.</p>
-        <p style="margin:4px 0 0;font-size:21px;color:${ACCENT};font-weight:600">Crew Logistics &middot; ${escapeHtml(input.kicker)}</p>
-        <p style="margin:6px 0 0;font-size:13px;color:${MUTED}">${escapeHtml(input.date)}</p>
+    <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="width:100%;max-width:640px;border-collapse:collapse;background:#ffffff;border:1px solid ${LINE};font-family:'Source Sans 3','Segoe UI',Arial,Helvetica,sans-serif;color:${INK}">
+      <tr><td style="padding:24px 28px 18px;border-bottom:1px solid ${LINE}">
+        <p style="margin:0;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:${ACCENT};font-weight:600">Tower Arctic Ltd.</p>
+        <p style="margin:2px 0 0;font-family:'Fraunces',Georgia,'Times New Roman',serif;font-size:34px;line-height:1.15;font-weight:400;color:${INK}">Crew Schedule</p>
+        <p style="margin:8px 0 0;font-size:14px;color:${MUTED}"><strong style="color:${INK};font-weight:600">${escapeHtml(input.kicker)}</strong> &middot; ${escapeHtml(input.date)}</p>
       </td></tr>
       <tr><td style="padding:26px 28px 8px">${input.body}</td></tr>
       <tr><td style="padding:18px 28px 24px;border-top:1px solid ${LINE};font-size:11px;line-height:1.6;color:${MUTED}">
-        <strong style="color:${INK}">Tower Arctic Ltd.</strong> &middot; Crew Logistics<br>${escapeHtml(input.footer)}
+        <strong style="color:${INK}">Tower Arctic Ltd.</strong> &middot; Crew Schedule<br>${escapeHtml(input.footer)}
       </td></tr>
     </table>
   </td></tr>

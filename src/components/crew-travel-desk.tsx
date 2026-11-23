@@ -248,8 +248,8 @@ export function CrewTravelDesk({
 
       <div className="grid grid-cols-3 gap-2">
         <Stat label="Trips" value={trips.length} />
-        <Stat label="Not booked yet" value={notBooked.length} tone={notBooked.length ? "amber" : undefined} />
-        <Stat label="Within 2 weeks, not booked" value={urgent} tone={urgent ? "rose" : undefined} />
+        <Stat label="Not booked yet" value={notBooked.length} />
+        <Stat label="Within 2 weeks, not booked" value={urgent} />
       </div>
 
       {shown.length === 0 ? (
@@ -266,8 +266,8 @@ export function CrewTravelDesk({
               trip.kind === "transfer"
                 ? routeBetweenSites(routes, trip.fromSite || "", trip.site).join(" → ")
                 : routeAirports(routes, trip.site, home || "HOME", trip.kind === "to_site" ? "outbound" : "return")
-                    .join(" → ")
-                    .replace("HOME", "home");
+                    .filter((code) => code !== "HOME")
+                    .join(" → ");
             const away = daysBetween(today, trip.date);
             const hotels = trip.booking?.hotels ?? [];
             return (
@@ -318,10 +318,7 @@ export function CrewTravelDesk({
                   {trip.booking?.segments.length ? (
                     <CrewTripPlan compact legs={trip.booking.segments} hotels={hotels} />
                   ) : (
-                    <p>
-                      <span className="text-xs">Usual </span>
-                      {usual}
-                    </p>
+                    <p>{usual}</p>
                   )}
                   {trip.booking?.pnr ? <p className="mt-1 tabular-nums">PNR {trip.booking.pnr}</p> : null}
                   {hotels.length || trip.booking?.carService ? (
@@ -369,8 +366,8 @@ export function CrewTravelDesk({
                   trip.kind === "transfer"
                     ? routeBetweenSites(routes, trip.fromSite || "", trip.site).join(" → ")
                     : routeAirports(routes, trip.site, home || "HOME", trip.kind === "to_site" ? "outbound" : "return")
-                        .join(" → ")
-                        .replace("HOME", "home");
+                        .filter((code) => code !== "HOME")
+                        .join(" → ");
                 const away = daysBetween(today, trip.date);
                 return (
                   <tr key={trip.key} className="align-top hover:bg-muted/30">
@@ -407,17 +404,14 @@ export function CrewTravelDesk({
                       {booked && trip.booking ? (
                         <CrewTripPlan compact legs={trip.booking.segments} hotels={trip.booking.hotels ?? []} />
                       ) : (
-                        <p className="text-muted-foreground">
-                          <span className="text-xs">Usual </span>
-                          {usual}
-                        </p>
+                        <p className="text-muted-foreground">{usual}</p>
                       )}
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", statusTone(trip, today))}>
                         {trip.booking ? flightStatusLabel(trip.booking.status) : "Not booked"}
                       </span>
-                      {trip.booking?.pnr ? <p className="mt-1 text-xs tabular-nums text-muted-foreground">{trip.booking.pnr}</p> : null}
+                      {trip.booking?.pnr ? <p className="mt-1 px-2 text-xs tabular-nums text-muted-foreground">{trip.booking.pnr}</p> : null}
                     </td>
                     <td className="px-3 py-3 text-xs">
                       {trip.booking?.hotels?.length ? (
@@ -465,12 +459,13 @@ export function CrewTravelDesk({
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone?: "amber" | "rose" }) {
+function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div
       className={cn(
         "rounded-xl border px-2.5 py-2 sm:px-4 sm:py-3",
-        tone === "rose" ? "border-rose-200 bg-rose-50" : tone === "amber" ? "border-amber-200 bg-amber-50" : "border-border bg-card",
+        // Plain tiles: the numbers speak for themselves (no yellow / red backgrounds).
+        "border-border bg-card",
       )}
     >
       <p className="text-[10px] leading-tight font-medium tracking-wide text-muted-foreground uppercase sm:text-xs">{label}</p>

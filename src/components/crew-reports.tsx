@@ -855,7 +855,7 @@ function downloadPowerBiPack(tables: ReportTables) {
 
 function powerBiReadme(year: number) {
   return [
-    `Crew Logistics data pack for ${year}`,
+    `Crew Schedule data pack for ${year}`,
     `Exported ${new Date().toISOString()}`,
     "",
     "Tables (CSV, UTF-8, dates as YYYY-MM-DD):",
@@ -867,7 +867,7 @@ function powerBiReadme(year: number) {
     "  crew_activity         planning log",
     "",
     "Power BI setup (once):",
-    "  1. Unzip into a OneDrive or SharePoint folder, e.g. Crew Logistics/Power BI.",
+    "  1. Unzip into a OneDrive or SharePoint folder, e.g. Crew Schedule/Power BI.",
     "  2. Power BI Desktop: Get data > Text/CSV, load each file (or SharePoint folder and filter by name).",
     "  3. Model view: link crew_people[PersonId] one-to-many to PersonId in every other table.",
     "  4. Add a date table and link it to crew_daily_onsite[Date].",
