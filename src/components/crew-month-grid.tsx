@@ -1528,6 +1528,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             ? current.returnFlight
             : "not_started",
       }));
+      setStaySelection(null);
       showFlash("Cleared return window");
       return;
     }
@@ -1538,10 +1539,12 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       // Click (no drag): from that day through OUT. Drag: paint exactly the days you cover.
       if (!active.moved) {
         addReturnWindowAt(active.personId, active.anchor);
+        setStaySelection(null);
         return;
       }
       const range = orderedRange(active.start, active.end);
       setReturnWindow(active.personId, range.from, range.to);
+      setStaySelection(null);
       showFlash(`Return window · ${formatMedium(range.from)} – ${formatMedium(range.to)}`);
       return;
     }
@@ -1556,6 +1559,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
         onExtendStay(active.personId, stint.from, newOut);
         showFlash(`${newOut > oldOut ? "Longer" : "Shorter"} stay · last day ${formatMedium(active.end)}`);
       }
+      // Don't leave the black selection ring on after a drag change.
+      setStaySelection(null);
       return;
     }
 
@@ -1567,6 +1572,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
         onMoveStayIn(active.personId, stint.from, active.start);
         showFlash(`Stay starts ${formatMedium(active.start)}`);
       }
+      setStaySelection(null);
       return;
     }
 
@@ -1586,6 +1592,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       }
       if (!dates.length) return;
       onPaintStopovers(active.personId, dates, brush.hub);
+      setStaySelection(null);
       showFlash(
         dates.length === 1
           ? `${travelHubName(brush.hub, travelHubs)}  ${formatMedium(dates[0]!)}`
@@ -1598,6 +1605,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
 
     // Site brush → place immediately. Sheet: every IN has an OUT.
     placeStayNow(active.personId, finalRange.from, finalRange.to, brush.code);
+    setStaySelection(null);
   }
 
   // Finish the drag even if the pointer is released outside the grid.
@@ -2467,10 +2475,14 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       {cellMenu ? (
         <div
           className="fixed inset-0 z-50"
-          onClick={() => setCellMenu(null)}
+          onClick={() => {
+            setCellMenu(null);
+            setStaySelection(null);
+          }}
           onContextMenu={(event) => {
             event.preventDefault();
             setCellMenu(null);
+            setStaySelection(null);
           }}
         >
           <div
