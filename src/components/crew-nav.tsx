@@ -271,6 +271,7 @@ export function CrewNav({
                     </Link>
                   );
                 })}
+                <TestModeLinks pathname={pathname} onPick={() => setMenuOpen(false)} />
               </div>
             ) : null}
           </div>
@@ -309,6 +310,7 @@ export function CrewNav({
               </Link>
             );
           })}
+          <TestModeLinks pathname={pathname} onPick={() => setMoreOpen(false)} large />
           <a
             role="menuitem"
             href="/api/auth/logout"
@@ -354,6 +356,32 @@ export function CrewNav({
       </div>
     </div>
     {moreOpen ? <div className="fixed inset-0 z-30 bg-black/20 sm:hidden" onClick={() => setMoreOpen(false)} aria-hidden /> : null}
+    </>
+  );
+}
+
+/**
+ * Test Mode is opened in a NEW tab (it starts from a fresh copy of live data, and the page must
+ * load with ?test=1 for that). The real tab stays as it was. "Test log" shows what testers did.
+ */
+function TestModeLinks({ pathname, onPick, large }: { pathname: string; onPick: () => void; large?: boolean }) {
+  const row = large ? "block border-t border-border px-4 py-3.5 text-base" : "block border-t border-border px-4 py-2.5 text-sm";
+  return (
+    <>
+      <a
+        role="menuitem"
+        href={`${pathname || "/"}?test=1`}
+        target="_blank"
+        rel="noopener"
+        onClick={onPick}
+        className={cn(row, "text-amber-900 hover:bg-amber-50")}
+        title="Opens a new tab with a copy of the live schedule. Nothing you do there is saved and no emails are sent."
+      >
+        Practise in Test Mode (new tab)
+      </a>
+      <Link role="menuitem" href="/test-log" onClick={onPick} className={cn(row, "text-foreground hover:bg-sky-50")}>
+        Test log
+      </Link>
     </>
   );
 }

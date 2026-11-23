@@ -1517,7 +1517,7 @@ export function CrewBoard({
           style={{ maxHeight: "var(--app-board-max-h)" }}
         >
           <div className="sticky top-0 z-10 hidden min-w-[56rem] sm:grid grid-cols-[minmax(9rem,1.2fr)_4.5rem_6.5rem_7rem_6.5rem_6.5rem_6rem_5.5rem_5.5rem] gap-2 border-b border-border bg-card px-4 py-2 text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">
-            <span>Crew</span>
+            <span>Employee</span>
             <span>Site</span>
             <span>Status</span>
             <span>IN</span>

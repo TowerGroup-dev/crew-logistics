@@ -429,7 +429,7 @@ function personTable(rows: PersonRow[], empty: string) {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 26px">
     <tr>
       <td style="padding:8px 10px 6px 0;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:${MUTED};width:90px">Date</td>
-      <td style="padding:8px 10px 6px 0;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:${MUTED};width:38%">Crew member</td>
+      <td style="padding:8px 10px 6px 0;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:${MUTED};width:38%">Employee</td>
       <td style="padding:8px 0 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:${MUTED}">To do</td>
     </tr>${body}</table>`;
 }
@@ -487,14 +487,14 @@ export function buildInstantAlert(input: {
     kicker: input.actionNeeded ? "Action Needed" : "Update",
     date: formatLong(new Date().toISOString().slice(0, 10)),
     body: `
-      <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:${INK}">An important change was just made to a crew record${input.actionNeeded ? " and needs your attention" : ""}.</p>
+      <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:${INK}">An important change was just made to an employee record${input.actionNeeded ? " and needs your attention" : ""}.</p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 24px">
-        ${field("Crew member", input.personName, true)}
+        ${field("Employee", input.personName, true)}
         ${field("What changed", input.change)}
         ${field("Action needed", input.actionNeeded ? "Yes" : "No")}
         ${field("Changed by", owner)}
       </table>
-      ${button("Open this crew record", appUrl)}
+      ${button("Open this employee record", appUrl)}
     `,
     footer: "Sent automatically when a crew date, flight or accommodation changes. Alerts can be turned off in Settings.",
   });

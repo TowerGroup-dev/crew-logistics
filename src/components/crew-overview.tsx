@@ -834,7 +834,7 @@ function OnSiteTable({ rows, onOpen }: { rows: OnSiteRow[]; onOpen: (rotationId:
           cols,
         )}
       >
-        <span>Crew</span>
+        <span>Employee</span>
         <span>Location</span>
         <span>Time in</span>
         <span>To go</span>
