@@ -64,7 +64,17 @@ describe("removePerson", () => {
       outDate: null,
       rotationDays: 42,
       events: [],
-      stints: [{ site: "IQA", from: "2026-06-01", out: "2026-07-13" }],
+      stints: [
+        {
+          site: "IQA",
+          sites: ["IQA"],
+          from: "2026-06-01",
+          out: "2026-07-13",
+          arrival: "2026-06-01",
+          departure: null,
+          tentative: false,
+        },
+      ],
       active: true,
     };
 
