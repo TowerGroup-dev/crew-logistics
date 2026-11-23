@@ -2812,7 +2812,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                   closeCellMenu();
                 }}
               >
-                Plan journey (From → stops → To)
+                From → To travel
               </button>
             ) : null}
 

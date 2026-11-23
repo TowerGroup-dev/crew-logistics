@@ -41,8 +41,10 @@ export function normalizeJourneyAirports(codes: string[]) {
 
 /**
  * Build flight legs + which calendar days get a hub mark.
- * - same-day: every leg on `startDate`; no overnight hub paint (captions live on the arrival camp box).
- * - overnight: each hop on its own day; intermediate arrival cities painted grey that night.
+ * - same-day: every leg on `startDate`; leave and arrive that day.
+ * - overnight / 2 days:
+ *   - direct (From → To only): leave startDate, arrive the next day
+ *   - with stops: one night at each intermediate city, then final hop
  */
 export function buildJourneyPlan(input: {
   airports: string[];
@@ -57,22 +59,26 @@ export function buildJourneyPlan(input: {
   const segments: FlightSegment[] = [];
   const stopoverDays: JourneyStopoverDay[] = [];
   let day = start;
+  const direct = airports.length === 2;
 
   for (let i = 0; i < airports.length - 1; i += 1) {
     const from = airports[i]!;
     const to = airports[i + 1]!;
     const last = i === airports.length - 2;
+    // Direct 2-day: arrive the next calendar day. Multi-stop overnight: arrive same day as that hop's depart.
+    const arrive =
+      input.pace === "overnight" && direct && last ? addDays(day, 1) : day;
     segments.push({
       fromAirport: from,
       toAirport: to,
       departDate: day,
       departTime: "",
-      arriveDate: day,
+      arriveDate: arrive,
       arriveTime: "",
       flightNumber: "",
       mode: "flight",
     });
-    // Overnight: sleep at this hop's arrival when it is not the final camp day.
+    // Overnight with stops: sleep at this hop's arrival when it is not the final destination.
     if (input.pace === "overnight" && !last && !WORK_SITE_CODES.has(to)) {
       stopoverDays.push({ iso: day, hub: to });
       day = addDays(day, 1);

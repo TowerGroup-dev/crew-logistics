@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Route, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import { AirportSelect, CAMP_AIRPORTS, useTravelHubs } from "@/components/crew-airport-select";
 import {
   buildJourneyPlan,
@@ -21,7 +21,7 @@ export type JourneyPlannerApply = {
   arriveDate: string;
 };
 
-/** Simple From → stops → To planner that paints onto the Month calendar. */
+/** From → To travel (optional stops). Puts the path on the Month calendar. */
 export function CrewJourneyPlanner({
   personName,
   initialDate,
@@ -43,9 +43,9 @@ export function CrewJourneyPlanner({
   const [direction, setDirection] = useState<FlightDirection>(initialDirection);
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo);
-  const [stops, setStops] = useState<string[]>(["YEG", "KUG"]);
+  const [stops, setStops] = useState<string[]>([]);
   const [startDate, setStartDate] = useState(initialDate.slice(0, 10));
-  const [pace, setPace] = useState<JourneyPace>("overnight");
+  const [pace, setPace] = useState<JourneyPace>("same-day");
 
   const airports = useMemo(
     () => normalizeJourneyAirports([from, ...stops, to]),
@@ -55,6 +55,7 @@ export function CrewJourneyPlanner({
     () => buildJourneyPlan({ airports, startDate, pace }),
     [airports, startDate, pace],
   );
+  const hasStops = stops.some((code) => code.trim());
 
   function setStop(index: number, code: string) {
     setStops((current) => current.map((row, i) => (i === index ? code : row)));
@@ -81,16 +82,15 @@ export function CrewJourneyPlanner({
       <div
         role="dialog"
         aria-labelledby="journey-planner-title"
-        className="max-h-[min(92vh,40rem)] w-full max-w-lg overflow-auto rounded-2xl border border-border bg-card p-4 shadow-2xl"
+        className="max-h-[min(92vh,36rem)] w-full max-w-md overflow-auto rounded-2xl border border-border bg-card p-4 shadow-2xl"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p id="journey-planner-title" className="flex items-center gap-2 text-base font-semibold">
-              <Route className="size-4 text-sky-700" />
-              Plan journey
+            <p id="journey-planner-title" className="text-base font-semibold">
+              From → To
             </p>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {personName} · From → stops → To, then see it on the calendar
+              {personName} · put travel on the calendar
             </p>
           </div>
           <button
@@ -114,7 +114,13 @@ export function CrewJourneyPlanner({
               <button
                 key={value}
                 type="button"
-                onClick={() => setDirection(value)}
+                onClick={() => {
+                  if (value === direction) return;
+                  // Flip From/To when switching To site ↔ Home.
+                  setFrom(to);
+                  setTo(from);
+                  setDirection(value);
+                }}
                 className={cn(
                   "h-8 flex-1 rounded-md px-3 text-xs font-semibold",
                   direction === value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground",
@@ -126,27 +132,14 @@ export function CrewJourneyPlanner({
           </div>
 
           <label className="grid gap-1 text-sm">
-            <span className="text-muted-foreground">From</span>
+            <span className="font-medium">From</span>
             <AirportSelect value={from} onChange={setFrom} hubs={hubs} placeholder="e.g. Ottawa (YOW)" />
           </label>
 
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Stops</span>
-              <button
-                type="button"
-                onClick={() => setStops((current) => [...current, ""])}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-input px-2 text-xs font-medium hover:bg-muted"
-              >
-                <Plus className="size-3.5" /> Add stop
-              </button>
-            </div>
-            {stops.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-                No stops — direct From → To. Add Edmonton, Yellowknife, …
-              </p>
-            ) : (
-              stops.map((stop, index) => (
+          {stops.length > 0 ? (
+            <div className="grid gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Stops (optional)</span>
+              {stops.map((stop, index) => (
                 <div key={`stop-${index}`} className="flex items-center gap-2">
                   <AirportSelect
                     value={stop}
@@ -164,12 +157,21 @@ export function CrewJourneyPlanner({
                     <Trash2 className="size-4" />
                   </button>
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => setStops((current) => [...current, ""])}
+            className="inline-flex h-8 w-fit items-center gap-1 rounded-md border border-dashed border-input px-2.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Plus className="size-3.5" />
+            {stops.length ? "Add another stop" : "Add a stop (optional)"}
+          </button>
 
           <label className="grid gap-1 text-sm">
-            <span className="text-muted-foreground">To</span>
+            <span className="font-medium">To</span>
             <AirportSelect
               value={to}
               onChange={setTo}
@@ -179,7 +181,7 @@ export function CrewJourneyPlanner({
           </label>
 
           <label className="grid gap-1 text-sm">
-            <span className="text-muted-foreground">Leave date</span>
+            <span className="font-medium">Leave date</span>
             <input
               type="date"
               value={startDate}
@@ -189,12 +191,22 @@ export function CrewJourneyPlanner({
           </label>
 
           <div className="grid gap-1.5">
-            <span className="text-sm text-muted-foreground">How long is the journey?</span>
+            <span className="text-sm font-medium">Same day or 2 days?</span>
             <div className="grid grid-cols-2 gap-2">
               {(
                 [
-                  ["same-day", "Same day", "All hops on one calendar day"],
-                  ["overnight", "Overnight", "One night at each stop"],
+                  [
+                    "same-day",
+                    "Same day",
+                    hasStops ? "All hops that day" : "Leave and arrive that day",
+                  ],
+                  [
+                    "overnight",
+                    "2 days",
+                    hasStops
+                      ? "Overnight at each stop"
+                      : "Leave one day, arrive the next",
+                  ],
                 ] as const
               ).map(([value, label, hint]) => (
                 <button
@@ -230,7 +242,7 @@ export function CrewJourneyPlanner({
                 </p>
               </>
             ) : (
-              <p className="text-muted-foreground">Pick From and To to preview the path.</p>
+              <p className="text-muted-foreground">Pick From and To.</p>
             )}
           </div>
         </div>
