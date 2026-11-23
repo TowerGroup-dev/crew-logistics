@@ -278,7 +278,7 @@ export function buildCrewBriefing(input: {
 }
 
 // Email look: formal, plain, works in Outlook (tables and inline styles only).
-const NAVY = "#356dbd"; // section titles and totals use the app's blue too
+const NAVY = "#1d2733"; // totals and section titles in black; only the company name and the button are blue
 const ACCENT = "#356dbd"; // the app's blue
 const INK = "#1d2733";
 const MUTED = "#5b6675";
