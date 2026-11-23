@@ -1868,7 +1868,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                         count={visiblePeople.length}
                         spaced={false}
                         className={cn(
-                          "h-10 border-y border-slate-300 bg-slate-200 px-3 py-0 shadow-sm",
+                          "h-10 border-y border-border bg-[#f1f3f6] px-3 py-0",
                           groupIndex > 0 && "border-t-2",
                         )}
                         onContextMenu={
@@ -2175,7 +2175,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               <div key={`days-${group.role}`}>
                 <div
                   className={cn(
-                    "sticky top-[5.5rem] z-20 h-10 border-y border-slate-300 bg-slate-200",
+                    "sticky top-[5.5rem] z-20 h-10 border-y border-border bg-[#f1f3f6]",
                     groupIndex > 0 && "border-t-2",
                   )}
                   style={{ width: daysTrackWidth, minWidth: daysTrackWidth }}

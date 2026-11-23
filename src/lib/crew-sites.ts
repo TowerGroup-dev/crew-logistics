@@ -9,6 +9,8 @@ export type SiteColour = {
   swatch: string;
   /** List chips */
   chip: string;
+  /** Text colour for the site name in lists ("● IQA"). */
+  text: string;
   /** Filled month cell text */
   solid: string;
   /** Year tape bar */
@@ -16,14 +18,14 @@ export type SiteColour = {
 };
 
 export const SITE_COLOURS: SiteColour[] = [
-  { id: "sky", label: "Blue", swatch: "bg-sky-500", chip: "bg-sky-100 text-sky-950", solid: "bg-sky-500 text-white", bar: "bg-sky-600" },
-  { id: "emerald", label: "Green", swatch: "bg-emerald-500", chip: "bg-emerald-100 text-emerald-950", solid: "bg-emerald-500 text-white", bar: "bg-emerald-600" },
-  { id: "amber", label: "Amber", swatch: "bg-amber-500", chip: "bg-amber-100 text-amber-950", solid: "bg-amber-500 text-white", bar: "bg-amber-600" },
-  { id: "violet", label: "Violet", swatch: "bg-violet-500", chip: "bg-violet-100 text-violet-950", solid: "bg-violet-500 text-white", bar: "bg-violet-600" },
-  { id: "rose", label: "Rose", swatch: "bg-rose-500", chip: "bg-rose-100 text-rose-950", solid: "bg-rose-500 text-white", bar: "bg-rose-600" },
-  { id: "teal", label: "Teal", swatch: "bg-teal-500", chip: "bg-teal-100 text-teal-950", solid: "bg-teal-500 text-white", bar: "bg-teal-600" },
-  { id: "orange", label: "Orange", swatch: "bg-orange-500", chip: "bg-orange-100 text-orange-950", solid: "bg-orange-500 text-white", bar: "bg-orange-600" },
-  { id: "stone", label: "Stone", swatch: "bg-stone-500", chip: "bg-stone-100 text-stone-800", solid: "bg-stone-500 text-white", bar: "bg-stone-600" },
+  { id: "sky", label: "Blue", swatch: "bg-sky-500", chip: "bg-sky-100 text-sky-950", text: "text-sky-700", solid: "bg-sky-500 text-white", bar: "bg-sky-600" },
+  { id: "emerald", label: "Green", swatch: "bg-emerald-500", chip: "bg-emerald-100 text-emerald-950", text: "text-emerald-700", solid: "bg-emerald-500 text-white", bar: "bg-emerald-600" },
+  { id: "amber", label: "Amber", swatch: "bg-amber-500", chip: "bg-amber-100 text-amber-950", text: "text-amber-700", solid: "bg-amber-500 text-white", bar: "bg-amber-600" },
+  { id: "violet", label: "Violet", swatch: "bg-violet-500", chip: "bg-violet-100 text-violet-950", text: "text-violet-700", solid: "bg-violet-500 text-white", bar: "bg-violet-600" },
+  { id: "rose", label: "Rose", swatch: "bg-rose-500", chip: "bg-rose-100 text-rose-950", text: "text-rose-700", solid: "bg-rose-500 text-white", bar: "bg-rose-600" },
+  { id: "teal", label: "Teal", swatch: "bg-teal-500", chip: "bg-teal-100 text-teal-950", text: "text-teal-700", solid: "bg-teal-500 text-white", bar: "bg-teal-600" },
+  { id: "orange", label: "Orange", swatch: "bg-orange-500", chip: "bg-orange-100 text-orange-950", text: "text-orange-700", solid: "bg-orange-500 text-white", bar: "bg-orange-600" },
+  { id: "stone", label: "Stone", swatch: "bg-stone-500", chip: "bg-stone-100 text-stone-800", text: "text-stone-600", solid: "bg-stone-500 text-white", bar: "bg-stone-600" },
 ];
 
 export type CrewSite = {

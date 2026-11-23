@@ -213,21 +213,21 @@ export function CrewRotationDrawer({
 
           {section === "travel" ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 border-b border-border">
                 <button
                   type="button"
                   onClick={() => setTravelDir("outbound")}
                   className={cn(
-                    "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition",
+                    "-mb-px flex items-center gap-2 border-b-2 px-2 py-2.5 text-left text-sm font-medium transition",
                     travelDir === "outbound"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border hover:bg-muted",
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
                   )}
                 >
                   <PlaneTakeoff className="size-4 shrink-0" />
                   <span className="min-w-0">
                     <span className="block">Outbound</span>
-                    <span className={cn("block text-xs font-normal", travelDir === "outbound" ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                    <span className={cn("block text-xs font-normal", "text-muted-foreground")}>
                       {tripLabel(draft.outbound)}
                     </span>
                   </span>
@@ -236,16 +236,16 @@ export function CrewRotationDrawer({
                   type="button"
                   onClick={() => setTravelDir("moves")}
                   className={cn(
-                    "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition",
+                    "-mb-px flex items-center gap-2 border-b-2 px-2 py-2.5 text-left text-sm font-medium transition",
                     travelDir === "moves"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border hover:bg-muted",
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
                   )}
                 >
                   <Repeat className="size-4 shrink-0" />
                   <span className="min-w-0">
                     <span className="block">Site transfers</span>
-                    <span className={cn("block text-xs font-normal", travelDir === "moves" ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                    <span className={cn("block text-xs font-normal", "text-muted-foreground")}>
                       {(draft.moves?.length ?? 0) + suggestedMoves.length
                         ? `${(draft.moves?.length ?? 0) + suggestedMoves.length} planned`
                         : "None"}
@@ -256,16 +256,16 @@ export function CrewRotationDrawer({
                   type="button"
                   onClick={() => setTravelDir("return")}
                   className={cn(
-                    "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition",
+                    "-mb-px flex items-center gap-2 border-b-2 px-2 py-2.5 text-left text-sm font-medium transition",
                     travelDir === "return"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border hover:bg-muted",
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
                   )}
                 >
                   <PlaneLanding className="size-4 shrink-0" />
                   <span className="min-w-0">
                     <span className="block">Inbound</span>
-                    <span className={cn("block text-xs font-normal", travelDir === "return" ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                    <span className={cn("block text-xs font-normal", "text-muted-foreground")}>
                       {tripLabel(draft.returnTravel)}
                     </span>
                   </span>
@@ -361,7 +361,7 @@ export function CrewRotationDrawer({
                 When this stay ends: extend the rotation, or add another person.
               </p>
 
-              <div className="rounded-xl border border-border bg-muted/20 p-4">
+              <div className="border-t border-border pt-4">
                 <p className="font-medium">Extend rotation</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Keep {person.name} on site longer. OUT moves with the new place end. Current stay{" "}
@@ -404,7 +404,7 @@ export function CrewRotationDrawer({
               </div>
 
               {replacement ? (
-                <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="border-t border-border pt-4">
                   <p className="font-medium">Another person linked</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {people.find((row) => row.id === replacement.personId)?.name || replacement.personId}
@@ -425,7 +425,7 @@ export function CrewRotationDrawer({
                   )}
                 </div>
               ) : draft.replacementNeeded === false ? (
-                <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="border-t border-border pt-4">
                   <p className="font-medium">No one else needed</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     This rotation ends with no handoff (extended, or coverage stops).
@@ -439,7 +439,7 @@ export function CrewRotationDrawer({
                   </button>
                 </div>
               ) : (
-                <div className="rounded-xl border border-border bg-muted/20 p-4">
+                <div className="border-t border-border pt-4">
                   <p className="font-medium">Add another person</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Bring someone else in when this rotation ends.
@@ -774,7 +774,7 @@ function MovesPanel({
       {suggested.map((row) => (
         <div
           key={`${row.fromSite}-${row.toSite}-${row.date}`}
-          className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-violet-300 bg-violet-50/60 px-3 py-2.5"
+          className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-border bg-transparent px-3 py-2.5"
         >
           <div>
             <p className="font-semibold">
