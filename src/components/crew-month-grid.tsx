@@ -62,6 +62,12 @@ import { returnWindowFromStayDay } from "@/lib/crew-month-gestures";
 import { flightPlaceOnDay } from "@/lib/crew-routes";
 import type { FlightBook } from "@/lib/crew-flights";
 import {
+  captionFromSheetRoute,
+  journeyDayCaption,
+  segmentsForPersonDay,
+} from "@/lib/crew-journey-legs";
+import { stayNoteBarLayout } from "@/lib/crew-stay-notes";
+import {
   stopoverDatesFor,
   stopoverOnDay,
   travelPlanForStay,
@@ -375,18 +381,21 @@ const MonthRow = memo(function MonthRow({
   const journeyLine = dynamicJourneyLine(person, stopoverBook, flightBook, year);
   // Stay notes are written once across the whole stay (not squeezed into one box).
   const yearStart = dayMeta[0]?.iso || `${year}-01-01`;
-  const stayNotes: { key: string; start: number; span: number; note: string }[] = [];
-  for (const stint of person.stints || []) {
+  const stayNotes = (person.stints || []).flatMap((stint) => {
     const out = stint.out || scheduleYearOutExclusive(year);
     const plan = roster ? findRotationPlanAt(roster, person.id, stint.from) : null;
     const note =
       getStayNote(roster, person.id, stint.from, out) ||
       (plan && plan.from === stint.from ? plan.note || "" : "");
-    if (!note) continue;
-    const start = Math.max(0, daysBetween(yearStart, stint.from));
-    const end = Math.min(dayMeta.length, daysBetween(yearStart, out));
-    if (end > start) stayNotes.push({ key: `${stint.from}|${out}`, start, span: end - start, note });
-  }
+    const bar = stayNoteBarLayout({
+      yearStart,
+      dayCount: dayMeta.length,
+      stayFrom: stint.from,
+      stayOutExclusive: out,
+      note: note || "",
+    });
+    return bar ? [bar] : [];
+  });
   // Notes on dates the coordinator picked: a thin amber line over those days, text at its start.
   const dateNoteBars = dateNotesFor(roster, person.id).flatMap((row) => {
     const start = Math.max(0, daysBetween(yearStart, row.from));
@@ -436,10 +445,11 @@ const MonthRow = memo(function MonthRow({
         const monthIndex = day.monthIndex;
         const monthStartDay = day.monthStartDay;
         const dayPlan = site ? (roster ? findRotationPlanAt(roster, person.id, iso) : null) : null;
-        const covering = site ? stintCovering(person, iso) : null;
+        const coveringStay = stintCovering(person, iso);
+        const covering = site ? coveringStay : null;
         // One IN (first day of stay) and one OUT (last day), never mid-stay doubles.
         // A stay can end on a travel day (e.g. IQA, then YOW on the way home): OUT goes on that last box.
-        const stayForOut = covering || (hub ? stintCovering(person, iso) : null);
+        const stayForOut = covering || (hub ? coveringStay : null);
         const stayLastDay =
           stayForOut?.out && stayForOut.out.length >= 10
             ? addDays(stayForOut.out, -1)
@@ -494,9 +504,30 @@ const MonthRow = memo(function MonthRow({
               )
             : "";
         const bookedTravel = journey || journeyForPerson(flightBook, person.id, "return");
-        const sheetRoute = hub ? travelSegmentOnDay(person, iso)?.route || "" : "";
+        const sheetLeg = travelSegmentOnDay(person, iso);
+        const sheetRoute = sheetLeg?.route || "";
+        const sheetPiece = (coveringStay?.segments || []).find(
+          (piece) => piece.from <= iso && iso < piece.out,
+        );
+        const daySegments = segmentsForPersonDay(
+          flightBook?.bookings || [],
+          person.id,
+          iso,
+          coveringStay?.from || null,
+          coveringStay?.out || null,
+        );
+        const legCaption =
+          journeyDayCaption(daySegments, iso, { siteOnIso: site }) ||
+          (sheetRoute
+            ? captionFromSheetRoute(sheetRoute, iso, {
+                siteOnIso: site,
+                departDate: sheetPiece?.from,
+                arriveDate: sheetPiece ? addDays(sheetPiece.out, -1) : undefined,
+              })
+            : "") ||
+          (hub && !site ? `→ ${travelBoxCode(hub)}` : "");
         const travelDisplay = journeyDisplayNames(
-          sheetRoute || bookedTravel || stayTravel || journeyLine || "",
+          sheetRoute || bookedTravel || stayTravel || journeyLine || legCaption || "",
           travelHubs,
         );
         const hubJourneyTitle = travelDisplay
@@ -515,7 +546,7 @@ const MonthRow = memo(function MonthRow({
                 : hub
                   ? `${stintEnd ? "OUT · " : ""}${hubJourneyTitle}`
                   : site
-                    ? `${stintEnd ? "OUT · " : ""}${assignmentRole ? `${assignmentRole} · ` : ""}${work ? `${work} · ` : ""}${siteLabel(site)} · ${formatMedium(iso)}${stayNote ? ` · ${stayNote}` : ""}${travelDisplay ? ` · Travel ${travelDisplay}` : ""}${covering?.unsure ? " · No site code on the Excel for this stay, please confirm" : ""}`
+                    ? `${stintEnd ? "OUT · " : ""}${assignmentRole ? `${assignmentRole} · ` : ""}${work ? `${work} · ` : ""}${siteLabel(site)} · ${formatMedium(iso)}${stayNote ? ` · ${stayNote}` : ""}${legCaption ? ` · ${legCaption}` : travelDisplay ? ` · Travel ${travelDisplay}` : ""}${covering?.unsure ? " · No site code on the Excel for this stay, please confirm" : ""}`
                     : `Empty · ${formatMedium(iso)} · drag ${paintBrush.kind === "site" ? paintBrush.code : `Travel ${paintBrush.hub}`} · IN → OUT`
             }
             onClick={() => actions.click(person.id, iso)}
@@ -572,20 +603,13 @@ const MonthRow = memo(function MonthRow({
               staySelected && "ring-2 ring-inset ring-stone-900/70",
             )}
           >
-            {travelOnStay && hubMark ? (
-              <span
-                className="absolute bottom-0.5 left-0.5 z-[2] rounded bg-stone-900/85 px-0.5 text-[8px] font-bold leading-tight text-white"
-                title={travelHubLabel(hubMark, travelHubs)}
-              >
-                {travelBoxCode(hubMark).slice(0, 4)}
-              </span>
-            ) : null}
             <span
               className={cn(
                 "relative z-[1] block max-w-full px-0.5",
-                hub && !paintPreview && !flight && !returnWindow && !stintEnd
+                (hub || legCaption) && !paintPreview && !flight && !returnWindow && !stintEnd
                   ? "whitespace-normal text-center text-[8px] font-bold leading-[1.05]"
                   : "truncate",
+                legCaption && (site || hub) && "pb-3",
               )}
             >
               {paintPreview
@@ -604,25 +628,43 @@ const MonthRow = memo(function MonthRow({
                     ? "OUT"
                     : dayCount
                       ? dayCount
-                      : hub && !site
+                      : hub && !site && !legCaption
                         ? travelBoxCode(hub)
                         : ""}
             </span>
+            {legCaption && !paintPreview && !returnWindow ? (
+              <span
+                className={cn(
+                  "absolute inset-x-0 bottom-0.5 z-[2] px-0.5 text-center text-[7px] font-bold leading-tight tracking-tight",
+                  site ? "text-white/95 drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]" : "text-white",
+                )}
+                title={legCaption}
+              >
+                <span className="block truncate">{legCaption}</span>
+              </span>
+            ) : travelOnStay && hubMark ? (
+              <span
+                className="absolute bottom-0.5 left-0.5 z-[2] rounded bg-stone-900/85 px-0.5 text-[8px] font-bold leading-tight text-white"
+                title={travelHubLabel(hubMark, travelHubs)}
+              >
+                {travelBoxCode(hubMark).slice(0, 4)}
+              </span>
+            ) : null}
           </div>
         );
       })}
       {stayNotes.map((row) => (
         <div
           key={row.key}
-          className="pointer-events-none absolute inset-y-0 z-[3] flex items-center px-1"
+          className="pointer-events-none absolute inset-x-0 inset-y-0 z-[3] flex items-center"
           style={{ left: `${row.start * dayColRem}rem`, width: `${row.span * dayColRem}rem` }}
         >
-          {/* Sticky: stays in view at the left edge of the visible part of a long stay. */}
+          {/* Full-stay banner so the note reads across the coloured boxes, not one day. */}
           <span
             title={row.note}
-            className="sticky left-1 max-w-full truncate rounded bg-white/90 px-1.5 py-px text-[10px] font-semibold leading-tight text-stone-900 shadow-sm"
+            className="mx-0.5 flex h-[1.15rem] w-[calc(100%-0.25rem)] items-center overflow-hidden rounded bg-white/90 px-1.5 text-[10px] font-semibold leading-tight text-stone-900 shadow-sm"
           >
-            {row.note}
+            <span className="block w-full truncate">{row.note}</span>
           </span>
         </div>
       ))}
@@ -669,6 +711,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   moveOnDay,
   onBookMove,
   onRemoveRotation,
+  onClearStayBooking,
   onSetRotationNote,
   onSetStayNote,
   onSetDateNote,
@@ -727,6 +770,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onBookMove?: (personId: string, iso: string) => void;
   /** Delete an app-painted placement (NAV-07). */
   onRemoveRotation?: (personId: string, planId: string) => void;
+  /** One-shot clear: flights + hotels + stopovers for this stay. */
+  onClearStayBooking?: (personId: string, stayFrom: string, stayOutExclusive: string | null) => void;
   /** Update stay note on an app plan (NAV-08). */
   onSetRotationNote?: (personId: string, planId: string, note: string) => void;
   /** Update stay note on sheet or app stays by date range (NAV-08). */
@@ -866,6 +911,15 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     setFlash(message);
     flashTimer.current = setTimeout(() => setFlash(null), 2000);
   }
+
+  useEffect(() => {
+    function onSaved(event: Event) {
+      const detail = (event as CustomEvent<string>).detail;
+      if (typeof detail === "string" && detail) showFlash(detail);
+    }
+    window.addEventListener("crew-flash", onSaved as EventListener);
+    return () => window.removeEventListener("crew-flash", onSaved as EventListener);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -1334,15 +1388,40 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   }
 
   /** Whole-stay note for the selected stay (empty text clears it). */
-  function saveWholeStayNote(text: string) {
-    if (!staySelection) return;
+  function saveWholeStayNote(
+    text: string,
+    target?: { personId: string; from: string; out: string; planId?: string },
+  ) {
+    const stay = target || staySelection;
+    if (!stay) return;
     const next = text.slice(0, MAX_STAY_NOTE_CHARS).trim();
-    if (onSetStayNote) onSetStayNote(staySelection.personId, staySelection.from, staySelection.out, next);
-    else if (staySelection.planId && onSetRotationNote) onSetRotationNote(staySelection.personId, staySelection.planId, next);
+    if (onSetStayNote) onSetStayNote(stay.personId, stay.from, stay.out, next);
+    else if (stay.planId && onSetRotationNote) onSetRotationNote(stay.personId, stay.planId, next);
     else return;
-    setStaySelection({ ...staySelection, note: next });
+    if (staySelection && staySelection.personId === stay.personId && staySelection.from === stay.from) {
+      setStaySelection({ ...staySelection, note: next, out: stay.out, planId: stay.planId || staySelection.planId });
+    }
     setNoteDraft(next);
     showFlash(next ? `Note saved for the whole stay · ${next}` : "Note removed");
+  }
+
+  /** Stay under the open cell menu (so Add note can default to whole-stay). */
+  function stayUnderCellMenu() {
+    if (!cellMenu?.hasSite) return null;
+    const person = peopleById.get(cellMenu.personId);
+    const stint = person ? stintCovering(person, cellMenu.iso) : null;
+    if (!stint) return null;
+    const out = stint.out || scheduleYearOutExclusive(year);
+    const plan = roster ? findRotationPlanAt(roster, cellMenu.personId, stint.from) : null;
+    const note = getStayNote(roster, cellMenu.personId, stint.from, out) || plan?.note || "";
+    return {
+      personId: cellMenu.personId,
+      from: stint.from,
+      out,
+      last: addDays(out, -1),
+      planId: plan?.id || "",
+      note,
+    };
   }
 
   // Resolve real plan id / note after roster catches up from place or note save.
@@ -1571,6 +1650,13 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       // Click opens; drag extends the stay (not yellow, yellow is right-click).
       dragRef.current = { personId, anchor: iso, start: iso, end: iso, mode: "open", moved: false };
       setDraft(null);
+      return;
+    }
+
+    // Click an existing travel box again to clear it (same as right-click → Clear travel).
+    const paintedHub = stopoverBook ? stopoverOnDay(stopoverBook, personId, iso) : null;
+    if (paintedHub && onToggleStopover) {
+      applyStopover(personId, iso, paintedHub);
       return;
     }
 
@@ -1993,7 +2079,6 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                     </div>
                     {visiblePeople.map((person) => {
                       const category = crewCategoryFor(person);
-                      const journeyLine = dynamicJourneyLine(person, stopoverBook, flightBook, year);
                       return (
                         <div
                           key={`${person.id}::${group.role}`}
@@ -2053,14 +2138,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                                   </span>
                                 ) : null}
                               </span>
-                              {journeyLine ? (
-                                <span
-                                  className="mt-0.5 block truncate rounded bg-stone-100 px-1 py-0.5 text-xs font-semibold tracking-tight text-stone-800"
-                                  title={journeyLine}
-                                >
-                                  {journeyLine}
-                                </span>
-                              ) : (person.roles?.length ?? 0) > 1 ? (
+                              {(person.roles?.length ?? 0) > 1 ? (
                                 <span className="block truncate text-xs text-muted-foreground">
                                   {roleLabel(person)}
                                 </span>
@@ -2459,6 +2537,29 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               </button>
             ) : null}
 
+            {cellMenu.hasSite && onClearStayBooking ? (
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium text-rose-800 hover:bg-rose-50"
+                onClick={() => {
+                  const person = peopleById.get(cellMenu.personId);
+                  const stint = person ? stintCovering(person, cellMenu.iso) : null;
+                  if (stint) {
+                    const ok = window.confirm(
+                      `Clear booking for ${person?.name || "this stay"}?\nFlights, hotels and travel stopovers for this stay will be removed.`,
+                    );
+                    if (!ok) return;
+                    onClearStayBooking(cellMenu.personId, stint.from, stint.out);
+                    showFlash("Cleared booking · flights, hotels & travel");
+                  }
+                  setCellMenu(null);
+                }}
+              >
+                Clear booking
+              </button>
+            ) : null}
+
             {cellMenu.plan && onRemoveRotation ? (
               <button
                 type="button"
@@ -2473,97 +2574,139 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               </button>
             ) : null}
 
-            {onSetDateNote ? (
-              dateNoteDraft ? (
-                <DateNoteEditor
-                  draft={dateNoteDraft}
-                  onChange={setDateNoteDraft}
-                  onCancel={() => setDateNoteDraft(null)}
-                  stayRange={
-                    cellMenu.hasSite && staySelection && (onSetStayNote || onSetRotationNote)
-                      ? { from: staySelection.from, last: addDays(staySelection.out, -1) }
-                      : null
-                  }
-                  onSave={() => {
-                    const trimmed = dateNoteDraft.note.trim();
-                    if (dateNoteDraft.wholeStay) {
-                      saveWholeStayNote(trimmed);
-                      // A note that was on some dates and is now for the whole stay: move it.
-                      if (dateNoteDraft.id) onSetDateNote({ ...dateNoteDraft, note: "", personId: cellMenu.personId });
-                      setDateNoteDraft(null);
-                      setCellMenu(null);
-                      return;
-                    }
-                    if (dateNoteDraft.wasWholeStay) saveWholeStayNote("");
-                    onSetDateNote({ ...dateNoteDraft, personId: cellMenu.personId });
-                    showFlash(
-                      trimmed
-                        ? `Note saved · ${formatMedium(dateNoteDraft.from)}${dateNoteDraft.to !== dateNoteDraft.from ? ` to ${formatMedium(dateNoteDraft.to)}` : ""}`
-                        : "Note removed",
+            {onSetDateNote
+              ? (() => {
+                  const menuStay = stayUnderCellMenu();
+                  const canWholeStay = Boolean(menuStay && (onSetStayNote || onSetRotationNote));
+                  if (dateNoteDraft) {
+                    return (
+                      <DateNoteEditor
+                        draft={dateNoteDraft}
+                        onChange={setDateNoteDraft}
+                        onCancel={() => setDateNoteDraft(null)}
+                        stayRange={
+                          canWholeStay && menuStay ? { from: menuStay.from, last: menuStay.last } : null
+                        }
+                        onSave={() => {
+                          const trimmed = dateNoteDraft.note.trim();
+                          if (dateNoteDraft.wholeStay && menuStay) {
+                            saveWholeStayNote(trimmed, menuStay);
+                            // A note that was on some dates and is now for the whole stay: move it.
+                            if (dateNoteDraft.id) {
+                              onSetDateNote({ ...dateNoteDraft, note: "", personId: cellMenu.personId });
+                            }
+                            setDateNoteDraft(null);
+                            setCellMenu(null);
+                            return;
+                          }
+                          if (dateNoteDraft.wasWholeStay && menuStay) saveWholeStayNote("", menuStay);
+                          onSetDateNote({ ...dateNoteDraft, personId: cellMenu.personId });
+                          showFlash(
+                            trimmed
+                              ? `Note saved · ${formatMedium(dateNoteDraft.from)}${dateNoteDraft.to !== dateNoteDraft.from ? ` to ${formatMedium(dateNoteDraft.to)}` : ""}`
+                              : "Note removed",
+                          );
+                          setDateNoteDraft(null);
+                          setCellMenu(null);
+                        }}
+                        onRemove={
+                          dateNoteDraft.wasWholeStay
+                            ? () => {
+                                if (menuStay) saveWholeStayNote("", menuStay);
+                                setDateNoteDraft(null);
+                                setCellMenu(null);
+                              }
+                            : dateNoteDraft.id
+                              ? () => {
+                                  onSetDateNote({
+                                    ...dateNoteDraft,
+                                    note: "",
+                                    personId: cellMenu.personId,
+                                  });
+                                  showFlash("Note removed");
+                                  setDateNoteDraft(null);
+                                  setCellMenu(null);
+                                }
+                              : undefined
+                        }
+                      />
                     );
-                    setDateNoteDraft(null);
-                    setCellMenu(null);
-                  }}
-                  onRemove={
-                    dateNoteDraft.wasWholeStay
-                      ? () => {
-                          saveWholeStayNote("");
-                          setDateNoteDraft(null);
-                          setCellMenu(null);
-                        }
-                      : dateNoteDraft.id
-                      ? () => {
-                          onSetDateNote({ ...dateNoteDraft, note: "", personId: cellMenu.personId });
-                          showFlash("Note removed");
-                          setDateNoteDraft(null);
-                          setCellMenu(null);
-                        }
-                      : undefined
                   }
-                />
-              ) : (
-                <>
-                  {cellMenu.hasSite && (staySelection?.note || cellMenu.plan?.note) ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-muted"
-                      onClick={() =>
-                        setDateNoteDraft({
-                          from: cellMenu.iso,
-                          to: cellMenu.iso,
-                          note: staySelection?.note || cellMenu.plan?.note || "",
-                          wholeStay: true,
-                          wasWholeStay: true,
-                        })
-                      }
-                    >
-                      <span className="h-2 w-2 shrink-0 rounded-full bg-stone-900" />
-                      <span className="min-w-0 truncate">Edit note · {staySelection?.note || cellMenu.plan?.note}</span>
-                    </button>
-                  ) : null}
-                  {dateNotesOn(roster, cellMenu.personId, cellMenu.iso).map((row: DateNote) => (
-                    <button
-                      key={row.id}
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-muted"
-                      onClick={() => setDateNoteDraft({ id: row.id, from: row.from, to: row.to, note: row.note })}
-                    >
-                      <span className="h-2 w-2 shrink-0 rounded-full bg-stone-400" />
-                      <span className="min-w-0 truncate">Edit note · {row.note}</span>
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-muted"
-                    onClick={() => setDateNoteDraft({ from: cellMenu.iso, to: cellMenu.iso, note: "" })}
-                  >
-                    Add note
-                  </button>
-                </>
-              )
+                  const stayNoteText = menuStay?.note || "";
+                  return (
+                    <>
+                      {menuStay && stayNoteText ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-muted"
+                          onClick={() =>
+                            setDateNoteDraft({
+                              from: menuStay.from,
+                              to: menuStay.last,
+                              note: stayNoteText,
+                              wholeStay: true,
+                              wasWholeStay: true,
+                            })
+                          }
+                        >
+                          <span className="h-2 w-2 shrink-0 rounded-full bg-stone-900" />
+                          <span className="min-w-0 truncate">Edit note · {stayNoteText}</span>
+                        </button>
+                      ) : null}
+                      {dateNotesOn(roster, cellMenu.personId, cellMenu.iso).map((row: DateNote) => (
+                        <button
+                          key={row.id}
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-muted"
+                          onClick={() =>
+                            setDateNoteDraft({ id: row.id, from: row.from, to: row.to, note: row.note })
+                          }
+                        >
+                          <span className="h-2 w-2 shrink-0 rounded-full bg-stone-400" />
+                          <span className="min-w-0 truncate">Edit note · {row.note}</span>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-muted"
+                        onClick={() => {
+                          // On a stay, default to whole-stay so notes span (not a 1-day scrap).
+                          if (canWholeStay && menuStay) {
+                            setDateNoteDraft({
+                              from: menuStay.from,
+                              to: menuStay.last,
+                              note: "",
+                              wholeStay: true,
+                            });
+                            return;
+                          }
+                          setDateNoteDraft({ from: cellMenu.iso, to: cellMenu.iso, note: "" });
+                        }}
+                      >
+                        Add note
+                      </button>
+                    </>
+                  );
+                })()
+              : null}
+
+            {onToggleStopover &&
+            stopoverBook &&
+            stopoverOnDay(stopoverBook, cellMenu.personId, cellMenu.iso) ? (
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium text-rose-800 hover:bg-rose-50"
+                onClick={() => {
+                  const hub = stopoverOnDay(stopoverBook, cellMenu.personId, cellMenu.iso);
+                  if (hub) applyStopover(cellMenu.personId, cellMenu.iso, hub);
+                }}
+              >
+                Clear travel
+              </button>
             ) : null}
 
             {onToggleStopover ? (

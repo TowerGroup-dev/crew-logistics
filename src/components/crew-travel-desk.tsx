@@ -1,12 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useMemo, useState } from "react";
 import { BedDouble, Car, Plane, PlaneLanding, PlaneTakeoff, Repeat } from "lucide-react";
 import type { CrewOpsBook } from "@/lib/crew-ops";
 import { flightStatusLabel, type FlightBook, type FlightBooking, type FlightDirection } from "@/lib/crew-flights";
 import { lastStartAirport, loadRoutes, routeAirports, routeBetweenSites } from "@/lib/crew-routes";
-import { ASSUMED_PNR, travelIsBooked, type RotationBook, type RotationTravel } from "@/lib/crew-rotations";
-import { movesOnCalendar } from "@/lib/crew-site-days";
+import {
+  ASSUMED_PNR,
+  movesFromStint,
+  travelIsBooked,
+  type CrewRotation,
+  type RotationBook,
+  type RotationTravel,
+} from "@/lib/crew-rotations";
 import { siteLabel, type CrewPerson, type CrewSnapshot } from "@/lib/crew-schedule";
 import { formatJourneyPath } from "@/lib/crew-travel-hubs";
 import { addDays, daysBetween, formatMedium } from "@/lib/dates";
@@ -69,30 +75,6 @@ function bookingFromTravel(travel: RotationTravel, personId: string, date: strin
   };
 }
 
-/** The trip on the stay itself (drawer → Travel), for the stay that starts or ends on this day. */
-function matchRotation(rotationBook: RotationBook | undefined, personId: string, direction: FlightDirection, date: string) {
-  if (!rotationBook) return null;
-  const rotation = rotationBook.rotations.find(
-    (row) =>
-      row.personId === personId &&
-      (direction === "outbound" ? row.plannedIn === date : addDays(row.plannedOut, -1) === date),
-  );
-  if (!rotation) return null;
-  return bookingFromTravel(direction === "outbound" ? rotation.outbound : rotation.returnTravel, personId, date);
-}
-
-/** The booking for this trip: same direction, within 3 days of the travel day. */
-function matchBooking(flightBook: FlightBook, personId: string, direction: FlightDirection, date: string) {
-  const near = (iso: string | null | undefined) => Boolean(iso) && Math.abs(daysBetween(date, iso!)) <= 3;
-  return (
-    flightBook.bookings.find((row) => {
-      if (row.personId !== personId || row.direction !== direction || row.status === "cancelled") return false;
-      const { first, last } = tripDates(row);
-      return near(row.rotationDate) || near(direction === "outbound" ? last : first);
-    }) ?? null
-  );
-}
-
 /** Every flight someone needs between `from` and `to`: going in, coming home, and camp-to-camp moves. */
 function tripsBetween(
   people: CrewPerson[],
@@ -101,13 +83,41 @@ function tripsBetween(
   from: string,
   to: string,
 ) {
+  // Index once — avoid scanning all bookings/rotations per stint edge.
+  const rotationsByPerson = new Map<string, CrewRotation[]>();
+  for (const rotation of rotationBook?.rotations || []) {
+    const list = rotationsByPerson.get(rotation.personId);
+    if (list) list.push(rotation);
+    else rotationsByPerson.set(rotation.personId, [rotation]);
+  }
+  const bookingsByPerson = new Map<string, FlightBooking[]>();
+  for (const booking of flightBook.bookings) {
+    if (booking.status === "cancelled") continue;
+    const list = bookingsByPerson.get(booking.personId);
+    if (list) list.push(booking);
+    else bookingsByPerson.set(booking.personId, [booking]);
+  }
+
   const find = (personId: string, direction: FlightDirection, date: string) => {
-    const onStay = matchRotation(rotationBook, personId, direction, date);
-    const record = matchBooking(flightBook, personId, direction, date);
+    const near = (iso: string | null | undefined) => Boolean(iso) && Math.abs(daysBetween(date, iso!)) <= 3;
+    const rotations = rotationsByPerson.get(personId) || [];
+    const rotation = rotations.find((row) =>
+      direction === "outbound" ? row.plannedIn === date : addDays(row.plannedOut, -1) === date,
+    );
+    const onStay = rotation
+      ? bookingFromTravel(direction === "outbound" ? rotation.outbound : rotation.returnTravel, personId, date)
+      : null;
+    const record =
+      (bookingsByPerson.get(personId) || []).find((row) => {
+        if (row.direction !== direction) return false;
+        const { first, last } = tripDates(row);
+        return near(row.rotationDate) || near(direction === "outbound" ? last : first);
+      }) ?? null;
     // A real ticket wins over a half-filled trip.
     if (onStay && onStay.status !== "pending_booking") return onStay;
     return record || onStay;
   };
+
   const trips: Trip[] = [];
   const inWindow = (iso: string) => iso >= from && iso <= to;
   for (const person of people) {
@@ -138,18 +148,22 @@ function tripsBetween(
           booking: find(person.id, "return", outDay),
         });
       }
-      // Moves between sites inside one stay (e.g. IQA → POND): saved on the stay, plus any the calendar shows.
-      const rotation = rotationBook?.rotations.find((row) => row.personId === person.id && row.plannedIn === stint.from);
+      // Camp-to-camp moves: saved travel first, else segment list (not a day-by-day walk).
+      const rotation = (rotationsByPerson.get(person.id) || []).find((row) => row.plannedIn === stint.from);
       const saved = rotation?.moves ?? [];
-      const stayEnd = stint.out || `${Number(stint.from.slice(0, 4)) + 1}-01-01`;
-      const fromExcel = movesOnCalendar(person, stint.from, stayEnd).filter(
+      const fromSheet = movesFromStint(stint).filter(
         (row) =>
           !saved.some(
             (move) =>
-              move.fromSite === row.fromSite && move.toSite === row.toSite && Math.abs(daysBetween(move.date, row.date)) <= 3,
+              move.fromSite === row.fromSite &&
+              move.toSite === row.toSite &&
+              Math.abs(daysBetween(move.date, row.date)) <= 3,
           ),
       );
-      const allMoves: { fromSite: string; toSite: string; date: string; travel?: RotationTravel }[] = [...saved, ...fromExcel];
+      const allMoves: { fromSite: string; toSite: string; date: string; travel?: RotationTravel }[] = [
+        ...saved,
+        ...fromSheet,
+      ];
       for (const move of allMoves) {
         if (!inWindow(move.date)) continue;
         trips.push({
@@ -195,10 +209,19 @@ export function CrewTravelDesk({
   const [onlyOpen, setOnlyOpen] = useState(false);
   const routes = useMemo(() => loadRoutes(), []);
   const people = useMemo(() => rows.map((row) => row.person), [rows]);
+  const deferredPeople = useDeferredValue(people);
+  const deferredWindow = useDeferredValue(windowDays);
 
   const trips = useMemo(
-    () => tripsBetween(people, flightBook, rotationBook, addDays(today, -2), addDays(today, windowDays)),
-    [people, flightBook, rotationBook, today, windowDays],
+    () =>
+      tripsBetween(
+        deferredPeople,
+        flightBook,
+        rotationBook,
+        addDays(today, -2),
+        addDays(today, deferredWindow),
+      ),
+    [deferredPeople, flightBook, rotationBook, today, deferredWindow],
   );
   const notBooked = trips.filter((trip) => !trip.booking || trip.booking.status === "pending_booking");
   const shown = onlyOpen ? notBooked : trips;
@@ -228,7 +251,7 @@ export function CrewTravelDesk({
               <button
                 key={option.days}
                 type="button"
-                onClick={() => setWindowDays(option.days)}
+                onClick={() => startTransition(() => setWindowDays(option.days))}
                 aria-pressed={windowDays === option.days}
                 className={cn(
                   "rounded-md px-3 py-1 text-sm font-medium transition",

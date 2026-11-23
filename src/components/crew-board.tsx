@@ -56,7 +56,9 @@ import {
   loadRoster,
   mergePeople,
   mergeProjects,
-  removeManualEmployee,
+  employmentStatusFor,
+  employmentStatusLabel,
+  removePerson,
   removeRotationPlan,
   saveRoster,
   setEmploymentStatus,
@@ -105,6 +107,7 @@ import {
   type RotationBook,
 } from "@/lib/crew-rotations";
 import { autoSeedTravelOps } from "@/lib/crew-auto-ops";
+import { clearStayBooking } from "@/lib/crew-clear-booking";
 import {
   clearFlightsForPerson,
   loadFlights,
@@ -302,6 +305,56 @@ export function CrewBoard({
   useEffect(() => {
     setSeenViews((current) => (current[boardView] ? current : { ...current, [boardView]: true }));
   }, [boardView]);
+
+  // Prefetch heavy tabs one-by-one while idle (not all at once — that freezes the UI).
+  useEffect(() => {
+    if (!hydrated) return;
+    const warm: CrewBoardView[] = ["travel", "month", "year", "list", "employees", "accommodation"];
+    let index = 0;
+    let idleId: number | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
+
+    function scheduleNext() {
+      if (cancelled || index >= warm.length) return;
+      const kick = () => {
+        if (cancelled) return;
+        const view = warm[index++]!;
+        startTransition(() => {
+          setSeenViews((current) => (current[view] ? current : { ...current, [view]: true }));
+        });
+        scheduleNext();
+      };
+      if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        idleId = window.requestIdleCallback(kick, { timeout: 1800 });
+      } else {
+        timeoutId = setTimeout(kick, 400);
+      }
+    }
+
+    scheduleNext();
+    return () => {
+      cancelled = true;
+      if (idleId != null && typeof window !== "undefined" && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId != null) clearTimeout(timeoutId);
+    };
+  }, [hydrated]);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s") return;
+      event.preventDefault();
+      // Local books already persist on each change; Ctrl+S confirms that to the user.
+      saveCrewOps(opsBook);
+      saveRoster(roster);
+      saveRotations(rotationBook);
+      window.dispatchEvent(new CustomEvent("crew-flash", { detail: "Saved" }));
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [opsBook, roster, rotationBook]);
 
   function captureHistory() {
     if (!hydrated || skipHistoryRef.current) return;
@@ -1154,6 +1207,38 @@ export function CrewBoard({
               onRemoveRotation={(personId, planId) =>
                 patchRoster((current) => removeRotationPlan(current, personId, planId), { history: true })
               }
+              onClearStayBooking={(personId, stayFrom, stayOutExclusive) => {
+                captureHistory();
+                const result = clearStayBooking({
+                  personId,
+                  stayFrom,
+                  stayOutExclusive,
+                  flightBook,
+                  stopoverBook,
+                  rotationBook,
+                });
+                setFlightBook(result.flightBook);
+                saveFlights(result.flightBook);
+                setStopoverBook(result.stopoverBook);
+                saveStopovers(result.stopoverBook);
+                setRotationBook(result.rotationBook);
+                saveRotations(result.rotationBook);
+                setOpsBook((prev) => {
+                  const next = {
+                    ...prev,
+                    [personId]: syncOpsFromFlights(prev, result.flightBook, personId),
+                  };
+                  saveCrewOps(next);
+                  return next;
+                });
+                const person = overview.rows.find((row) => row.person.id === personId)?.person;
+                logActivity({
+                  kind: "stay_place",
+                  personId,
+                  personName: person?.name,
+                  text: `${person?.name || personId}: cleared booking (${result.cleared.flights} flights, ${result.cleared.stopoverDays} travel days)`,
+                });
+              }}
               onSetRotationNote={(personId, planId, note) =>
                 patchRoster((current) => setRotationPlanNote(current, personId, planId, note), {
                   history: true,
@@ -1427,87 +1512,120 @@ export function CrewBoard({
                 </div>
               </div>
             ) : null}
-            {rows.length === 0 ? (
-              <p className="px-4 py-8 text-sm text-muted-foreground">No crew match these filters.</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {rows.map((row) => {
-                  const isActive = row.person.active !== false;
-                  // Only true hires (not sheet people with a profile overlay) can be deleted.
-                  const canDelete = row.person.manual === true;
-                  return (
-                    <li key={row.person.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => openEmployeeEdit(row.person.id)}
-                        className="min-w-0 flex-1 text-left hover:opacity-80"
-                      >
-                        <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                          <span>{row.person.name}</span>
-                          {row.person.provisional ? (
-                            <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[0.625rem] font-semibold tracking-wide text-muted-foreground uppercase">
-                              Draft
-                            </span>
-                          ) : null}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{roleLabel(row.person)}</p>
-                      </button>
-                      <span
-                        className={cn(
-                          "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-                          isActive ? "bg-slate-100 text-slate-800" : "bg-stone-200 text-stone-700",
-                        )}
-                      >
-                        {isActive ? "Active" : "Inactive"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => openEmployeeEdit(row.person.id)}
-                        className="h-8 rounded-lg border border-input px-3 text-xs font-medium hover:bg-muted"
-                      >
-                        Edit info
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(row.person.id)}
-                        className="h-8 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90"
-                      >
-                        {isActive ? "Add rotation" : "Set active + add rotation"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
+            {(() => {
+              const activeRows = rows.filter((row) => row.person.active !== false);
+              const inactiveRows = rows.filter((row) => row.person.active === false);
+              function employeeRow(row: (typeof rows)[number], inactive: boolean) {
+                const status = employmentStatusFor(roster, row.person.id);
+                return (
+                  <li
+                    key={row.person.id}
+                    className={cn(
+                      "flex flex-wrap items-center gap-3 px-4 py-3",
+                      inactive && "bg-stone-50/80 opacity-90",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openEmployeeEdit(row.person.id)}
+                      className="min-w-0 flex-1 text-left hover:opacity-80"
+                    >
+                      <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                        <span className={cn(inactive && "text-stone-600")}>{row.person.name}</span>
+                        {row.person.provisional ? (
+                          <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[0.625rem] font-semibold tracking-wide text-muted-foreground uppercase">
+                            Draft
+                          </span>
+                        ) : null}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{roleLabel(row.person)}</p>
+                    </button>
+                    <label className="grid gap-0.5 text-[0.65rem] text-muted-foreground">
+                      <span className="sr-only">Employment</span>
+                      <select
+                        value={status === "inactive" ? "pause" : status}
+                        onChange={(event) =>
                           patchRoster((current) =>
-                            setEmploymentStatus(current, row.person.id, isActive ? "inactive" : "active"),
+                            setEmploymentStatus(current, row.person.id, event.target.value as EmploymentStatus),
                           )
                         }
-                        className="h-8 rounded-lg border border-input px-3 text-xs font-medium hover:bg-muted"
+                        className={cn(
+                          "h-8 rounded-lg border border-input bg-card px-2 text-xs font-medium",
+                          inactive && "bg-stone-100 text-stone-700",
+                        )}
                       >
-                        {isActive ? "Set inactive" : "Set active"}
-                      </button>
-                      {canDelete ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const ok = window.confirm(
-                              `Delete ${row.person.name}? This removes the hire and any placements painted for them.`,
-                            );
-                            if (!ok) return;
-                            captureHistory();
-                            patchRoster((current) => removeManualEmployee(current, row.person.id));
-                            purgePersonSideState(row.person.id);
-                            patchScheduleView((current) => showPerson(current, row.person.id));
-                          }}
-                          className="h-8 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-900 hover:bg-rose-100"
-                        >
-                          Delete
-                        </button>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+                        <option value="active">Active</option>
+                        <option value="pause">Pause</option>
+                        <option value="terminated">Terminated</option>
+                        <option value="resignation">Resignation</option>
+                        <option value="retirement">Retirement</option>
+                      </select>
+                    </label>
+                    <span
+                      className={cn(
+                        "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+                        inactive ? "bg-stone-200 text-stone-700" : "bg-slate-100 text-slate-800",
+                      )}
+                    >
+                      {employmentStatusLabel(status)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openEmployeeEdit(row.person.id)}
+                      className="h-8 rounded-lg border border-input px-3 text-xs font-medium hover:bg-muted"
+                    >
+                      Edit info
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (inactive) {
+                          patchRoster((current) => setEmploymentStatus(current, row.person.id, "active"));
+                        }
+                        setSelectedId(row.person.id);
+                      }}
+                      className="h-8 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90"
+                    >
+                      {inactive ? "Set active + add rotation" : "Add rotation"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ok = window.confirm(
+                          `Delete ${row.person.name} permanently? This removes them from Employees and any placements painted for them.`,
+                        );
+                        if (!ok) return;
+                        captureHistory();
+                        patchRoster((current) => removePerson(current, row.person.id));
+                        purgePersonSideState(row.person.id);
+                        patchScheduleView((current) => showPerson(current, row.person.id));
+                      }}
+                      className="h-8 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-900 hover:bg-rose-100"
+                    >
+                      Delete
+                    </button>
+                  </li>
+                );
+              }
+              if (!activeRows.length && !inactiveRows.length) {
+                return <p className="px-4 py-8 text-sm text-muted-foreground">No crew match these filters.</p>;
+              }
+              return (
+                <div>
+                  <ul className="divide-y divide-border">{activeRows.map((row) => employeeRow(row, false))}</ul>
+                  {inactiveRows.length ? (
+                    <details className="border-t border-border">
+                      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-stone-600 hover:bg-muted/40">
+                        See more · {inactiveRows.length} inactive
+                      </summary>
+                      <ul className="divide-y divide-border border-t border-border">
+                        {inactiveRows.map((row) => employeeRow(row, true))}
+                      </ul>
+                    </details>
+                  ) : null}
+                </div>
+              );
+            })()}
           </div>
           </KeepAlive>
         ) : null}
@@ -1705,6 +1823,7 @@ export function CrewBoard({
               onClose={() => setSelectedId(null)}
               onChange={(recipe) => patchOps(selected.person.id, recipe)}
               onSaveFlight={saveFlightBooking}
+              employmentStatus={employmentStatusFor(roster, selected.person.id)}
               onEmploymentStatus={(status) =>
                 patchRoster((current) => setEmploymentStatus(current, selected.person.id, status))
               }
@@ -1792,6 +1911,7 @@ function PersonProfile({
   onClose,
   onChange,
   onSaveFlight,
+  employmentStatus = "active",
   onEmploymentStatus,
   onAddRotation,
   onAddRotations,
@@ -1806,6 +1926,7 @@ function PersonProfile({
   onClose: () => void;
   onChange: (recipe: (current: CrewPersonOps) => CrewPersonOps) => void;
   onSaveFlight: (booking: FlightBooking) => void;
+  employmentStatus?: EmploymentStatus;
   onEmploymentStatus: (status: EmploymentStatus) => void;
   onAddRotation: (input: { site: string; from: string; out: string; role: string }) => void;
   onAddRotations?: (inputs: { site: string; from: string; out: string; role: string }[]) => void;
@@ -1872,7 +1993,7 @@ function PersonProfile({
                 isActive ? "bg-slate-100 text-slate-800" : "bg-stone-200 text-stone-700",
               )}
             >
-              {isActive ? "Active" : "Inactive"}
+              {employmentStatusLabel(employmentStatus)}
             </span>
           </div>
         </div>
@@ -1893,16 +2014,20 @@ function PersonProfile({
           <p className="mt-1 text-sm">
             {isActive
               ? "Included in live ops, travel, and action lists."
-              : "Hidden from live ops until set active again."}
+              : "Under See more on Employees until set active again."}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => onEmploymentStatus(isActive ? "inactive" : "active")}
+        <select
+          value={employmentStatus === "inactive" ? "pause" : employmentStatus}
+          onChange={(event) => onEmploymentStatus(event.target.value as EmploymentStatus)}
           className="h-9 rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted"
         >
-          {isActive ? "Set inactive" : "Set active"}
-        </button>
+          <option value="active">Active</option>
+          <option value="pause">Pause</option>
+          <option value="terminated">Terminated</option>
+          <option value="resignation">Resignation</option>
+          <option value="retirement">Retirement</option>
+        </select>
       </section>
 
       <CrewNextRotationForm

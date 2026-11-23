@@ -4,6 +4,8 @@
  */
 
 import {
+  ASSUMED_BOOKED_BEFORE,
+  BOOK_BEFORE_ARRIVAL_DAYS,
   buildKatrinaChecklist,
   inclusiveOut,
   type ChecklistItem,
@@ -13,12 +15,14 @@ import {
   type RotationTravel,
 } from "@/lib/crew-rotations";
 import { bookingNeedsAttention, opsFor, type CrewOpsBook } from "@/lib/crew-ops";
-import {
-  isOffRotation,
-  roleLabel,
-  type CrewSnapshot,
-} from "@/lib/crew-schedule";
+import { roleLabel, type CrewSnapshot } from "@/lib/crew-schedule";
 import { addDays, daysBetween, formatMedium, weekBounds } from "@/lib/dates";
+
+export { ASSUMED_BOOKED_BEFORE, BOOK_BEFORE_ARRIVAL_DAYS };
+
+export function isAssumedBookedDone(iso: string | null | undefined) {
+  return Boolean(iso && iso < ASSUMED_BOOKED_BEFORE);
+}
 
 export type WeekStoryKind =
   | "arriving"
@@ -27,7 +31,8 @@ export type WeekStoryKind =
   | "move"
   | "here"
   | "flight"
-  | "stay";
+  | "stay"
+  | "confirm";
 
 export type WeekStoryLine = {
   id: string;
@@ -49,16 +54,56 @@ function whenPhrase(iso: string, asOf: string) {
  * Everything happening this week: arrivals, leaves, travel, site moves,
  * who’s still here, and booking gaps tied to those moves.
  */
+/** Tentative arrivals that still need a confirm-before-booking step. */
+export function tentativeConfirmItems(
+  rows: CrewSnapshot[],
+  book: RotationBook,
+  asOf: string,
+): ChecklistItem[] {
+  const items: ChecklistItem[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (row.person.active === false) continue;
+    for (const stint of row.person.stints || []) {
+      if (!stint.tentative || !stint.from) continue;
+      if (isAssumedBookedDone(stint.from)) continue;
+      if (stint.from < asOf) continue;
+      const id = `${row.person.id}:tentative:${stint.from}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const rotation =
+        book.rotations.find((r) => r.personId === row.person.id && r.plannedIn === stint.from) ||
+        latestStartedRotation(book, row.person.id, stint.from);
+      items.push({
+        id,
+        rotationId: rotation?.id || `tentative:${row.person.id}:${stint.from}`,
+        personId: row.person.id,
+        personName: row.person.name,
+        title: `Confirm arrival · ${formatMedium(stint.from)}`,
+        detail: stint.site
+          ? `Tentative at ${stint.site} · book by ${formatMedium(addDays(stint.from, -BOOK_BEFORE_ARRIVAL_DAYS))}`
+          : `Tentative date · book by ${formatMedium(addDays(stint.from, -BOOK_BEFORE_ARRIVAL_DAYS))}`,
+        dueOn: addDays(stint.from, -BOOK_BEFORE_ARRIVAL_DAYS),
+        priority: addDays(stint.from, -BOOK_BEFORE_ARRIVAL_DAYS) <= asOf ? "urgent" : "normal",
+      });
+    }
+  }
+  return items;
+}
+
 export function buildWeekStory({
   rows,
   book,
   asOf,
   opsBook = {},
+  confirmedTentativeIds = new Set<string>(),
 }: {
   rows: CrewSnapshot[];
   book: RotationBook;
   asOf: string;
   opsBook?: CrewOpsBook;
+  /** Checklist ids marked confirmed (tentative:…); those arrivals show in This week. */
+  confirmedTentativeIds?: Set<string>;
 }): { weekStart: string; weekEnd: string; lines: WeekStoryLine[] } {
   const { start: weekStart, end: weekEnd } = weekBounds(asOf);
   const names = new Map(rows.map((row) => [row.person.id, row.person.name]));
@@ -78,8 +123,15 @@ export function buildWeekStory({
     if (!names.has(rotation.personId)) continue;
     const name = nameOf(rotation.personId);
     const ops = opsFor(opsBook, rotation.personId);
+    const tentativeId = `${rotation.personId}:tentative:${rotation.plannedIn}`;
+    const row = rows.find((r) => r.person.id === rotation.personId);
+    const stintTentative = (row?.person.stints || []).some(
+      (stint) => stint.from === rotation.plannedIn && stint.tentative,
+    );
+    // Unconfirmed tentatives stay in To do only; confirmed ones appear here.
+    const showArrival = !stintTentative || confirmedTentativeIds.has(tentativeId);
 
-    if (rotation.plannedIn >= weekStart && rotation.plannedIn <= weekEnd) {
+    if (showArrival && rotation.plannedIn >= weekStart && rotation.plannedIn <= weekEnd) {
       movedThisWeek.add(rotation.personId);
       const when = whenPhrase(rotation.plannedIn, asOf);
       push({
@@ -92,7 +144,7 @@ export function buildWeekStory({
         personId: rotation.personId,
         rotationId: rotation.id,
       });
-      if (bookingNeedsAttention(ops.outboundFlight)) {
+      if (!isAssumedBookedDone(rotation.plannedIn) && bookingNeedsAttention(ops.outboundFlight)) {
         push({
           id: `${rotation.id}:arrive-flight`,
           kind: "flight",
@@ -102,7 +154,7 @@ export function buildWeekStory({
           rotationId: rotation.id,
         });
       }
-      if (bookingNeedsAttention(ops.accommodation)) {
+      if (!isAssumedBookedDone(rotation.plannedIn) && bookingNeedsAttention(ops.accommodation)) {
         push({
           id: `${rotation.id}:arrive-stay`,
           kind: "stay",
@@ -141,79 +193,22 @@ export function buildWeekStory({
     }
   }
 
-  // Sheet events this week: site changes, Out marks, transfers.
+  // Live calendar only — do not invent week lines from old Excel day marks.
   for (const row of rows) {
     if (row.person.active === false) continue;
-    const name = row.person.name;
+    if (row.duty !== "in_transit") continue;
     const rotation = latestStartedRotation(book, row.person.id, asOf);
-    const events = [...(row.person.events || [])].sort((a, b) => a.date.localeCompare(b.date));
-
-    for (let i = 0; i < events.length; i += 1) {
-      const event = events[i]!;
-      if (event.date < weekStart || event.date > weekEnd) continue;
-      const mark = event.mark;
-      const prev = events[i - 1];
-      if (isOffRotation(mark)) {
-        // Covered by rotation leave when possible; still note sheet Out if no leave line.
-        if (!seen.has(`${rotation?.id || row.person.id}:leave`)) {
-          movedThisWeek.add(row.person.id);
-          push({
-            id: `${row.person.id}:event-out-${event.date}`,
-            kind: "leaving",
-            sortDate: event.date,
-            text: `${name} goes Out ${whenPhrase(event.date, asOf)}.`,
-            personId: row.person.id,
-            rotationId: rotation?.id ?? null,
-          });
-        }
-        continue;
-      }
-      const key = mark.toLowerCase();
-      if (
-        key.includes("transfer") ||
-        key === "in" ||
-        key.includes("yf") ||
-        key.includes("yeg") ||
-        key.includes("yk")
-      ) {
-        movedThisWeek.add(row.person.id);
-        push({
-          id: `${row.person.id}:event-travel-${event.date}`,
-          kind: "travelling",
-          sortDate: event.date,
-          text: `${name} is travelling (${mark}) ${whenPhrase(event.date, asOf)}.`,
-          personId: row.person.id,
-          rotationId: rotation?.id ?? null,
-        });
-        continue;
-      }
-      // Site / camp mark change within the week.
-      if (prev && prev.date < event.date && !isOffRotation(prev.mark) && prev.mark !== mark) {
-        movedThisWeek.add(row.person.id);
-        push({
-          id: `${row.person.id}:event-move-${event.date}`,
-          kind: "move",
-          sortDate: event.date,
-          text: `${name} moves ${prev.mark} → ${mark} ${whenPhrase(event.date, asOf)}.`,
-          personId: row.person.id,
-          rotationId: rotation?.id ?? null,
-        });
-      }
-    }
-
-    if (row.duty === "in_transit") {
-      movedThisWeek.add(row.person.id);
-      push({
-        id: `${row.person.id}:transit-now`,
-        kind: "travelling",
-        sortDate: asOf,
-        text: row.site
-          ? `${name} is on the way to ${row.site}.`
-          : `${name} is travelling right now.`,
-        personId: row.person.id,
-        rotationId: rotation?.id ?? null,
-      });
-    }
+    movedThisWeek.add(row.person.id);
+    push({
+      id: `${row.person.id}:transit-now`,
+      kind: "travelling",
+      sortDate: asOf,
+      text: row.site
+        ? `${row.person.name} is on the way to ${row.site}.`
+        : `${row.person.name} is travelling right now.`,
+      personId: row.person.id,
+      rotationId: rotation?.id ?? null,
+    });
   }
 
   // Who stays put this week (still here), grouped by site.
@@ -311,7 +306,8 @@ export type ActionGroup = {
   items: ChecklistItem[];
 };
 
-function travelState(travel: RotationTravel, due: boolean): BookingState {
+function travelState(travel: RotationTravel, due: boolean, stayStart?: string | null): BookingState {
+  if (isAssumedBookedDone(stayStart)) return "confirmed";
   if (travel.confirmed || travel.bookedOn || travel.pnr.trim()) {
     return travel.confirmed ? "confirmed" : "booked";
   }
@@ -319,6 +315,7 @@ function travelState(travel: RotationTravel, due: boolean): BookingState {
 }
 
 function stayState(rotation: CrewRotation): BookingState {
+  if (isAssumedBookedDone(rotation.plannedIn)) return "confirmed";
   if (rotation.stay.confirmed) return "confirmed";
   if (rotation.stay.room.trim() || rotation.stay.notes.trim()) return "booked";
   return "todo";
@@ -440,8 +437,8 @@ export function buildOverview({
         totalDays,
         daysLeft,
         outDate: row.expectedOut,
-        flightToSite: rotation ? travelState(rotation.outbound, true) : "none",
-        flightHome: rotation ? travelState(rotation.returnTravel, returnDue) : "none",
+        flightToSite: rotation ? travelState(rotation.outbound, true, rotation.plannedIn) : "none",
+        flightHome: rotation ? travelState(rotation.returnTravel, returnDue, rotation.plannedIn) : "none",
         stay: rotation ? stayState(rotation) : "none",
         replacement: incoming ? nameOf(incoming.personId) : null,
         needsReplacement: Boolean(
@@ -468,7 +465,7 @@ export function buildOverview({
         rotationId: rotation.id,
         inDate: rotation.plannedIn,
         daysUntil: daysBetween(asOf, rotation.plannedIn),
-        flightIn: travelState(rotation.outbound, true),
+        flightIn: travelState(rotation.outbound, true, rotation.plannedIn),
         stay: stayState(rotation),
         replacing: replaced ? nameOf(replaced.personId) : null,
       };
@@ -491,18 +488,19 @@ export function buildOverview({
         rotationId: rotation.id,
         outDate: inclusiveOut(rotation),
         daysUntil: daysBetween(asOf, inclusiveOut(rotation)),
-        flightHome: travelState(rotation.returnTravel, true),
+        flightHome: travelState(rotation.returnTravel, true, rotation.plannedIn),
         replacement: incoming ? nameOf(incoming.personId) : null,
         replacementNeeded: rotation.replacementNeeded !== false,
       };
     })
     .sort((a, b) => a.outDate.localeCompare(b.outDate));
 
-  // Action list, grouped by when it is due.
+  // Action list, grouped by when it is due. Pre–Oct 15 stays are assumed done — vanish.
   const checklist = [
     ...bookingWindowItems(opsBook, book, names, asOf),
     ...buildKatrinaChecklist(book, names, asOf, thresholds),
-  ].filter((item) => activeIds.has(item.personId));
+    ...tentativeConfirmItems(rows, book, asOf),
+  ].filter((item) => activeIds.has(item.personId) && !isAssumedBookedDone(item.dueOn));
   const weekEnd = addDays(asOf, 7);
   const groups: ActionGroup[] = [
     { key: "overdue", label: "Overdue", items: [] },
@@ -511,7 +509,7 @@ export function buildOverview({
     { key: "housekeeping", label: "Confirm arrivals", items: [] },
   ];
   for (const item of checklist) {
-    if (item.priority === "normal") groups[3].items.push(item);
+    if (item.id.includes(":tentative") || item.priority === "normal") groups[3].items.push(item);
     else if (item.dueOn && item.dueOn < asOf) groups[0].items.push(item);
     else if (item.priority === "urgent" && (!item.dueOn || item.dueOn <= asOf)) groups[0].items.push(item);
     else if (!item.dueOn || item.dueOn <= weekEnd) groups[1].items.push(item);

@@ -6,6 +6,15 @@
 
 import { addDays, daysBetween } from "@/lib/dates";
 import type { FlightBook, FlightBooking, FlightHotel, FlightSegment } from "@/lib/crew-flights";
+
+/**
+ * Stays that started before this date are treated as already booked and done.
+ * They vanish from To do (not shown greyed).
+ */
+export const ASSUMED_BOOKED_BEFORE = "2026-10-15";
+
+/** Book outbound / confirm tentatives this many days before arrival. */
+export const BOOK_BEFORE_ARRIVAL_DAYS = 14;
 import { flightPlaceOnDay } from "@/lib/crew-routes";
 import type { CrewOpsBook } from "@/lib/crew-ops";
 import { opsFor } from "@/lib/crew-ops";
@@ -815,6 +824,9 @@ export function buildKatrinaChecklist(
     const day = rotationDayNumber(rotation, asOf);
     const left = daysLeftOnRotation(rotation, asOf);
     const endInclusive = addDays(rotation.plannedOut, -1);
+    // Pre–Oct 15 stays: assumed booked and done — skip entirely.
+    if (rotation.plannedIn < ASSUMED_BOOKED_BEFORE) continue;
+    const bookBy = addDays(rotation.plannedIn, -BOOK_BEFORE_ARRIVAL_DAYS);
     const activeOrSoon =
       (rotation.plannedIn <= addDays(asOf, thresholds.planDays) && asOf < rotation.plannedOut) ||
       (asOf < rotation.plannedIn && rotation.plannedIn <= addDays(asOf, thresholds.planDays));
@@ -823,7 +835,7 @@ export function buildKatrinaChecklist(
     // Finished more than a week ago: history, not a to-do.
     if (left < -7) continue;
 
-    // Outbound + accommodation before / at start
+    // Outbound + accommodation: due 2 weeks before arrival.
     if (asOf <= addDays(rotation.plannedIn, 3) || (day > 0 && day < thresholds.returnBookDay)) {
       if (!rotation.outbound.confirmed) {
         items.push({
@@ -833,8 +845,8 @@ export function buildKatrinaChecklist(
           personName: name,
           title: "Book outbound flight",
           detail: `To site · IN ${rotation.plannedIn}`,
-          dueOn: rotation.plannedIn,
-          priority: asOf >= addDays(rotation.plannedIn, -thresholds.escalateDays) ? "urgent" : "high",
+          dueOn: bookBy,
+          priority: asOf >= bookBy ? "urgent" : "high",
         });
       }
       if (!rotation.stay.confirmed) {
@@ -845,8 +857,8 @@ export function buildKatrinaChecklist(
           personName: name,
           title: "Book accommodation",
           detail: `Whole stay · ${rotation.plannedIn} → ${endInclusive}`,
-          dueOn: rotation.plannedIn,
-          priority: "high",
+          dueOn: bookBy,
+          priority: asOf >= bookBy ? "urgent" : "high",
         });
       }
     }

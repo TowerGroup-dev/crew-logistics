@@ -26,7 +26,50 @@ export type CrewProject = {
   assignments?: CrewProjectAssignment[];
 };
 
-export type EmploymentStatus = "active" | "inactive";
+/** Active on the board, or inactive with a reason (all inactive live under See more). */
+export type EmploymentStatus =
+  | "active"
+  | "pause"
+  | "terminated"
+  | "resignation"
+  | "retirement"
+  /** @deprecated migrated to pause */
+  | "inactive";
+
+export const INACTIVE_EMPLOYMENT_STATUSES: EmploymentStatus[] = [
+  "pause",
+  "terminated",
+  "resignation",
+  "retirement",
+  "inactive",
+];
+
+export function isInactiveEmployment(status: EmploymentStatus | undefined | null) {
+  return Boolean(status && status !== "active");
+}
+
+export function employmentStatusLabel(status: EmploymentStatus) {
+  switch (status) {
+    case "pause":
+    case "inactive":
+      return "Pause";
+    case "terminated":
+      return "Terminated";
+    case "resignation":
+      return "Resignation";
+    case "retirement":
+      return "Retirement";
+    default:
+      return "Active";
+  }
+}
+
+export function normalizeEmploymentStatus(value: unknown): EmploymentStatus | null {
+  if (value === "active") return "active";
+  if (value === "pause" || value === "inactive") return "pause";
+  if (value === "terminated" || value === "resignation" || value === "retirement") return value;
+  return null;
+}
 
 export type ManualCrewPerson = {
   id: string;
@@ -96,6 +139,11 @@ export type CrewRosterBook = {
   /** Notes on dates you pick (e.g. "Lingering for snow" 15 to 20 Nov), shown only on those days. */
   dateNotes: DateNote[];
   employees: ManualCrewPerson[];
+  /**
+   * Permanently removed people (sheet or manual). Filtered out of mergePeople.
+   * Prefer this over deleting imported schedule rows.
+   */
+  removedPersonIds?: Record<string, true>;
 };
 
 export type DateNote = {
@@ -236,12 +284,7 @@ function readEmployee(value: unknown): ManualCrewPerson | null {
     rotationDays: typeof row.rotationDays === "number" ? row.rotationDays : 42,
     notes: typeof row.notes === "string" ? row.notes : "",
     createdAt: typeof row.createdAt === "string" ? row.createdAt : new Date().toISOString(),
-    employmentStatus:
-      row.employmentStatus === "inactive"
-        ? "inactive"
-        : row.employmentStatus === "active"
-          ? "active"
-          : undefined,
+    employmentStatus: normalizeEmploymentStatus(row.employmentStatus) ?? undefined,
     provisional: row.provisional === true,
     category:
       row.category === "Regular" || row.category === "Local" || row.category === "Subcontractor"
@@ -304,8 +347,15 @@ export function commitProvisionalEmployee(
 
 /** Remove a manual employee and their app rotation plans. */
 export function removeManualEmployee(roster: CrewRosterBook, personId: string): CrewRosterBook {
+  return removePerson(roster, personId);
+}
+
+/**
+ * Permanently remove someone from Employees (manual or sheet).
+ * Sheet people are hidden via removedPersonIds; manual rows are deleted.
+ */
+export function removePerson(roster: CrewRosterBook, personId: string): CrewRosterBook {
   const employees = roster.employees.filter((row) => row.id !== personId);
-  if (employees.length === roster.employees.length) return roster;
   const rotationPlans = { ...(roster.rotationPlans ?? {}) };
   delete rotationPlans[personId];
   const employmentStatus = { ...roster.employmentStatus };
@@ -320,6 +370,11 @@ export function removeManualEmployee(roster: CrewRosterBook, personId: string): 
   for (const key of Object.keys(stintInOverrides)) {
     if (key.startsWith(`${personId}:`)) delete stintInOverrides[key];
   }
+  const stayNotes = { ...(roster.stayNotes ?? {}) };
+  for (const key of Object.keys(stayNotes)) {
+    if (key.startsWith(`${personId}:`)) delete stayNotes[key];
+  }
+  const removedPersonIds = { ...(roster.removedPersonIds ?? {}), [personId]: true as const };
   return {
     ...roster,
     employees,
@@ -328,6 +383,8 @@ export function removeManualEmployee(roster: CrewRosterBook, personId: string): 
     projectLinks,
     stintOutOverrides,
     stintInOverrides,
+    stayNotes,
+    removedPersonIds,
     dateNotes: (roster.dateNotes ?? []).filter((row) => row.personId !== personId),
   };
 }
@@ -359,7 +416,14 @@ export function readRoster(value: unknown): CrewRosterBook {
   const employmentStatus: Record<string, EmploymentStatus> = {};
   if (raw.employmentStatus && typeof raw.employmentStatus === "object") {
     for (const [personId, status] of Object.entries(raw.employmentStatus)) {
-      if (status === "active" || status === "inactive") employmentStatus[personId] = status;
+      const normalized = normalizeEmploymentStatus(status);
+      if (normalized) employmentStatus[personId] = normalized;
+    }
+  }
+  const removedPersonIds: Record<string, true> = {};
+  if (raw.removedPersonIds && typeof raw.removedPersonIds === "object") {
+    for (const [personId, flag] of Object.entries(raw.removedPersonIds)) {
+      if (flag) removedPersonIds[personId] = true;
     }
   }
   const employees = Array.isArray(raw.employees)
@@ -446,6 +510,7 @@ export function readRoster(value: unknown): CrewRosterBook {
     stayNotes,
     dateNotes,
     employees,
+    removedPersonIds,
   };
 }
 
@@ -676,7 +741,8 @@ type ImportedPerson = {
 };
 
 export function employmentStatusFor(roster: CrewRosterBook, personId: string): EmploymentStatus {
-  return roster.employmentStatus[personId] === "inactive" ? "inactive" : "active";
+  const raw = roster.employmentStatus[personId];
+  return normalizeEmploymentStatus(raw) ?? "active";
 }
 
 export function setEmploymentStatus(
@@ -1084,8 +1150,11 @@ function plansAsStints(plans: RosterRotationPlan[] | undefined): StintLike[] {
 
 /** Combine imported schedule people with manually added employees and project links. */
 export function mergePeople(imported: ImportedPerson[], roster: CrewRosterBook): ImportedPerson[] {
+  const removed = roster.removedPersonIds ?? {};
   const importedIds = new Set(imported.map((person) => person.id));
-  const merged = imported.map((person) => {
+  const merged = imported
+    .filter((person) => !removed[person.id])
+    .map((person) => {
     const extra = plansAsStints(roster.rotationPlans?.[person.id]);
     const stints = applyStintOutOverrides(
       person.id,
@@ -1105,6 +1174,7 @@ export function mergePeople(imported: ImportedPerson[], roster: CrewRosterBook):
   });
 
   for (const employee of roster.employees) {
+    if (removed[employee.id]) continue;
     if (importedIds.has(employee.id)) {
       const index = merged.findIndex((person) => person.id === employee.id);
       if (index >= 0) {

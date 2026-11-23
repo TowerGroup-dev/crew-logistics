@@ -217,9 +217,17 @@ export function CrewOverview({
     [asOf, horizon, opsBook, rotationBook, rows, thresholds],
   );
 
+  const confirmedTentativeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const id of Object.keys(doneBook.done)) {
+      if (id.includes(":tentative:")) ids.add(id);
+    }
+    return ids;
+  }, [doneBook]);
+
   const weekStory = useMemo(
-    () => buildWeekStory({ rows, book: rotationBook, asOf, opsBook }),
-    [asOf, opsBook, rotationBook, rows],
+    () => buildWeekStory({ rows, book: rotationBook, asOf, opsBook, confirmedTentativeIds }),
+    [asOf, confirmedTentativeIds, opsBook, rotationBook, rows],
   );
 
   const openCount = useMemo(() => {
@@ -227,7 +235,9 @@ export function CrewOverview({
     for (const group of data.groups) {
       for (const item of group.items) {
         if (isChecklistDoneExpired(doneBook, item.id, asOf)) continue;
-        if (!isChecklistDone(doneBook, item.id) && item.priority !== "normal") count += 1;
+        if (isChecklistDone(doneBook, item.id)) continue;
+        // Tentative confirms and booking work both count as open.
+        count += 1;
       }
     }
     return count;
