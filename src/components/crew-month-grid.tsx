@@ -342,14 +342,13 @@ type DayMeta = {
 
 /**
  * One person's row of day boxes for the whole year. Memoised: it only redraws when
- * this person's data, the drag on this row, or the selection on this row changes.
+ * this person's data or the drag on this row changes.
  * Scrolling, hovering and edits to other people never touch it.
  */
 const MonthRow = memo(function MonthRow({
   person,
   opsEntry,
   draft,
-  staySelection,
   stopoverBook,
   flightBook,
   roster,
@@ -367,7 +366,6 @@ const MonthRow = memo(function MonthRow({
   person: CrewPerson;
   opsEntry: CrewPersonOps | undefined;
   draft: { personId: string; start: string; end: string; mode: DragMode; stayFrom?: string } | null;
-  staySelection: StaySelection | null;
   stopoverBook: CrewStopoverBook | undefined;
   flightBook: FlightBook | undefined;
   roster: CrewRosterBook | undefined;
@@ -489,13 +487,6 @@ const MonthRow = memo(function MonthRow({
         const trimPreview =
           !inDraft && stayDrag && Boolean(site) && Boolean(covering && draft?.stayFrom && covering.from === draft.stayFrom);
         const paintPreview = placePreview || extendPreview;
-        const staySelected = Boolean(
-          staySelection &&
-            staySelection.personId === person.id &&
-            covering &&
-            staySelection.from === covering.from &&
-            staySelection.out === (covering.out || staySelection.out),
-        );
         const stayFrom = covering?.from || dayPlan?.from || "";
         const stayOut = covering?.out || dayPlan?.out || "";
         const stayNote =
@@ -581,7 +572,7 @@ const MonthRow = memo(function MonthRow({
             onPointerMove={(event) => actions.pointerMove(event, person.id, iso, Boolean(site || hub))}
             onPointerLeave={() => actions.pointerLeave(person.id, iso)}
             className={cn(
-              "relative flex h-11 min-w-0 items-center justify-center overflow-hidden border-l border-border text-[0.625rem] font-bold",
+              "relative flex h-11 min-w-0 items-center justify-center overflow-hidden border-l border-border text-[0.625rem] font-bold outline-none focus:outline-none focus-visible:outline-none",
               // The blue month rule is drawn over this edge; no second thin line under it.
               monthStartDay && "border-l-transparent",
               canEdit ? "cursor-cell select-none touch-none" : "cursor-pointer touch-pan-x touch-pan-y",
@@ -618,7 +609,6 @@ const MonthRow = memo(function MonthRow({
               returnPreview && "bg-[#FFD600]/80 text-stone-900 ring-1 ring-inset ring-amber-700/40",
               extendPreview && "bg-primary/25 text-foreground ring-1 ring-inset ring-primary/50",
               trimPreview && "opacity-25",
-              staySelected && "ring-2 ring-inset ring-stone-900/70",
             )}
           >
             <span
@@ -819,14 +809,6 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   );
   const [tryOpen, setTryOpen] = useState(false);
   const [tryDraft, setTryDraft] = useState({ name: "", role: "Labourer" });
-
-  // Leaving Edit cancels an in-progress drag so View stays scroll-only.
-  useEffect(() => {
-    if (canEdit) return;
-    dragRef.current = null;
-    setDraft(null);
-    setCellMenu(null);
-  }, [canEdit]);
   const peopleById = useMemo(() => new Map(rows.map((row) => [row.person.id, row.person])), [rows]);
   const displayRoleByPersonId = useMemo(() => {
     const map = new Map<string, string>();
@@ -860,6 +842,19 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   const [noteDraft, setNoteDraft] = useState("");
   const [dateNoteDraft, setDateNoteDraft] = useState<DateNoteDraft | null>(null);
   const [cellMenu, setCellMenu] = useState<CellMenu | null>(null);
+
+  function closeCellMenu() {
+    setCellMenu(null);
+    setStaySelection(null);
+  }
+
+  // Leaving Edit cancels an in-progress drag so View stays scroll-only.
+  useEffect(() => {
+    if (canEdit) return;
+    dragRef.current = null;
+    setDraft(null);
+    closeCellMenu();
+  }, [canEdit]);
   const [rowMenu, setRowMenu] = useState<RowMenu | null>(null);
   const [roleHiddenOpen, setRoleHiddenOpen] = useState<string | null>(null);
   const [hubDraft, setHubDraft] = useState({ code: "", name: "" });
@@ -898,14 +893,13 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     // Exclusive out = day after last on-site day (Excel OUT = last day on site).
     const out = addDays(cappedTo, 1);
     if (out <= from) return;
-    const planId =
-      onAddRotation(personId, {
-        site: siteCode,
-        from,
-        out,
-        role: displayRoleByPersonId.get(personId) || person.role,
-      }) || "";
-    setStaySelection({ personId, planId, from, out, note: "" });
+    onAddRotation(personId, {
+      site: siteCode,
+      from,
+      out,
+      role: displayRoleByPersonId.get(personId) || person.role,
+    });
+    setStaySelection(null);
     setNoteDraft("");
     showFlash(`${siteCode}  ${formatMedium(from)} – ${formatMedium(cappedTo)}`);
   }
@@ -1140,8 +1134,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     click(personId, iso) {
       if (canEdit) return;
       setTravelHover(null);
-      const plan = planOnDay(personId, iso);
-      if (plan) selectPlan(plan, personId);
+      setStaySelection(null);
       openDay(personId, iso);
     },
     pointerDown(event, personId, iso, hasSite) {
@@ -1421,8 +1414,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       if (!ok) return;
     }
     onRemoveRotation(staySelection.personId, staySelection.planId);
-    setStaySelection(null);
-    setCellMenu(null);
+    closeCellMenu();
     showFlash("Cleared placement");
   }
 
@@ -1498,8 +1490,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
         return;
       }
       if (event.key === "Escape") {
-        setStaySelection(null);
-        setCellMenu(null);
+        closeCellMenu();
         setRowMenu(null);
         setRoleHiddenOpen(null);
         setPaintBrush(defaultSiteBrush());
@@ -1524,8 +1515,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     if (!active) return;
 
     if (active.mode === "open") {
-      const plan = planOnDay(active.personId, active.anchor);
-      if (plan) selectPlan(plan, active.personId);
+      // Open the person — do not leave a selection ring on the stay.
+      setStaySelection(null);
       openDay(active.personId, active.anchor);
       return;
     }
@@ -1687,7 +1678,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     if (!onToggleStopover) return;
     const had = stopoverBook ? stopoverOnDay(stopoverBook, personId, iso) : null;
     onToggleStopover(personId, iso, hub);
-    setCellMenu(null);
+    closeCellMenu();
     showFlash(
       had === hub
         ? `Removed travel ${hub} · ${formatMedium(iso)}`
@@ -1698,7 +1689,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   function startDrag(personId: string, iso: string, button = 0) {
     // Only left button starts place / open / clear / extend.
     if (button !== 0) return;
-    setCellMenu(null);
+    closeCellMenu();
     const person = peopleById.get(personId);
     if (!person) return;
 
@@ -2059,7 +2050,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                           onHidePerson || (hiddenInRole.length && onShowPerson)
                             ? (event) => {
                                 event.preventDefault();
-                                setCellMenu(null);
+                                closeCellMenu();
                                 setRoleHiddenOpen(null);
                                 setRowMenu({
                                   kind: "role",
@@ -2100,7 +2091,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     setRowMenu(null);
-                                    setCellMenu(null);
+                                    closeCellMenu();
                                     setRoleHiddenOpen((open) => (open === group.role ? null : group.role));
                                   }}
                                   className="inline-flex items-center gap-1 rounded-md bg-slate-300/70 px-1.5 py-0.5 text-xs font-semibold text-slate-800 hover:bg-slate-300"
@@ -2211,7 +2202,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                             onContextMenu={(event) => {
                               if (!onHidePerson) return;
                               event.preventDefault();
-                              setCellMenu(null);
+                              closeCellMenu();
                               setRoleHiddenOpen(null);
                               setRowMenu({
                                 kind: "person",
@@ -2363,7 +2354,6 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                     person={person}
                     opsEntry={opsBook[person.id]}
                     draft={draft?.personId === person.id ? draft : null}
-                    staySelection={staySelection?.personId === person.id ? staySelection : null}
                     stopoverBook={stopoverBook}
                     flightBook={flightBook}
                     roster={roster}
@@ -2488,14 +2478,10 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       {cellMenu ? (
         <div
           className="fixed inset-0 z-50"
-          onClick={() => {
-            setCellMenu(null);
-            setStaySelection(null);
-          }}
+          onClick={() => closeCellMenu()}
           onContextMenu={(event) => {
             event.preventDefault();
-            setCellMenu(null);
-            setStaySelection(null);
+            closeCellMenu();
           }}
         >
           <div
@@ -2533,7 +2519,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                             className="h-8 flex-1 rounded-lg bg-primary px-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
                             onClick={() => {
                               onBookMove(cellMenu.personId, cellMenu.iso);
-                              setCellMenu(null);
+                              closeCellMenu();
                             }}
                           >
                             Book the travel
@@ -2545,7 +2531,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                           className="h-8 flex-1 rounded-lg border border-input px-2 text-xs font-medium hover:bg-muted"
                           onClick={() => {
                             onMoveSite(cellMenu.personId, cellMenu.iso, null);
-                            setCellMenu(null);
+                            closeCellMenu();
                             showFlash("Site transfer removed");
                           }}
                         >
@@ -2569,7 +2555,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                           )}
                           onClick={() => {
                             onMoveSite(cellMenu.personId, cellMenu.iso, row.code);
-                            setCellMenu(null);
+                            closeCellMenu();
                             showFlash(`${here || "Away"} → ${row.code} from ${formatMedium(cellMenu.iso)}`);
                           }}
                         >
@@ -2588,7 +2574,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                 className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-amber-50"
                   onClick={() => {
                     addReturnWindowAt(cellMenu.personId, cellMenu.iso);
-                    setCellMenu(null);
+                    closeCellMenu();
                   }}
               >
                 Return window (this day → OUT)
@@ -2611,7 +2597,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                         ? current.returnFlight
                         : "not_started",
                   }));
-                  setCellMenu(null);
+                  closeCellMenu();
                   showFlash("Cleared return window");
                 }}
               >
@@ -2632,7 +2618,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                     onExtendStay(cellMenu.personId, stint.from, addDays(cellMenu.iso, 1));
                     showFlash(`Ended stay · ${formatMedium(cellMenu.iso)}`);
                   }
-                  setCellMenu(null);
+                  closeCellMenu();
                 }}
               >
                 End stay on this day
@@ -2655,7 +2641,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                     onClearStayBooking(cellMenu.personId, stint.from, stint.out);
                     showFlash("Cleared booking · flights, hotels & travel");
                   }
-                  setCellMenu(null);
+                  closeCellMenu();
                 }}
               >
                 Clear booking
@@ -2669,7 +2655,6 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                 className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium text-rose-800 hover:bg-rose-50"
                 onClick={() => {
                   clearSelectedPlacement();
-                  setCellMenu(null);
                 }}
               >
                 Clear placement
@@ -2698,7 +2683,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                               onSetDateNote({ ...dateNoteDraft, note: "", personId: cellMenu.personId });
                             }
                             setDateNoteDraft(null);
-                            setCellMenu(null);
+                            closeCellMenu();
                             return;
                           }
                           if (dateNoteDraft.wasWholeStay && menuStay) saveWholeStayNote("", menuStay);
@@ -2709,14 +2694,14 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                               : "Note removed",
                           );
                           setDateNoteDraft(null);
-                          setCellMenu(null);
+                          closeCellMenu();
                         }}
                         onRemove={
                           dateNoteDraft.wasWholeStay
                             ? () => {
                                 if (menuStay) saveWholeStayNote("", menuStay);
                                 setDateNoteDraft(null);
-                                setCellMenu(null);
+                                closeCellMenu();
                               }
                             : dateNoteDraft.id
                               ? () => {
@@ -2727,7 +2712,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                                   });
                                   showFlash("Note removed");
                                   setDateNoteDraft(null);
-                                  setCellMenu(null);
+                                  closeCellMenu();
                                 }
                               : undefined
                         }
@@ -2824,8 +2809,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                     iso: cellMenu.iso,
                     site: person ? siteOnDay(person, cellMenu.iso) : null,
                   });
-                  setCellMenu(null);
-                  setStaySelection(null);
+                  closeCellMenu();
                 }}
               >
                 Plan journey (From → stops → To)
