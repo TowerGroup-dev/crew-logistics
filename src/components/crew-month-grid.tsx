@@ -71,6 +71,8 @@ import {
   CrewJourneyPlanner,
   type JourneyPlannerApply,
 } from "@/components/crew-journey-planner";
+import { buildJourneyPlan, type JourneyPace } from "@/lib/crew-journey-plan";
+import type { FlightDirection } from "@/lib/crew-flights";
 import {
   stopoverDatesFor,
   stopoverOnDay,
@@ -1686,6 +1688,51 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     );
   }
 
+  /** Next camp colour on/after this day — drives Coming in To. */
+  function campAhead(person: CrewPerson, iso: string) {
+    const here = siteOnDay(person, iso);
+    if (here) return here;
+    for (let i = 1; i <= 21; i += 1) {
+      const site = siteOnDay(person, addDays(iso, i));
+      if (site) return site;
+    }
+    return null;
+  }
+
+  /** One-tap From → To using the coloured stay next to this day (home = Ottawa). */
+  function applyQuickTravel(
+    personId: string,
+    iso: string,
+    direction: FlightDirection,
+    pace: JourneyPace,
+  ) {
+    if (!onApplyJourney) return;
+    const person = peopleById.get(personId);
+    if (!person) return;
+    const home = "YOW";
+    const camp = campAhead(person, iso) || siteOnDay(person, iso);
+    if (!camp) {
+      showFlash("Paint the camp stay first, then mark travel");
+      return;
+    }
+    const from = direction === "outbound" ? home : camp;
+    const to = direction === "outbound" ? camp : home;
+    const built = buildJourneyPlan({ airports: [from, to], startDate: iso, pace });
+    if (!built) return;
+    onApplyJourney(personId, {
+      direction,
+      segments: built.segments,
+      stopoverDays: built.stopoverDays,
+      pathLabel: built.pathLabel,
+      startDate: built.startDate,
+      arriveDate: built.arriveDate,
+    });
+    closeCellMenu();
+    showFlash(
+      `${built.pathLabel} · ${pace === "same-day" ? "same day" : "2 days"} · ${formatMedium(built.startDate)}`,
+    );
+  }
+
   function startDrag(personId: string, iso: string, button = 0) {
     // Only left button starts place / open / clear / extend.
     if (button !== 0) return;
@@ -1922,7 +1969,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             >
               <button
                 type="button"
-                title="Browse and scroll without changing the schedule" aria-label="View"
+                title="See the whole schedule — scroll only" aria-label="View"
                 onClick={() => onInteractionModeChange?.("view")}
                 className={cn(
                   "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors",
@@ -1934,7 +1981,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               </button>
               <button
                 type="button"
-                title="Drag to place stays and return windows" aria-label="Edit"
+                title="Edit stays and plan travel from the coloured days" aria-label="Edit"
                 onClick={() => onInteractionModeChange?.("edit")}
                 className={cn(
                   "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors",
@@ -2796,25 +2843,61 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               </button>
             ) : null}
 
-            {onApplyJourney ? (
-              <button
-                type="button"
-                role="menuitem"
-                className="mt-1 flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-sky-50"
-                onClick={() => {
+            {onApplyJourney
+              ? (() => {
                   const person = peopleById.get(cellMenu.personId);
-                  setJourneyPlanner({
-                    personId: cellMenu.personId,
-                    personName: person?.name || cellMenu.personId,
-                    iso: cellMenu.iso,
-                    site: person ? siteOnDay(person, cellMenu.iso) : null,
-                  });
-                  closeCellMenu();
-                }}
-              >
-                From → To travel
-              </button>
-            ) : null}
+                  const camp = person ? campAhead(person, cellMenu.iso) : null;
+                  const onCamp = Boolean(person && siteOnDay(person, cellMenu.iso));
+                  if (!camp) return null;
+                  return (
+                    <div className="mt-1 border-t border-border pt-2">
+                      <p className="px-2 pb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                        Travel · uses camp colour {camp}
+                      </p>
+                      {(
+                        [
+                          ["outbound", "same-day", `Coming in · same day · YOW → ${camp}`],
+                          ["outbound", "overnight", `Coming in · 2 days · YOW → ${camp}`],
+                          ...(onCamp
+                            ? ([
+                                ["return", "same-day", `Going home · same day · ${camp} → YOW`],
+                                ["return", "overnight", `Going home · 2 days · ${camp} → YOW`],
+                              ] as const)
+                            : []),
+                        ] as const
+                      ).map(([direction, pace, label]) => (
+                        <button
+                          key={`${direction}-${pace}`}
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-sky-50"
+                          onClick={() =>
+                            applyQuickTravel(cellMenu.personId, cellMenu.iso, direction, pace)
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium text-muted-foreground hover:bg-muted"
+                        onClick={() => {
+                          setJourneyPlanner({
+                            personId: cellMenu.personId,
+                            personName: person?.name || cellMenu.personId,
+                            iso: cellMenu.iso,
+                            site: camp,
+                          });
+                          closeCellMenu();
+                        }}
+                      >
+                        More stops (From → To…)
+                      </button>
+                    </div>
+                  );
+                })()
+              : null}
 
             {onToggleStopover ? (
               <div className="mt-1 border-t border-border pt-2">

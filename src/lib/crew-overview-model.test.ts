@@ -167,6 +167,89 @@ describe("week story", () => {
     expect(leave).toBeUndefined();
     expect(story.lines.some((line) => /leaves POND/i.test(line.text))).toBe(false);
   });
+
+  it("does not invent a POND leave from a desk rotation that does not match any calendar stay", () => {
+    const mike = person({
+      id: "mike-reid-mechanic",
+      name: "Mike Reid",
+      role: "Mechanic",
+      roles: ["Mechanic"],
+      stints: [
+        {
+          site: "IQA",
+          sites: ["IQA"],
+          from: "2026-11-09",
+          out: "2026-12-21",
+          arrival: "marked",
+          departure: "marked",
+          tentative: false,
+          segments: [{ from: "2026-11-09", out: "2026-12-21", kind: "site", site: "IQA" }],
+        },
+      ],
+      events: [{ date: "2026-11-09", mark: "IQA" }],
+    });
+    const story = buildWeekStory({
+      rows: [snap(mike, { site: "IQA", duty: "on_site", mark: "IQA" })],
+      book: {
+        version: 1,
+        rotations: [
+          rotation({
+            id: "mike-orphan-pond",
+            personId: "mike-reid-mechanic",
+            plannedIn: "2026-08-04",
+            plannedOut: "2026-11-24",
+            site: "POND",
+          }),
+        ],
+      },
+      asOf: "2026-11-23",
+    });
+    expect(story.lines.some((line) => /POND/i.test(line.text))).toBe(false);
+    expect(story.lines.some((line) => /at IQA/i.test(line.text))).toBe(true);
+  });
+});
+
+describe("buildOverview live site", () => {
+  it("shows Mike on IQA from the calendar, not a stale desk POND", () => {
+    const mike = person({
+      id: "mike-reid-mechanic",
+      name: "Mike Reid",
+      role: "Mechanic",
+      roles: ["Mechanic"],
+      stints: [
+        {
+          site: "IQA",
+          sites: ["IQA"],
+          from: "2026-11-09",
+          out: "2026-12-21",
+          arrival: "marked",
+          departure: "marked",
+          tentative: false,
+          segments: [{ from: "2026-11-09", out: "2026-12-21", kind: "site", site: "IQA" }],
+        },
+      ],
+    });
+    const data = buildOverview({
+      rows: [snap(mike, { site: "POND", duty: "on_site", mark: "POND" })],
+      book: {
+        version: 1,
+        rotations: [
+          rotation({
+            id: "mike-desk",
+            personId: "mike-reid-mechanic",
+            plannedIn: "2026-08-04",
+            plannedOut: "2026-11-24",
+            site: "POND",
+          }),
+        ],
+      },
+      asOf: "2026-11-23",
+      horizonDays: 30,
+      thresholds: { planDays: 14, returnBookDay: 28, escalateDays: 3 },
+    });
+    expect(data.onSite).toEqual([expect.objectContaining({ personId: "mike-reid-mechanic", site: "IQA" })]);
+    expect(data.leaving.some((row) => /POND/i.test(row.site || ""))).toBe(false);
+  });
 });
 
 describe("tentative confirm", () => {
