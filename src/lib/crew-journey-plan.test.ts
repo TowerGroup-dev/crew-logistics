@@ -13,68 +13,70 @@ describe("normalizeJourneyAirports", () => {
 });
 
 describe("buildJourneyPlan", () => {
-  it("same-day keeps every leg on the start date", () => {
-    const plan = buildJourneyPlan({
-      airports: ["YOW", "YEG", "KUG", "IQA"],
-      startDate: "2026-11-23",
-      pace: "same-day",
-    });
-    expect(plan?.pathLabel).toBe("YOW → YEG → KUG → IQA");
-    expect(plan?.segments).toHaveLength(3);
-    expect(plan?.segments.every((leg) => leg.departDate === "2026-11-23")).toBe(true);
-    expect(plan?.arriveDate).toBe("2026-11-23");
-    expect(plan?.stopoverDays).toEqual([]);
-  });
-
-  it("overnight advances a day at each intermediate stop", () => {
-    const plan = buildJourneyPlan({
-      airports: ["YOW", "YEG", "KUG", "IQA"],
-      startDate: "2026-11-23",
-      pace: "overnight",
-    });
-    expect(plan?.segments.map((leg) => [leg.fromAirport, leg.toAirport, leg.departDate])).toEqual([
-      ["YOW", "YEG", "2026-11-23"],
-      ["YEG", "KUG", "2026-11-24"],
-      ["KUG", "IQA", "2026-11-25"],
-    ]);
-    expect(plan?.arriveDate).toBe("2026-11-25");
-    expect(plan?.stopoverDays).toEqual([{ iso: "2026-11-23", hub: "YEG" }]);
-  });
-
-  it("direct same-day is From → To on one day", () => {
+  it("one-day Ottawa → IQA paints one grey day with OTT→IQA path", () => {
     const plan = buildJourneyPlan({
       airports: ["YOW", "IQA"],
-      startDate: "2026-11-26",
-      pace: "same-day",
+      startDate: "2026-11-24",
+      endDate: "2026-11-24",
+      journeyType: "coming",
     });
     expect(plan?.pathLabel).toBe("YOW → IQA");
-    expect(plan?.segments).toEqual([
-      expect.objectContaining({
-        fromAirport: "YOW",
-        toAirport: "IQA",
-        departDate: "2026-11-26",
-        arriveDate: "2026-11-26",
-      }),
-    ]);
-    expect(plan?.stopoverDays).toEqual([]);
-  });
-
-  it("direct 2-day leaves one day and arrives the next", () => {
-    const plan = buildJourneyPlan({
-      airports: ["YOW", "IQA"],
-      startDate: "2026-11-26",
-      pace: "overnight",
-    });
-    expect(plan?.pathLabel).toBe("YOW → IQA");
+    expect(plan?.segments).toHaveLength(1);
     expect(plan?.segments[0]).toEqual(
       expect.objectContaining({
         fromAirport: "YOW",
         toAirport: "IQA",
-        departDate: "2026-11-26",
-        arriveDate: "2026-11-27",
+        departDate: "2026-11-24",
+        arriveDate: "2026-11-24",
       }),
     );
+    expect(plan?.stopoverDays).toEqual([{ iso: "2026-11-24", hub: "YOW" }]);
+  });
+
+  it("direct KUG → IQA camp transfer needs no hub", () => {
+    const plan = buildJourneyPlan({
+      airports: ["KUG", "IQA"],
+      startDate: "2026-11-25",
+      endDate: "2026-11-25",
+      journeyType: "transfer",
+    });
+    expect(plan?.pathLabel).toBe("KUG → IQA");
+    expect(plan?.stopoverDays).toEqual([{ iso: "2026-11-25", hub: "KUG" }]);
+  });
+
+  it("multi-day Ottawa → Edmonton → IQA spreads legs across painted days", () => {
+    const plan = buildJourneyPlan({
+      airports: ["YOW", "YEG", "IQA"],
+      startDate: "2026-11-24",
+      endDate: "2026-11-25",
+      journeyType: "coming",
+      overnightHub: "YEG",
+    });
+    expect(plan?.segments.map((leg) => [leg.fromAirport, leg.toAirport, leg.departDate])).toEqual([
+      ["YOW", "YEG", "2026-11-24"],
+      ["YEG", "IQA", "2026-11-25"],
+    ]);
+    expect(plan?.stopoverDays.map((row) => row.iso)).toEqual(["2026-11-24", "2026-11-25"]);
+  });
+
+  it("Montreal → POND and Vancouver → KUG work as free origins", () => {
+    expect(
+      buildJourneyPlan({ airports: ["YUL", "POND"], startDate: "2026-12-01", endDate: "2026-12-01" })
+        ?.pathLabel,
+    ).toBe("YUL → POND");
+    expect(
+      buildJourneyPlan({ airports: ["YVR", "KUG"], startDate: "2026-12-01", endDate: "2026-12-01" })
+        ?.pathLabel,
+    ).toBe("YVR → KUG");
+  });
+
+  it("legacy overnight pace still spans two days for direct", () => {
+    const plan = buildJourneyPlan({
+      airports: ["YOW", "IQA"],
+      startDate: "2026-11-26",
+      pace: "overnight",
+    });
     expect(plan?.arriveDate).toBe("2026-11-27");
-    expect(plan?.stopoverDays).toEqual([]);
+    expect(plan?.stopoverDays.map((row) => row.iso)).toEqual(["2026-11-26", "2026-11-27"]);
   });
 });

@@ -112,16 +112,20 @@ import {
   activeBookingFor,
   clearFlightsForPerson,
   loadFlights,
+  removeFlightBooking,
   saveFlights,
   syncOpsFromFlights,
   upsertFlightBooking,
   type FlightBook,
   type FlightBooking,
 } from "@/lib/crew-flights";
+import { journeyDateSpan } from "@/lib/crew-journey-plan";
 import {
   loadStopovers,
   saveStopovers,
   clearStopoversForPerson,
+  clearStopoversInRange,
+  paintStopoverDayMap,
   paintStopoverDays,
   setStopover,
   toggleStopover,
@@ -1189,14 +1193,19 @@ export function CrewBoard({
               onApplyJourney={(personId, plan) => {
                 captureHistory();
                 setFlightBook((prev) => {
-                  const existing = activeBookingFor(prev, personId, plan.direction);
+                  const existing =
+                    (plan.bookingId && prev.bookings.find((row) => row.id === plan.bookingId)) ||
+                    null;
                   const now = new Date().toISOString();
                   const status =
                     existing?.status === "booked" || existing?.status === "confirmed"
                       ? existing.status
                       : ("pending_booking" as const);
                   const booking: FlightBooking = {
-                    id: existing?.id || `journey-${personId}-${plan.direction}-${plan.startDate}`,
+                    id:
+                      plan.bookingId ||
+                      existing?.id ||
+                      `journey-${personId}-${plan.direction}-${plan.startDate}`,
                     personId,
                     direction: plan.direction,
                     rotationDate: plan.startDate,
@@ -1210,14 +1219,27 @@ export function CrewBoard({
                     enteredAt: existing?.enteredAt || now,
                     confirmationName: existing?.confirmationName || "",
                     confirmationDataUrl: existing?.confirmationDataUrl || "",
-                    notes: existing?.notes || plan.pathLabel,
+                    notes: plan.notes || plan.pathLabel,
                     hotels: existing?.hotels || [],
                     carService: existing?.carService || "",
                     history: [
-                      { at: now, by: "", text: `Journey planned · ${plan.pathLabel}` },
+                      { at: now, by: "", text: `Journey saved · ${plan.pathLabel}` },
                       ...(existing?.history || []),
                     ],
                   };
+                  // Grey days: clear previous span for this booking, then paint the new route days.
+                  setStopoverBook((stopPrev) => {
+                    let nextStop = stopPrev;
+                    if (existing?.segments?.length) {
+                      const oldSpan = journeyDateSpan(existing.segments);
+                      if (oldSpan) {
+                        nextStop = clearStopoversInRange(nextStop, personId, oldSpan.from, oldSpan.to);
+                      }
+                    }
+                    nextStop = paintStopoverDayMap(nextStop, personId, plan.stopoverDays);
+                    saveStopovers(nextStop);
+                    return nextStop;
+                  });
                   const next = upsertFlightBooking(prev, booking);
                   saveFlights(next);
                   setOpsBook((opsPrev) => {
@@ -1230,16 +1252,31 @@ export function CrewBoard({
                   });
                   return next;
                 });
-                if (plan.stopoverDays.length) {
-                  setStopoverBook((prev) => {
-                    let next = prev;
-                    for (const row of plan.stopoverDays) {
-                      next = setStopover(next, personId, row.iso, row.hub);
-                    }
-                    saveStopovers(next);
-                    return next;
+              }}
+              onDeleteJourney={(personId, bookingId) => {
+                captureHistory();
+                setFlightBook((prev) => {
+                  const existing = prev.bookings.find((row) => row.id === bookingId);
+                  const span = existing ? journeyDateSpan(existing.segments) : null;
+                  const next = removeFlightBooking(prev, bookingId);
+                  saveFlights(next);
+                  if (span) {
+                    setStopoverBook((stopPrev) => {
+                      const cleared = clearStopoversInRange(stopPrev, personId, span.from, span.to);
+                      saveStopovers(cleared);
+                      return cleared;
+                    });
+                  }
+                  setOpsBook((opsPrev) => {
+                    const synced = {
+                      ...opsPrev,
+                      [personId]: syncOpsFromFlights(opsPrev, next, personId),
+                    };
+                    saveCrewOps(synced);
+                    return synced;
                   });
-                }
+                  return next;
+                });
               }}
               onAddRotation={(personId, input) => {
                 let planId = "";

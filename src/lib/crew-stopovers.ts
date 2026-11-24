@@ -127,6 +127,37 @@ export function paintStopoverDays(
   return next;
 }
 
+/** Clear grey travel marks on an inclusive date range (edit/delete journey). */
+export function clearStopoversInRange(
+  book: CrewStopoverBook,
+  personId: string,
+  from: string,
+  to: string,
+): CrewStopoverBook {
+  const start = from.slice(0, 10);
+  const end = to.slice(0, 10);
+  const dates = book[personId];
+  if (!dates) return book;
+  let next = book;
+  for (const iso of Object.keys(dates)) {
+    if (iso >= start && iso <= end) next = setStopover(next, personId, iso, null);
+  }
+  return next;
+}
+
+/** Paint per-day hubs from a journey (each travel day can show a different city). */
+export function paintStopoverDayMap(
+  book: CrewStopoverBook,
+  personId: string,
+  days: { iso: string; hub: string }[],
+): CrewStopoverBook {
+  let next = book;
+  for (const row of days) {
+    next = setStopover(next, personId, row.iso.slice(0, 10), row.hub);
+  }
+  return next;
+}
+
 /** Sorted stopover dates for a person (optional year filter). */
 export function stopoverDatesFor(book: CrewStopoverBook, personId: string, year?: number) {
   const dates = Object.keys(book[personId] || {}).sort();

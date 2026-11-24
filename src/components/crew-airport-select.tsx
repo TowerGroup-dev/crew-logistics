@@ -20,12 +20,15 @@ export function useTravelHubs() {
   return hubs;
 }
 
-/** Pick a camp or an airport / stopover. New places are added under Settings → Travel places. */
+/**
+ * Searchable place field: pick a suggestion or type any city/airport code.
+ * Not limited to a fixed hub list (acceptance: any origin/destination).
+ */
 export function AirportSelect({
   value,
   onChange,
   hubs,
-  placeholder = "Pick a place",
+  placeholder = "City or airport",
   className,
   id,
   ariaLabel,
@@ -38,54 +41,42 @@ export function AirportSelect({
   className?: string;
   id?: string;
   ariaLabel?: string;
-  /** Likely places, shown first (e.g. where people usually go next from the last stop). */
   suggested?: { code: string; uses?: number; why?: string }[];
 }) {
-  const code = value.trim().toUpperCase();
-  const known = [...CAMP_AIRPORTS, ...hubs].some((row) => row.code === code);
+  const listId = id ? `${id}-list` : `airport-list-${placeholder.replace(/\s+/g, "-")}`;
+  const places = [...CAMP_AIRPORTS, ...hubs];
+  const seen = new Set(places.map((row) => row.code));
+  for (const row of suggested) {
+    if (!seen.has(row.code)) {
+      places.push({ code: row.code, name: row.why || row.code });
+      seen.add(row.code);
+    }
+  }
+
   return (
-    <select
-      id={id}
-      aria-label={ariaLabel}
-      value={code}
-      onChange={(event) => onChange(event.target.value)}
-      className={cn("h-9 w-full min-w-0 rounded-lg border border-input bg-card px-2", !code && "text-muted-foreground", className)}
-    >
-      <option value="">{placeholder}</option>
-      {suggested.length ? (
-        <optgroup label="Suggested">
-          {suggested.map((row) => {
-            const name = [...CAMP_AIRPORTS, ...hubs].find((place) => place.code === row.code)?.name;
-            const note = row.why || (row.uses ? `used ${row.uses}×` : "");
-            return (
-              <option key={`s-${row.code}`} value={row.code}>
-                {row.code}
-                {name ? ` · ${name}` : ""}
-                {note ? ` (${note})` : ""}
-              </option>
-            );
-          })}
-        </optgroup>
-      ) : null}
-      <optgroup label="Sites">
-        {CAMP_AIRPORTS.map((row) => (
+    <>
+      <input
+        id={id}
+        list={listId}
+        aria-label={ariaLabel || placeholder}
+        value={value}
+        placeholder={placeholder}
+        autoComplete="off"
+        spellCheck={false}
+        onChange={(event) => onChange(event.target.value.toUpperCase())}
+        className={cn(
+          "h-9 w-full min-w-0 rounded-lg border border-input bg-card px-2 uppercase tracking-wide",
+          !value && "normal-case tracking-normal text-muted-foreground",
+          className,
+        )}
+      />
+      <datalist id={listId}>
+        {places.map((row) => (
           <option key={row.code} value={row.code}>
-            {row.code} · {row.name}
+            {row.name}
           </option>
         ))}
-      </optgroup>
-      <optgroup label="Airports and stopovers">
-        {hubs.map((row) => (
-          <option key={row.code} value={row.code}>
-            {row.code} · {row.name}
-          </option>
-        ))}
-      </optgroup>
-      {code && !known ? (
-        <optgroup label="Other">
-          <option value={code}>{code}</option>
-        </optgroup>
-      ) : null}
-    </select>
+      </datalist>
+    </>
   );
 }

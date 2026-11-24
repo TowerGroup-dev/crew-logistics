@@ -277,6 +277,29 @@ export function upsertFlightBooking(book: FlightBook, booking: FlightBooking): F
   return { bookings: [booking, ...book.bookings] };
 }
 
+/** Remove one journey by id (camp assignments untouched). */
+export function removeFlightBooking(book: FlightBook, bookingId: string): FlightBook {
+  const bookings = book.bookings.filter((row) => row.id !== bookingId);
+  if (bookings.length === book.bookings.length) return book;
+  return { bookings };
+}
+
+/** Booking that covers a calendar day for this person (for click-to-edit travel). */
+export function bookingCoveringDay(
+  book: FlightBook,
+  personId: string,
+  iso: string,
+): FlightBooking | null {
+  const day = iso.slice(0, 10);
+  const matches = book.bookings.filter((row) => {
+    if (row.personId !== personId || row.status === "cancelled" || !row.segments?.length) return false;
+    return row.segments.some(
+      (leg) => leg.departDate <= day && day <= (leg.arriveDate || leg.departDate),
+    );
+  });
+  return matches[0] ?? null;
+}
+
 export function applyFlightToOpsBook(
   opsBook: CrewOpsBook,
   flightBook: FlightBook,

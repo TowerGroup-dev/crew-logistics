@@ -46,15 +46,12 @@ import {
 } from "@/lib/crew-sites";
 import {
   DEFAULT_TRAVEL_HUBS,
-  WORK_SITE_CODES,
   formatJourneyNames,
   formatJourneyPath,
   hubFromMark,
-  stopoverMenuHubs,
   transitCellMark,
   travelHubLabel,
   travelHubName,
-  upsertTravelHub,
   type CrewTravelHubsBook,
   type TravelHub,
 } from "@/lib/crew-travel-hubs";
@@ -71,8 +68,8 @@ import {
   CrewJourneyPlanner,
   type JourneyPlannerApply,
 } from "@/components/crew-journey-planner";
-import { buildJourneyPlan, type JourneyPace } from "@/lib/crew-journey-plan";
-import type { FlightDirection } from "@/lib/crew-flights";
+import { journeyDateSpan } from "@/lib/crew-journey-plan";
+import { bookingCoveringDay } from "@/lib/crew-flights";
 import {
   stopoverDatesFor,
   stopoverOnDay,
@@ -97,7 +94,7 @@ type StaySelection = {
 /** Legend paint brush, click a camp site on top, then drag In→Out on the grid. */
 type PaintBrush =
   | { kind: "site"; code: string }
-  | { kind: "travel"; hub: string }
+  | { kind: "travel" }
   | { kind: "return" };
 
 type CellMenu = {
@@ -555,7 +552,7 @@ const MonthRow = memo(function MonthRow({
                         paintBrush.kind === "site"
                           ? paintBrush.code
                           : paintBrush.kind === "travel"
-                            ? `Travel ${paintBrush.hub}`
+                            ? "Travel"
                             : "Return on a stay"
                       } · IN → OUT`
             }
@@ -707,6 +704,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onToggleStopover,
   onPaintStopovers,
   onApplyJourney,
+  onDeleteJourney,
   onAddRotation,
   onExtendStay,
   onMoveStayIn,
@@ -759,8 +757,10 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   onToggleStopover?: (personId: string, iso: string, hub: string) => void;
   /** Paint a travel hub across several days (legend Travel brush). */
   onPaintStopovers?: (personId: string, dates: string[], hub: string) => void;
-  /** From → stops → To planner: write legs + overnight hubs onto the calendar. */
+  /** Travel editor: write legs + grey days onto the calendar. */
   onApplyJourney?: (personId: string, plan: JourneyPlannerApply) => void;
+  /** Delete a saved journey (grey + flight record); camps stay. */
+  onDeleteJourney?: (personId: string, bookingId: string) => void;
   /** Returns the new plan id when known (so Delete can target it immediately). */
   onAddRotation: (personId: string, input: PlaceRotationInput) => string | void;
   /** Extend or shorten a stay's exclusive OUT (sheet + app). */
@@ -859,12 +859,20 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   }, [canEdit]);
   const [rowMenu, setRowMenu] = useState<RowMenu | null>(null);
   const [roleHiddenOpen, setRoleHiddenOpen] = useState<string | null>(null);
-  const [hubDraft, setHubDraft] = useState({ code: "", name: "" });
   const [journeyPlanner, setJourneyPlanner] = useState<{
     personId: string;
     personName: string;
     iso: string;
+    endIso: string;
     site: string | null;
+    bookingId?: string;
+    from?: string;
+    to?: string;
+    stops?: string[];
+    direction?: "outbound" | "return";
+    overnight?: boolean;
+    overnightHub?: string;
+    notes?: string;
   } | null>(null);
   /** Legend chip → drag empty days. Sheet rule: every IN has an OUT (first / last day). */
   const [paintBrush, setPaintBrush] = useState<PaintBrush>(() => ({
@@ -919,8 +927,6 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   const syncingVertical = useRef(false);
   const lastScrollTop = useRef(0);
   const dayWindowRaf = useRef<number | null>(null);
-  const menuHubs = useMemo(() => stopoverMenuHubs(travelHubs), [travelHubs]);
-
   function showFlash(message: string) {
     if (flashTimer.current) clearTimeout(flashTimer.current);
     setFlash(message);
@@ -1588,22 +1594,30 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     const brush = paintBrushRef.current;
     const person = peopleById.get(active.personId);
 
-    // Travel brush → pass-through days (IN on first, OUT on last; → between cities).
+    // Travel brush → open compact journey editor for the painted empty days.
     if (brush.kind === "travel") {
-      if (!onPaintStopovers) return;
+      if (!onApplyJourney) return;
       const dates: string[] = [];
       for (let d = finalRange.from; d <= finalRange.to; d = addDays(d, 1)) {
         if (person && siteOnDay(person, d)) break;
         dates.push(d);
       }
-      if (!dates.length) return;
-      onPaintStopovers(active.personId, dates, brush.hub);
+      if (!dates.length) {
+        showFlash("Travel paints empty days between camp colours");
+        setStaySelection(null);
+        return;
+      }
+      const camp = person ? campAhead(person, dates[dates.length - 1]!) : null;
+      setJourneyPlanner({
+        personId: active.personId,
+        personName: person?.name || active.personId,
+        iso: dates[0]!,
+        endIso: dates[dates.length - 1]!,
+        site: camp,
+        from: camp && siteOnDay(person!, addDays(dates[0]!, -1)) ? siteOnDay(person!, addDays(dates[0]!, -1)) || undefined : undefined,
+        to: camp || undefined,
+      });
       setStaySelection(null);
-      showFlash(
-        dates.length === 1
-          ? `${travelHubName(brush.hub, travelHubs)}  ${formatMedium(dates[0]!)}`
-          : `${travelHubName(brush.hub, travelHubs)}  ${formatMedium(dates[0]!)} – ${formatMedium(dates[dates.length - 1]!)}`,
-      );
       return;
     }
 
@@ -1688,7 +1702,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     );
   }
 
-  /** Next camp colour on/after this day — drives Coming in To. */
+  /** Next camp colour on/after this day — sensible To default. */
   function campAhead(person: CrewPerson, iso: string) {
     const here = siteOnDay(person, iso);
     if (here) return here;
@@ -1699,38 +1713,37 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     return null;
   }
 
-  /** One-tap From → To using the coloured stay next to this day (home = Ottawa). */
-  function applyQuickTravel(
-    personId: string,
-    iso: string,
-    direction: FlightDirection,
-    pace: JourneyPace,
-  ) {
+  /** Click grey travel → reopen the journey editor for that booking. */
+  function openTravelEditor(personId: string, iso: string) {
     if (!onApplyJourney) return;
     const person = peopleById.get(personId);
-    if (!person) return;
-    const home = "YOW";
-    const camp = campAhead(person, iso) || siteOnDay(person, iso);
-    if (!camp) {
-      showFlash("Paint the camp stay first, then mark travel");
-      return;
+    const booking = flightBook ? bookingCoveringDay(flightBook, personId, iso) : null;
+    const span = booking ? journeyDateSpan(booking.segments) : null;
+    const segs = booking?.segments || [];
+    const codes: string[] = [];
+    for (const leg of segs) {
+      if (leg.fromAirport) codes.push(leg.fromAirport);
+      if (leg.toAirport) codes.push(leg.toAirport);
     }
-    const from = direction === "outbound" ? home : camp;
-    const to = direction === "outbound" ? camp : home;
-    const built = buildJourneyPlan({ airports: [from, to], startDate: iso, pace });
-    if (!built) return;
-    onApplyJourney(personId, {
-      direction,
-      segments: built.segments,
-      stopoverDays: built.stopoverDays,
-      pathLabel: built.pathLabel,
-      startDate: built.startDate,
-      arriveDate: built.arriveDate,
+    const path = codes.filter((code, i) => code && code !== codes[i - 1]);
+    const overnight =
+      Boolean(span && span.from !== span.to) ||
+      segs.some((leg) => leg.departDate !== leg.arriveDate);
+    setJourneyPlanner({
+      personId,
+      personName: person?.name || personId,
+      iso: span?.from || iso,
+      endIso: span?.to || iso,
+      site: person ? campAhead(person, iso) : null,
+      bookingId: booking?.id,
+      from: path[0],
+      to: path[path.length - 1],
+      stops: path.length > 2 ? path.slice(1, -1) : [],
+      direction: booking?.direction,
+      overnight,
+      overnightHub: path.length > 2 ? path[1] : "",
+      notes: booking?.notes || "",
     });
-    closeCellMenu();
-    showFlash(
-      `${built.pathLabel} · ${pace === "same-day" ? "same day" : "2 days"} · ${formatMedium(built.startDate)}`,
-    );
   }
 
   function startDrag(personId: string, iso: string, button = 0) {
@@ -1744,6 +1757,10 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     if (!canEdit) return;
 
     if (siteOnDay(person, iso)) {
+      if (paintBrushRef.current.kind === "travel") {
+        showFlash("Travel paints empty days — not on a camp colour");
+        return;
+      }
       // Return brush: paint yellow booking window on stay days (click = that day → OUT).
       if (paintBrushRef.current.kind === "return") {
         dragRef.current = { personId, anchor: iso, start: iso, end: iso, mode: "return", moved: false };
@@ -1756,10 +1773,10 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       return;
     }
 
-    // Click an existing travel box again to clear it (same as right-click → Clear travel).
+    // Click grey travel → edit journey (Excel-simple; no right-click required).
     const paintedHub = stopoverBook ? stopoverOnDay(stopoverBook, personId, iso) : null;
-    if (paintedHub && onToggleStopover) {
-      applyStopover(personId, iso, paintedHub);
+    if (paintedHub) {
+      openTravelEditor(personId, iso);
       return;
     }
 
@@ -1928,13 +1945,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             <button
               type="button"
               disabled={!canEdit}
-              title="Travel: drag pass-through days (hubs / airports)"
-              onClick={() =>
-                setPaintBrush({
-                  kind: "travel",
-                  hub: travelHubs[0]?.code || DEFAULT_TRAVEL_HUBS[0]?.code || "YK",
-                })
-              }
+              title="Travel: click or drag empty days, then enter From → To"
+              onClick={() => setPaintBrush({ kind: "travel" })}
               className={cn(
                 "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 font-semibold transition-colors sm:px-2.5",
                 paintBrush.kind === "travel"
@@ -2827,150 +2839,20 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                 })()
               : null}
 
-            {onToggleStopover &&
+            {onApplyJourney &&
             stopoverBook &&
             stopoverOnDay(stopoverBook, cellMenu.personId, cellMenu.iso) ? (
               <button
                 type="button"
                 role="menuitem"
-                className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium text-rose-800 hover:bg-rose-50"
+                className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-sky-50"
                 onClick={() => {
-                  const hub = stopoverOnDay(stopoverBook, cellMenu.personId, cellMenu.iso);
-                  if (hub) applyStopover(cellMenu.personId, cellMenu.iso, hub);
+                  openTravelEditor(cellMenu.personId, cellMenu.iso);
+                  closeCellMenu();
                 }}
               >
-                Clear travel
+                Edit travel
               </button>
-            ) : null}
-
-            {onApplyJourney
-              ? (() => {
-                  const person = peopleById.get(cellMenu.personId);
-                  const camp = person ? campAhead(person, cellMenu.iso) : null;
-                  const onCamp = Boolean(person && siteOnDay(person, cellMenu.iso));
-                  if (!camp) return null;
-                  return (
-                    <div className="mt-1 border-t border-border pt-2">
-                      <p className="px-2 pb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                        Travel · uses camp colour {camp}
-                      </p>
-                      {(
-                        [
-                          ["outbound", "same-day", `Coming in · same day · YOW → ${camp}`],
-                          ["outbound", "overnight", `Coming in · 2 days · YOW → ${camp}`],
-                          ...(onCamp
-                            ? ([
-                                ["return", "same-day", `Going home · same day · ${camp} → YOW`],
-                                ["return", "overnight", `Going home · 2 days · ${camp} → YOW`],
-                              ] as const)
-                            : []),
-                        ] as const
-                      ).map(([direction, pace, label]) => (
-                        <button
-                          key={`${direction}-${pace}`}
-                          type="button"
-                          role="menuitem"
-                          className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-sky-50"
-                          onClick={() =>
-                            applyQuickTravel(cellMenu.personId, cellMenu.iso, direction, pace)
-                          }
-                        >
-                          {label}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="flex w-full items-center rounded-lg px-2 py-2 text-left text-sm font-medium text-muted-foreground hover:bg-muted"
-                        onClick={() => {
-                          setJourneyPlanner({
-                            personId: cellMenu.personId,
-                            personName: person?.name || cellMenu.personId,
-                            iso: cellMenu.iso,
-                            site: camp,
-                          });
-                          closeCellMenu();
-                        }}
-                      >
-                        More stops (From → To…)
-                      </button>
-                    </div>
-                  );
-                })()
-              : null}
-
-            {onToggleStopover ? (
-              <div className="mt-1 border-t border-border pt-2">
-                <p className="px-2 pb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  Add travel
-                </p>
-                <div className="grid grid-cols-3 gap-1 px-1 pb-1">
-                  {menuHubs.map((hub) => {
-                    const active =
-                      stopoverBook && stopoverOnDay(stopoverBook, cellMenu.personId, cellMenu.iso) === hub.code;
-                    return (
-                      <button
-                        key={hub.code}
-                        type="button"
-                        title={`${hub.name} (${hub.code})`}
-                        className={cn(
-                          "rounded-md border px-1 py-1.5 text-center",
-                          active
-                            ? "border-stone-700 bg-stone-700 text-white"
-                            : "border-border bg-card hover:bg-stone-100",
-                        )}
-                        onClick={() => applyStopover(cellMenu.personId, cellMenu.iso, hub.code)}
-                      >
-                        <span className="block truncate text-xs font-bold leading-tight">{hub.name}</span>
-                        <span className="block text-[9px] font-medium opacity-70">{hub.code}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {onTravelHubsChange ? (
-                  <div className="mt-2 grid gap-1.5 border-t border-border px-2 pt-2">
-                    <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                      Add place to list
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      <input
-                        value={hubDraft.code}
-                        onChange={(event) =>
-                          setHubDraft((current) => ({ ...current, code: event.target.value.toUpperCase() }))
-                        }
-                        placeholder="CODE"
-                        maxLength={8}
-                        className="h-8 w-16 rounded-md border border-input px-1.5 text-xs uppercase"
-                      />
-                      <input
-                        value={hubDraft.name}
-                        onChange={(event) =>
-                          setHubDraft((current) => ({ ...current, name: event.target.value }))
-                        }
-                        placeholder="Name"
-                        className="h-8 min-w-[6rem] flex-1 rounded-md border border-input px-1.5 text-xs"
-                      />
-                      <button
-                        type="button"
-                        className="h-8 rounded-md border border-input px-2 text-xs font-medium hover:bg-muted"
-                        onClick={() => {
-                          const code = hubDraft.code.trim().toUpperCase();
-                          if (!/^[A-Z0-9]{2,8}$/.test(code) || WORK_SITE_CODES.has(code)) return;
-                          onTravelHubsChange(
-                            upsertTravelHub(
-                              { version: 1, hubs: travelHubs },
-                              { code, name: hubDraft.name.trim() || code },
-                            ),
-                          );
-                          setHubDraft({ code: "", name: "" });
-                        }}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
             ) : null}
           </div>
         </div>
@@ -2979,15 +2861,32 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       {journeyPlanner && onApplyJourney ? (
         <CrewJourneyPlanner
           personName={journeyPlanner.personName}
+          person={peopleById.get(journeyPlanner.personId)}
           initialDate={journeyPlanner.iso}
-          initialTo={journeyPlanner.site || "IQA"}
-          initialFrom="YOW"
+          initialEndDate={journeyPlanner.endIso}
+          initialTo={journeyPlanner.to || journeyPlanner.site || undefined}
+          initialFrom={journeyPlanner.from}
+          initialDirection={journeyPlanner.direction}
+          initialStops={journeyPlanner.stops}
+          initialOvernight={journeyPlanner.overnight}
+          initialOvernightHub={journeyPlanner.overnightHub}
+          initialNotes={journeyPlanner.notes}
+          bookingId={journeyPlanner.bookingId}
           onClose={() => setJourneyPlanner(null)}
           onApply={(plan) => {
             onApplyJourney(journeyPlanner.personId, plan);
             showFlash(`${plan.pathLabel} · ${formatMedium(plan.startDate)}`);
             setJourneyPlanner(null);
           }}
+          onDelete={
+            journeyPlanner.bookingId && onDeleteJourney
+              ? () => {
+                  onDeleteJourney(journeyPlanner.personId, journeyPlanner.bookingId!);
+                  showFlash("Travel removed");
+                  setJourneyPlanner(null);
+                }
+              : undefined
+          }
         />
       ) : null}
 

@@ -122,6 +122,12 @@ export function journeyDayCaption(
     return formatLegCaption(path);
   }
 
+  // Multi-day direct: still show From → To on days between depart and arrive.
+  const spanning = legs.find((leg) => leg.departDate < day && day <= leg.arriveDate);
+  if (spanning?.from && spanning.to) {
+    return formatLegCaption([spanning.from, spanning.to]);
+  }
+
   // Sitting overnight at a hub between legs.
   const place = flightPlaceOnDay(segments, day);
   if (place && !isCamp(place, camps)) return formatLegCaption([place]);

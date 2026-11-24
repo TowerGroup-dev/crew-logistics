@@ -472,58 +472,60 @@ export function buildOverview({
   const horizonEnd = addDays(asOf, horizonDays);
 
   // On site now: live Month camp colour for the day, bookings from the rotation.
-  const onSite: OnSiteRow[] = rows
-    .map((row) => {
-      const site = liveSite(row.person, asOf, row.site);
-      if (!site) return null;
-      const rotation = latestStartedRotation(book, row.person.id, asOf);
-      // expectedOut is the place end (inclusive Out). Duration = days on site through that date.
-      const totalDays =
-        row.plannedIn && row.expectedOut
-          ? Math.max(1, daysBetween(row.plannedIn, row.expectedOut) + 1)
-          : row.rotationDays || null;
-      const daysLeft = row.daysUntilOut;
-      const returnDue =
-        (row.daysOnSite ?? 0) >= thresholds.returnBookDay ||
-        (daysLeft != null && daysLeft <= thresholds.planDays);
-      const incoming = rotation?.replacedByRotationId ? rotationById.get(rotation.replacedByRotationId) : null;
-      return {
-        personId: row.person.id,
-        name: row.person.name,
-        role: roleLabel(row.person),
-        site,
-        rotationId: rotation?.id ?? null,
-        inSince: row.arrivedOn,
-        day: row.rotationDay,
-        totalDays,
-        daysLeft,
-        outDate: row.expectedOut,
-        flightToSite: rotation ? travelState(rotation.outbound, true, rotation.plannedIn) : "none",
-        flightHome: rotation ? travelState(rotation.returnTravel, returnDue, rotation.plannedIn) : "none",
-        stay: rotation ? stayState(rotation) : "none",
-        replacement: incoming ? nameOf(incoming.personId) : null,
-        needsReplacement: Boolean(
-          rotation &&
-            rotation.replacementNeeded !== false &&
-            !incoming &&
-            daysLeft != null &&
-            daysLeft <= thresholds.planDays,
-        ),
-      };
-    })
-    .filter((row): row is OnSiteRow => Boolean(row))
-    .sort((a, b) => (a.daysLeft ?? 9999) - (b.daysLeft ?? 9999) || a.name.localeCompare(b.name));
+  const onSite: OnSiteRow[] = [];
+  for (const row of rows) {
+    const site = liveSite(row.person, asOf, row.site);
+    if (!site) continue;
+    const rotation = latestStartedRotation(book, row.person.id, asOf);
+    // expectedOut is the place end (inclusive Out). Duration = days on site through that date.
+    const totalDays =
+      row.plannedIn && row.expectedOut
+        ? Math.max(1, daysBetween(row.plannedIn, row.expectedOut) + 1)
+        : row.rotationDays || null;
+    const daysLeft = row.daysUntilOut;
+    const returnDue =
+      (row.daysOnSite ?? 0) >= thresholds.returnBookDay ||
+      (daysLeft != null && daysLeft <= thresholds.planDays);
+    const incoming = rotation?.replacedByRotationId ? rotationById.get(rotation.replacedByRotationId) : null;
+    onSite.push({
+      personId: row.person.id,
+      name: row.person.name,
+      role: roleLabel(row.person),
+      site,
+      rotationId: rotation?.id ?? null,
+      inSince: row.arrivedOn,
+      day: row.rotationDay,
+      totalDays,
+      daysLeft,
+      outDate: row.expectedOut,
+      flightToSite: rotation ? travelState(rotation.outbound, true, rotation.plannedIn) : "none",
+      flightHome: rotation ? travelState(rotation.returnTravel, returnDue, rotation.plannedIn) : "none",
+      stay: rotation ? stayState(rotation) : "none",
+      replacement: incoming ? nameOf(incoming.personId) : null,
+      needsReplacement: Boolean(
+        rotation &&
+          rotation.replacementNeeded !== false &&
+          !incoming &&
+          daysLeft != null &&
+          daysLeft <= thresholds.planDays,
+      ),
+    });
+  }
+  onSite.sort((a, b) => (a.daysLeft ?? 9999) - (b.daysLeft ?? 9999) || a.name.localeCompare(b.name));
 
-  // Arriving: rotations that start between tomorrow and the horizon.
+  // Arriving: rotations that start between tomorrow and the horizon (camp from calendar when known).
   const arriving: ArrivingRow[] = book.rotations
     .filter((rotation) => activeIds.has(rotation.personId) && rotation.plannedIn > asOf && rotation.plannedIn <= horizonEnd)
     .map((rotation) => {
       const replaced = rotation.replacesRotationId ? rotationById.get(rotation.replacesRotationId) : null;
+      const row = rows.find((r) => r.person.id === rotation.personId);
+      const calendarStint = stintForRotation(row, rotation);
+      const site = calendarStint?.site || rotation.site;
       return {
         personId: rotation.personId,
         name: nameOf(rotation.personId) || rotation.personId,
         role: roles.get(rotation.personId) || rotation.role,
-        site: rotation.site,
+        site,
         rotationId: rotation.id,
         inDate: rotation.plannedIn,
         daysUntil: daysBetween(asOf, rotation.plannedIn),
