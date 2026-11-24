@@ -381,12 +381,23 @@ export function CrewBoard({
     const monthParam = searchParams.get("month") || searchParams.get("start");
     if (monthParam && /^\d{4}-\d{2}/.test(monthParam)) {
       const monthIso = monthStartFromIso(monthParam.length === 7 ? `${monthParam}-01` : monthParam);
-      setMonthCursor(monthIso);
-      setMonthScrollTo(monthIso);
+      const monthYear = Number(monthIso.slice(0, 4));
+      const activeYear = yearParam && Number.isInteger(yearParam) ? yearParam : scheduleYear;
+      if (monthYear === activeYear) {
+        setMonthCursor(monthIso);
+        setMonthScrollTo(monthIso);
+      } else {
+        // Year switch dropped a foreign month — open Jan (future) / today (current).
+        setMonthCursor(null);
+        setMonthScrollTo(null);
+      }
+    } else if (yearParam && Number.isInteger(yearParam)) {
+      setMonthCursor(null);
+      setMonthScrollTo(null);
     }
     const personParam = searchParams.get("person");
     if (personParam) setSelectedId(personParam);
-  }, [searchParams]);
+  }, [searchParams, scheduleYear]);
 
   // First paint already has local books; unlock undo/sync immediately, migrate in the background.
   useLayoutEffect(() => {

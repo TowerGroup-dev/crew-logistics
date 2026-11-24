@@ -1428,39 +1428,46 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     </div>
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Reset before the open-day scroll effect in the same commit — a useEffect reset
+    // ran too late and left the previous year's December scroll pinned on 2027.
     didScrollToToday.current = false;
-  }, [year, scrollToIso]);
-
-  useEffect(() => {
-    // New year → remount a short strip; refreshDayWindow widens to the viewport after scroll.
+    pinnedScrollLeft.current = 0;
     const end = Math.min(days.length, 100);
     dayWindowRef.current = { start: 0, end };
     setDayWindow({ start: 0, end });
-  }, [year, days.length]);
+  }, [year, days.length, scrollToIso]);
 
   useLayoutEffect(() => {
     // Prefetch / KeepAlive mounts Month while hidden (Overview → Calendar). Don't
     // burn the "open on today" scroll until the pane is actually visible.
     if (!active || didScrollToToday.current || days.length === 0) return;
 
+    function openIsoForYear() {
+      const calendarYear = Number(today.slice(0, 4));
+      // Current year → this week. Future planning → 1 Jan. Past → late December.
+      if (year === calendarYear) return days.includes(today) ? addDays(today, -3) : days[0]!;
+      if (year > calendarYear) return days[0]!;
+      const late = `${year}-12-01`;
+      return days.includes(late) ? late : days[Math.max(0, days.length - 31)]!;
+    }
+
     function applyScrollToOpenDay() {
       if (didScrollToToday.current) return true;
       const main = mainScrollRef.current;
       if (!main || main.clientWidth < 40) return false;
-      // Open on this week (today a few days in from the left); a Year-tape deep link wins.
+      // Year-tape / ?month= deep link wins when it belongs to this grid year.
       const explicitMonth =
         scrollToIso &&
+        Number(scrollToIso.slice(0, 4)) === year &&
         (days.includes(scrollToIso) || days.some((iso) => iso.startsWith(scrollToIso.slice(0, 7))));
       const preferred = explicitMonth
         ? days.includes(scrollToIso!)
           ? scrollToIso!
           : days.find((iso) => iso.startsWith(scrollToIso!.slice(0, 7)))!
-        : days.includes(today)
-          ? addDays(today, -3)
-          : days[0]!;
-      const idx = Math.max(0, days.indexOf(preferred) >= 0 ? days.indexOf(preferred) : days.indexOf(today) - 3);
-      setDaysScrollLeft(Math.max(0, idx * dayColPx));
+        : openIsoForYear();
+      const idx = Math.max(0, days.indexOf(preferred));
+      setDaysScrollLeft(idx * dayColPx);
       didScrollToToday.current = true;
       refreshDayWindow(true);
       return true;
@@ -1478,7 +1485,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       cancelAnimationFrame(raf1);
       if (raf2) cancelAnimationFrame(raf2);
     };
-  }, [active, days, scrollToIso, dayColPx, today]);
+  }, [active, days, scrollToIso, dayColPx, today, year]);
 
   useEffect(() => {
     if (!active) return;

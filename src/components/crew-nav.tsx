@@ -110,7 +110,12 @@ export function CrewNav({
 
   function hrefFor(path: string, forYear = year) {
     const params = new URLSearchParams({ year: String(forYear) });
-    if (path === "/month" && monthParam) params.set("month", monthParam);
+    // Keep ?month= only when it belongs to the year we are opening (else Month
+    // would inherit Nov/Dec from 2026 when switching into 2027).
+    if (path === "/month" && monthParam) {
+      const monthYear = Number(String(monthParam).slice(0, 4));
+      if (monthYear === forYear) params.set("month", monthParam);
+    }
     return `${path}?${params.toString()}`;
   }
 
