@@ -216,7 +216,7 @@ export function CrewNextRotationForm({
             ? `Add ${series.length} rotations`
             : isActive
               ? "Add rotation"
-              : "Set active + add rotation"}
+              : "Set active and add rotation"}
         </button>
         <div className="flex flex-wrap gap-2 text-[0.8125rem] text-muted-foreground">
           {SITES.map((row) => (

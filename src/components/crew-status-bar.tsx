@@ -195,7 +195,7 @@ export function CrewStatusBar({
                   addReminder();
                 }
               }}
-              placeholder="Book return for Bryan…"
+              placeholder="e.g. Book return for Bryan"
               className="h-9 flex-1 rounded-lg border border-input px-2 text-sm"
             />
             <button

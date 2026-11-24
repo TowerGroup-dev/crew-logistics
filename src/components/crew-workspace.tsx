@@ -27,7 +27,8 @@ function viewFromPath(pathname: string): CrewBoardView {
   if (pathname.startsWith("/employees")) return "employees";
   if (pathname.startsWith("/reports")) return "reports";
   if (pathname.startsWith("/settings")) return "settings";
-  if (pathname.startsWith("/travel")) return "travel";
+  // Old Travel page → Month (travel is painted on the calendar).
+  if (pathname.startsWith("/travel")) return "month";
   if (pathname.startsWith("/accommodation")) return "accommodation";
   if (pathname.startsWith("/alerts")) return "alerts";
   return "overview";
@@ -52,6 +53,13 @@ export function CrewWorkspace() {
     if (pathname.startsWith("/reminders")) {
       setRemindersOpen(true);
       router.replace("/", { scroll: false });
+    }
+  }, [pathname, router]);
+
+  // Old Travel tab → Month calendar (Excel-simple travel entry lives there).
+  useEffect(() => {
+    if (pathname.startsWith("/travel")) {
+      router.replace("/month", { scroll: false });
     }
   }, [pathname, router]);
 

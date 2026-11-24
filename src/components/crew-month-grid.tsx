@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Eye, EyeOff, Pencil, Plus } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, Pencil, Plus, Users } from "lucide-react";
 import type { CalendarInteractionMode } from "@/lib/crew-schedule-view";
 import {
   CREW_CATEGORY_ORDER,
@@ -17,7 +17,6 @@ import {
   scheduleYearOutExclusive,
   siteLabel,
   statusOnDate,
-  workLabelForAssignment,
   type CrewCategory,
   type CrewPerson,
 } from "@/lib/crew-schedule";
@@ -68,6 +67,10 @@ import {
   CrewJourneyPlanner,
   type JourneyPlannerApply,
 } from "@/components/crew-journey-planner";
+import {
+  CrewMultiSchedule,
+  type MultiScheduleRow,
+} from "@/components/crew-multi-schedule";
 import { journeyDateSpan } from "@/lib/crew-journey-plan";
 import { bookingCoveringDay } from "@/lib/crew-flights";
 import {
@@ -262,7 +265,7 @@ function travelBoxCode(hub: string) {
 }
 
 function journeyDisplayNames(path: string, hubs: TravelHub[]) {
-  if (!path || path === "No travel yet, right-click to add") return path;
+  if (!path || path === "No travel yet. Select Travel, then click empty days.") return path;
   const codes = path
     .split(/\s*→\s*/)
     .map((part) => part.replace(/^[→\s]+|[→\s]+$/g, "").trim())
@@ -473,7 +476,6 @@ const MonthRow = memo(function MonthRow({
         const stintEnd = Boolean(stayLastDay && iso === stayLastDay);
         // No day counts in the boxes (asked to keep the calendar clean); progress shows in the side panel.
         const dayCount = "";
-        const work = site ? workLabelForAssignment(person, site, iso, iso) : "";
         const inDraft =
           Boolean(draftRange && iso >= draftRange.from && iso <= draftRange.to);
         // Yellow only on stay days; white (away) days stay white.
@@ -547,7 +549,7 @@ const MonthRow = memo(function MonthRow({
                 : hub
                   ? `${stintEnd ? "OUT · " : ""}${hubJourneyTitle}`
                   : site
-                    ? `${stintEnd ? "OUT · " : ""}${assignmentRole ? `${assignmentRole} · ` : ""}${work ? `${work} · ` : ""}${siteLabel(site)} · ${formatMedium(iso)}${stayNote ? ` · ${stayNote}` : ""}${legCaption ? ` · ${legCaption}` : travelDisplay ? ` · Travel ${travelDisplay}` : ""}${covering?.unsure ? " · No site code on the Excel for this stay, please confirm" : ""}`
+                    ? `${stintEnd ? "OUT · " : ""}${assignmentRole ? `${assignmentRole} · ` : ""}${siteLabel(site)} · ${formatMedium(iso)}${stayNote ? ` · ${stayNote}` : ""}${legCaption ? ` · ${legCaption}` : travelDisplay ? ` · Travel ${travelDisplay}` : ""}${covering?.unsure ? " · No site code on the imported schedule for this stay. Confirm the site." : ""}`
                     : `Empty · ${formatMedium(iso)} · drag ${
                         paintBrush.kind === "site"
                           ? paintBrush.code
@@ -565,7 +567,7 @@ const MonthRow = memo(function MonthRow({
                 person.id,
                 iso,
                 Boolean(site || hub),
-                travelDisplay || (hub ? travelHubName(hub, travelHubs) : "No travel yet, right-click to add"),
+                travelDisplay || (hub ? travelHubName(hub, travelHubs) : "No travel yet. Select Travel, then click empty days."),
               )
             }
             onPointerMove={(event) => actions.pointerMove(event, person.id, iso, Boolean(site || hub))}
@@ -811,6 +813,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
   );
   const [tryOpen, setTryOpen] = useState(false);
   const [tryDraft, setTryDraft] = useState({ name: "", role: "Labourer" });
+  const [multiOpen, setMultiOpen] = useState(false);
   const peopleById = useMemo(() => new Map(rows.map((row) => [row.person.id, row.person])), [rows]);
   const displayRoleByPersonId = useMemo(() => {
     const map = new Map<string, string>();
@@ -1603,7 +1606,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
         dates.push(d);
       }
       if (!dates.length) {
-        showFlash("Travel paints empty days between camp colours");
+        showFlash("Travel applies to empty days between camp stays.");
         setStaySelection(null);
         return;
       }
@@ -1758,7 +1761,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
 
     if (siteOnDay(person, iso)) {
       if (paintBrushRef.current.kind === "travel") {
-        showFlash("Travel paints empty days — not on a camp colour");
+        showFlash("Travel applies to empty days, not camp days.");
         return;
       }
       // Return brush: paint yellow booking window on stay days (click = that day → OUT).
@@ -1781,7 +1784,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     }
 
     if (paintBrushRef.current.kind === "return") {
-      showFlash("Return paints on a stay — click or drag camp days");
+      showFlash("Return applies to camp days. Click or drag days on a stay.");
       return;
     }
 
@@ -1928,7 +1931,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                   key={site.code}
                   type="button"
                   disabled={!canEdit}
-                  title={`${site.code}: drag empty days · first = IN · last = OUT`}
+                  title={`${site.code}: drag empty days. First day is IN, last day is OUT.`}
                   onClick={() => setPaintBrush({ kind: "site", code: site.code })}
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 font-semibold transition-colors sm:px-2.5",
@@ -1945,7 +1948,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             <button
               type="button"
               disabled={!canEdit}
-              title="Travel: click or drag empty days, then enter From → To"
+              title="Travel: click or drag empty days, then enter From and To"
               onClick={() => setPaintBrush({ kind: "travel" })}
               className={cn(
                 "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 font-semibold transition-colors sm:px-2.5",
@@ -1960,7 +1963,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             <button
               type="button"
               disabled={!canEdit}
-              title="Return: click a stay day (that day → OUT), or drag the days to book"
+              title="Return: click a stay day (from that day through OUT), or drag the days to mark"
               onClick={() => setPaintBrush({ kind: "return" })}
               className={cn(
                 "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 font-semibold transition-colors sm:px-2.5",
@@ -1981,7 +1984,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             >
               <button
                 type="button"
-                title="See the whole schedule — scroll only" aria-label="View"
+                title="Browse the schedule. Editing is off." aria-label="View"
                 onClick={() => onInteractionModeChange?.("view")}
                 className={cn(
                   "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors",
@@ -2004,17 +2007,28 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                 <span className="hidden min-[400px]:inline">Edit</span>
               </button>
             </div>
+            {canEdit ? (
+              <button
+                type="button"
+                title="Schedule several people at once"
+                onClick={() => setMultiOpen(true)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-input bg-card px-2.5 text-xs font-semibold hover:bg-muted"
+              >
+                <Users className="size-3.5" aria-hidden />
+                <span className="hidden min-[400px]:inline">Add multiple</span>
+              </button>
+            ) : null}
             {canEdit && onTryPerson ? (
               <button
                 type="button"
-                title="Add crew to try on the schedule"
+                title="Add a draft person to the schedule"
                 onClick={() => {
                   setTryOpen((open) => !open);
                   setTryDraft({ name: "", role: "Labourer" });
                 }}
                 className="hidden h-8 sm:inline-flex items-center rounded-lg border border-input bg-card px-2.5 text-xs font-semibold hover:bg-muted"
               >
-                Simulate
+                Add draft
               </button>
             ) : null}
             {canEdit ? <CrewUndoButton className="h-8" /> : null}
@@ -2581,7 +2595,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                               closeCellMenu();
                             }}
                           >
-                            Book the travel
+                            Book travel
                           </button>
                         ) : null}
                         <button
@@ -2615,7 +2629,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                           onClick={() => {
                             onMoveSite(cellMenu.personId, cellMenu.iso, row.code);
                             closeCellMenu();
-                            showFlash(`${here || "Away"} → ${row.code} from ${formatMedium(cellMenu.iso)}`);
+                            showFlash(`${here || "Off site"} to ${row.code} from ${formatMedium(cellMenu.iso)}`);
                           }}
                         >
                           {row.code}
@@ -2872,6 +2886,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
           initialOvernightHub={journeyPlanner.overnightHub}
           initialNotes={journeyPlanner.notes}
           bookingId={journeyPlanner.bookingId}
+          flightBook={flightBook}
           onClose={() => setJourneyPlanner(null)}
           onApply={(plan) => {
             onApplyJourney(journeyPlanner.personId, plan);
@@ -2887,6 +2902,34 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                 }
               : undefined
           }
+        />
+      ) : null}
+
+      {canEdit && multiOpen ? (
+        <CrewMultiSchedule
+          people={rows.map((row) => row.person)}
+          initialDate={today.startsWith(String(year)) ? today : `${year}-01-01`}
+          onClose={() => setMultiOpen(false)}
+          onApply={(batch: MultiScheduleRow[]) => {
+            let placed = 0;
+            for (const row of batch) {
+              const person = peopleById.get(row.personId);
+              if (!person) continue;
+              const role =
+                displayRoleByPersonId.get(row.personId) || normalizeRole(person.role) || "Labourer";
+              // Departure is inclusive; roster `out` is exclusive.
+              const out = addDays(row.to.slice(0, 10), 1);
+              onAddRotation(row.personId, {
+                site: row.site,
+                from: row.from.slice(0, 10),
+                out,
+                role,
+              });
+              placed += 1;
+            }
+            setMultiOpen(false);
+            if (placed) showFlash(`Placed ${placed} ${placed === 1 ? "person" : "people"}`);
+          }}
         />
       ) : null}
 
@@ -2910,10 +2953,10 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
           </p>
           <p className="mt-1 text-[11px] font-medium opacity-85">
             {draftDays > STANDARD_ROTATION_DAYS
-              ? `${draftDays - STANDARD_ROTATION_DAYS} day${draftDays - STANDARD_ROTATION_DAYS === 1 ? "" : "s"} past 6 weeks`
+              ? `${draftDays - STANDARD_ROTATION_DAYS} day${draftDays - STANDARD_ROTATION_DAYS === 1 ? "" : "s"} beyond standard 6 weeks`
               : draftDays === STANDARD_ROTATION_DAYS
-                ? "Full 6 weeks"
-                : `${STANDARD_ROTATION_DAYS - draftDays} day${STANDARD_ROTATION_DAYS - draftDays === 1 ? "" : "s"} short of 6 weeks`}
+                ? "Standard 6 weeks"
+                : `${STANDARD_ROTATION_DAYS - draftDays} day${STANDARD_ROTATION_DAYS - draftDays === 1 ? "" : "s"} under 6 weeks`}
             {" · OUT "}
             {formatMedium(orderedRange(draft.start, draft.end).to)}
           </p>
@@ -2927,7 +2970,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             top: Math.min(travelHover.y + 12, typeof window !== "undefined" ? window.innerHeight - 80 : travelHover.y),
           }}
         >
-          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Journey</p>
+          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Travel</p>
           <p className="mt-0.5 font-medium leading-snug text-foreground">{travelHover.plan}</p>
         </div>
       ) : null}
@@ -3029,7 +3072,7 @@ function DateNoteEditor({
         <input
           value={draft.note}
           onChange={(event) => onChange({ ...draft, note: event.target.value.slice(0, MAX_STAY_NOTE_CHARS) })}
-          placeholder="e.g. Lingering for snow"
+          placeholder="e.g. Held for weather"
           maxLength={MAX_STAY_NOTE_CHARS}
           spellCheck
           autoCapitalize="sentences"

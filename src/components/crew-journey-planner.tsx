@@ -9,7 +9,8 @@ import {
   normalizeJourneyAirports,
   type JourneyType,
 } from "@/lib/crew-journey-plan";
-import type { FlightDirection, FlightSegment } from "@/lib/crew-flights";
+import type { FlightBook, FlightDirection, FlightSegment } from "@/lib/crew-flights";
+import { suggestRoutesFor } from "@/lib/crew-route-suggestions";
 import { formatMedium } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 import { siteOnDay } from "@/lib/crew-site-days";
@@ -50,6 +51,7 @@ export function CrewJourneyPlanner({
   initialOvernightHub = "",
   initialNotes = "",
   bookingId,
+  flightBook,
   onApply,
   onDelete,
   onClose,
@@ -66,6 +68,8 @@ export function CrewJourneyPlanner({
   initialOvernightHub?: string;
   initialNotes?: string;
   bookingId?: string;
+  /** Past journeys — used only for optional route suggestions. */
+  flightBook?: FlightBook;
   onApply: (plan: JourneyPlannerApply) => void;
   onDelete?: () => void;
   onClose: () => void;
@@ -90,6 +94,10 @@ export function CrewJourneyPlanner({
   const airports = useMemo(
     () => normalizeJourneyAirports([from, ...stops, to]),
     [from, stops, to],
+  );
+  const suggestions = useMemo(
+    () => suggestRoutesFor(flightBook, from, to),
+    [flightBook, from, to],
   );
   const preview = useMemo(
     () =>
@@ -161,7 +169,7 @@ export function CrewJourneyPlanner({
 
         <div className="mt-3 grid gap-3">
           <div>
-            <p className="mb-1.5 text-sm font-medium">Where are they travelling?</p>
+            <p className="mb-1.5 text-sm font-medium">Route</p>
             <div className="grid grid-cols-2 gap-2">
               <label className="grid gap-1 text-xs text-muted-foreground">
                 From
@@ -177,10 +185,41 @@ export function CrewJourneyPlanner({
                 />
               </label>
             </div>
+            {suggestions.length ? (
+              <div className="mt-2 rounded-lg border border-dashed border-border bg-muted/20 px-2.5 py-2">
+                <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  Previous routes
+                </p>
+                <div className="mt-1.5 flex flex-col gap-1">
+                  {suggestions.map((row) => (
+                    <button
+                      key={row.pathLabel}
+                      type="button"
+                      onClick={() => {
+                        setFrom(row.airports[0] || from);
+                        setTo(row.airports[row.airports.length - 1] || to);
+                        setStops(row.airports.length > 2 ? row.airports.slice(1, -1) : []);
+                        if (row.airports.length > 2) {
+                          setOvernight(true);
+                          setOvernightHub(row.airports[1] || "");
+                        }
+                      }}
+                      className="rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-sky-50"
+                    >
+                      <span className="font-semibold">{row.pathLabel}</span>
+                      <span className="ml-1.5 text-muted-foreground">· used {row.uses}×</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Suggestion only. Not a booked flight.
+                </p>
+              </div>
+            ) : null}
           </div>
 
           <div>
-            <p className="mb-1.5 text-sm font-medium">What type of journey?</p>
+            <p className="mb-1.5 text-sm font-medium">Travel type</p>
             <div className="grid grid-cols-3 gap-1.5">
               {(
                 [
@@ -211,8 +250,8 @@ export function CrewJourneyPlanner({
             <div className="grid grid-cols-2 gap-1.5">
               {(
                 [
-                  [false, "No · direct"],
-                  [true, "Yes · overnight"],
+                  [false, "No overnight"],
+                  [true, "Overnight"],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -258,7 +297,7 @@ export function CrewJourneyPlanner({
               </button>
             </div>
             {stops.length === 0 ? (
-              <p className="text-xs text-muted-foreground">None — direct From → To.</p>
+              <p className="text-xs text-muted-foreground">No stops. Direct From to To.</p>
             ) : (
               <div className="grid gap-2">
                 {stops.map((stop, index) => (
@@ -310,7 +349,7 @@ export function CrewJourneyPlanner({
             <input
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              placeholder="Flight #, etc."
+              placeholder="Flight number or notes"
               className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
             />
           </label>
@@ -322,10 +361,9 @@ export function CrewJourneyPlanner({
                 <p className="mt-1 text-xs text-muted-foreground">
                   {formatMedium(preview.startDate)}
                   {preview.arriveDate !== preview.startDate
-                    ? ` → ${formatMedium(preview.arriveDate)}`
-                    : " · same day"}
-                  {" · "}
-                  grey on calendar
+                    ? ` to ${formatMedium(preview.arriveDate)}`
+                    : ". Same day"}
+                  . Shown as travel days on the calendar.
                 </p>
               </>
             ) : (
@@ -339,7 +377,7 @@ export function CrewJourneyPlanner({
             <button
               type="button"
               onClick={() => {
-                if (window.confirm("Delete this journey? Camp colours stay as they are.")) onDelete();
+                if (window.confirm("Delete this travel route? Camp days stay.")) onDelete();
               }}
               className="h-9 rounded-lg px-3 text-sm font-medium text-rose-800 hover:bg-rose-50"
             >
@@ -362,7 +400,7 @@ export function CrewJourneyPlanner({
               onClick={apply}
               className="h-9 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-40"
             >
-              Save journey
+              Save travel
             </button>
           </div>
         </div>

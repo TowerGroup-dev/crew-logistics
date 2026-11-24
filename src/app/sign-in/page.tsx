@@ -70,7 +70,7 @@ function SignInForm() {
           disabled={busy}
           className="h-11 w-full rounded-xl bg-[#356dbd] text-sm font-semibold text-white hover:bg-[#2f60a8] disabled:opacity-50"
         >
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? "Signing in..." : "Sign in"}
         </button>
       </form>
     </div>
@@ -79,7 +79,7 @@ function SignInForm() {
 
 export default function SignInPage() {
   return (
-    <Suspense fallback={<p className="p-8 text-sm text-muted-foreground">Loading…</p>}>
+    <Suspense fallback={<p className="p-8 text-sm text-muted-foreground">Loading...</p>}>
       <SignInForm />
     </Suspense>
   );

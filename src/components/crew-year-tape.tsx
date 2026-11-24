@@ -59,7 +59,7 @@ function occupiedOn(person: CrewPerson, iso: string) {
 function overlapMessage(person: CrewPerson, from: string, to: string) {
   for (let d = from; d <= to; d = addDays(d, 1)) {
     if (occupiedOn(person, d)) {
-      return `Overlaps an existing stay around ${formatMedium(d)}. Open Month to paint empty days.`;
+      return `Overlaps an existing stay around ${formatMedium(d)}. Open Month and place on empty days.`;
     }
   }
   return null;
@@ -161,7 +161,7 @@ export function CrewYearTape({
       <div className="border-b border-border bg-[#356dbd] px-3 py-2.5 text-white sm:px-5 sm:py-4">
         <h2 className="text-lg font-semibold tracking-tight sm:text-xl">{year}</h2>
         <p className="mt-1 hidden text-sm text-white/85 sm:block">
-          Click a month on a person to place them (standard 6 weeks; can extend past). Header months open Month view.
+          Click a month on a person to place them (standard 6 weeks; can extend). Header months open Month view.
         </p>
       </div>
 
@@ -278,11 +278,11 @@ export function CrewYearTape({
                               </div>
                             ) : null}
                             {bars.map((bar) => {
-                              const label = bar.work || siteLabel(bar.site);
+                              const label = siteLabel(bar.site);
                               return (
                                 <div
                                   key={`${person.id}-${bar.from}-${bar.site}`}
-                                  title={`${label} · ${siteLabel(bar.site)} · ${formatMedium(bar.from)} – ${formatMedium(bar.to)}`}
+                                  title={`${label} · ${formatMedium(bar.from)} – ${formatMedium(bar.to)}`}
                                   className={cn(
                                     "pointer-events-none absolute top-3 z-[1] flex h-8 items-center overflow-hidden rounded-md px-0.5 text-[10px] font-semibold text-white sm:px-1.5 sm:text-xs",
                                     siteBarTone(bar.site, siteList),

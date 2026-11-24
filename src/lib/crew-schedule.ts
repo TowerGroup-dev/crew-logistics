@@ -501,7 +501,8 @@ export const CREW_ROLES = [
     ),
   ].filter((role) => !(CREW_ROLE_ORDER as readonly string[]).includes(role)),
 ];
-export const CREW_PROJECTS = CREW_SCHEDULE.projects;
+/** Projects removed from the product; locations (sites) are the schedule truth. */
+export const CREW_PROJECTS: CrewProject[] = [];
 
 export function projectLabel(projects: CrewProject[], projectId: string) {
   return projects.find((project) => project.id === projectId)?.name ?? projectId;
@@ -737,14 +738,14 @@ export function currentProjectForPerson(
 
 /** Assigned projects, or timeline projects at that site overlapping the dates. */
 export function workForAssignment(
-  person: CrewPerson,
-  site: string,
-  from: string,
-  to: string,
-  projects: CrewProject[] = CREW_PROJECTS,
+  _person: CrewPerson,
+  _site: string,
+  _from: string,
+  _to: string,
+  _projects: CrewProject[] = CREW_PROJECTS,
 ) {
-  const current = currentProjectForPerson(person, from, site, projects);
-  return current ? [current.name] : [];
+  // Projects removed; schedule labels use location (site) only.
+  return [] as string[];
 }
 
 export function workLabelForAssignment(
@@ -802,7 +803,7 @@ export function yearOnSiteBars(person: CrewPerson, year = CREW_SCHEDULE.year) {
         to,
         site: bar.site,
         role: bar.role,
-        work: bar.role || workLabelForAssignment(person, bar.site, from, to),
+        work: siteLabel(bar.site),
         leftPct: (start / yearDays) * 100,
         widthPct: Math.max(((end - start) / yearDays) * 100, 0.35),
       };

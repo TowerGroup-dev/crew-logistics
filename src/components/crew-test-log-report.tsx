@@ -22,7 +22,7 @@ const PAGE_NAMES: Record<string, string> = {
   "/accommodation": "Accommodation",
   "/reports": "Reports",
   "/settings": "Settings",
-  "/actions": "Projects / actions",
+  "/actions": "Actions",
   "/alerts": "Alerts",
 };
 const pageName = (p: string) => PAGE_NAMES[p] ?? p;
@@ -138,7 +138,7 @@ export function CrewTestLogReport() {
       </div>
 
       {error ? <p className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
-      {lines === null && !error ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
+      {lines === null && !error ? <p className="text-sm text-muted-foreground">Loading...</p> : null}
       {lines && lines.length === 0 ? (
         <p className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
           Nothing logged yet. Testers open the app with <b>?test=1</b> on the end of the link (e.g. crew.towerarctic.ca/?test=1) and the log fills in as they go.

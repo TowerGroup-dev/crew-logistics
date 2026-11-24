@@ -230,8 +230,8 @@ export function CrewSettingsPanel({
         <div>
           <h3 className="text-base font-semibold">Travel places</h3>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Short codes for stopovers (Ottawa, Toronto, Yellowknife, …). Shown on stay hover and in the
-            right-click Add travel menu, not in the Month colour legend.
+            Short codes for stopovers (Ottawa, Toronto, Yellowknife, and others). Shown on stay hover and when
+            adding travel, not in the Month colour legend.
           </p>
         </div>
         <ul className="divide-y divide-border border border-border">
@@ -360,7 +360,7 @@ export function CrewSettingsPanel({
               onChange={(event) =>
                 onNotifyChange((current) => ({ ...current, recipientEmail: event.target.value }))
               }
-              placeholder="katrina@…"
+              placeholder="katrina@example.com"
               className="h-9 rounded-md border border-input px-2"
             />
           </label>

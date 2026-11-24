@@ -122,7 +122,7 @@ export function CrewPlaceDialog({
             <input
               value={note}
               onChange={(event) => setNote(event.target.value.slice(0, MAX_STAY_NOTE_CHARS))}
-              placeholder="e.g. Linger for snow"
+              placeholder="e.g. Held for weather"
               maxLength={MAX_STAY_NOTE_CHARS}
               spellCheck
               autoCorrect="on"
@@ -148,7 +148,7 @@ export function CrewPlaceDialog({
           <p className="mt-3 text-xs text-muted-foreground">
             {pastSixWeeks
               ? `This stay is past the usual 6 weeks (${STANDARD_ROTATION_DAYS} days). Ceiling is ${MAX_ROTATION_DAYS} days.`
-              : `Standard stay is ${STANDARD_ROTATION_DAYS} days (6 weeks). Keep painting to extend past 6 weeks if needed.`}
+              : `Standard stay is ${STANDARD_ROTATION_DAYS} days (6 weeks). Drag further to extend past 6 weeks if needed.`}
           </p>
         )}
 

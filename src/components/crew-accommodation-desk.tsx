@@ -46,7 +46,7 @@ export function CrewAccommodationDesk({
 
       <Queue
         title={`Needs booking (${needsAttention.length})`}
-        empty="None right now."
+        empty="None."
         rows={needsAttention}
         opsBook={opsBook}
         onOpen={onOpen}
@@ -55,7 +55,7 @@ export function CrewAccommodationDesk({
       />
       <Queue
         title={`Booked now (${booked.length})`}
-        empty="None right now."
+        empty="None."
         rows={booked}
         opsBook={opsBook}
         onOpen={onOpen}

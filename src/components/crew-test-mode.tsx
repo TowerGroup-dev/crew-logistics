@@ -111,9 +111,9 @@ function LeaveDialog({ onStay }: { onStay: () => void }) {
         className="w-full max-w-lg rounded-2xl bg-card p-5 shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <p className="text-lg font-semibold">Before you go</p>
+        <p className="text-lg font-semibold">Leave Test Mode</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your feedback helps make the app better. Both boxes are optional. After this you are back on the real schedule, where changes are saved.
+          Feedback is optional. After you leave, you return to the live schedule where changes are saved.
         </p>
         {!testerName() ? (
           <label className="mt-4 grid gap-1 text-sm">
@@ -122,14 +122,14 @@ function LeaveDialog({ onStay }: { onStay: () => void }) {
           </label>
         ) : null}
         <label className="mt-4 grid gap-1 text-sm">
-          <span className="font-medium">How was it? What worked, what didn&apos;t?</span>
+          <span className="font-medium">What worked, and what did not?</span>
           <textarea
             autoFocus
             value={overall}
             onChange={(event) => setOverall(event.target.value)}
             rows={3}
             className="rounded-lg border border-input px-3 py-2"
-            placeholder="e.g. Booking a flight was easy, but I couldn't find where to add a hotel."
+            placeholder="e.g. Flight booking was clear, but hotel entry was hard to find."
           />
         </label>
         <label className="mt-3 grid gap-1 text-sm">
@@ -139,7 +139,7 @@ function LeaveDialog({ onStay }: { onStay: () => void }) {
             onChange={(event) => setIdeas(event.target.value)}
             rows={3}
             className="rounded-lg border border-input px-3 py-2"
-            placeholder="Anything you'd add, remove or change."
+            placeholder="What should be added, removed, or changed?"
           />
         </label>
         <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
@@ -191,7 +191,7 @@ function PageFeedback({ path }: { path: string }) {
     >
       <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
         <MessageSquare className="size-3.5" /> Feedback on this page
-        {sent ? <span className="ml-auto font-medium normal-case text-muted-foreground">Sent{sent > 1 ? ` (${sent})` : ""} · thank you</span> : null}
+        {sent ? <span className="ml-auto font-medium normal-case text-muted-foreground">Sent{sent > 1 ? ` (${sent})` : ""}</span> : null}
       </p>
       <div className="flex gap-1">
         {kinds.map((row) => (
@@ -307,7 +307,7 @@ function TestGuide() {
             autoFocus
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
-            placeholder="Your name, so we know who tested"
+            placeholder="Your name"
             className="h-8 min-w-0 flex-1 rounded-md border border-input bg-white px-2 text-sm"
           />
           <button type="submit" className="h-8 rounded-md bg-[#1b2433] px-3 text-xs font-semibold text-white">
@@ -329,7 +329,7 @@ function TestGuide() {
               </span>
               <span className="min-w-0">
                 <span className={cn("block text-sm font-medium leading-snug", ticks[step.id] && "text-muted-foreground line-through")}>{step.do}</span>
-                <span className="block text-xs text-muted-foreground">Should happen: {step.expect}</span>
+                <span className="block text-xs text-muted-foreground">Expected: {step.expect}</span>
               </span>
             </button>
           </li>

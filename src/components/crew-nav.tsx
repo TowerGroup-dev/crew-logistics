@@ -11,7 +11,6 @@ import {
   ListChecks,
   Menu,
   MoreHorizontal,
-  Plane,
 } from "lucide-react";
 import { CREW_SCHEDULE } from "@/lib/crew-schedule";
 import { loadScheduleYears } from "@/lib/crew-years";
@@ -34,9 +33,9 @@ const PRIMARY: Section[] = [
     href: "/month",
     label: "Calendar",
     icon: CalendarDays,
-    match: (path) => path.startsWith("/month") || path.startsWith("/year") || path.startsWith("/list"),
+    match: (path) =>
+      path.startsWith("/month") || path.startsWith("/year") || path.startsWith("/list") || path.startsWith("/travel"),
   },
-  { key: "flights", href: "/travel", label: "Travel", icon: Plane, match: (path) => path.startsWith("/travel") },
 ];
 
 /** Right ☰ dropdown, plain list like B2W. */
@@ -375,9 +374,9 @@ function TestModeLinks({ pathname, onPick, large }: { pathname: string; onPick: 
         rel="noopener"
         onClick={onPick}
         className={cn(row, "text-amber-900 hover:bg-amber-50")}
-        title="Opens a new tab with a copy of the live schedule. Nothing you do there is saved and no emails are sent."
+        title="Opens a new tab with a copy of live data. Changes are not saved and emails are not sent."
       >
-        Practise in Test Mode (new tab)
+        Open Test Mode (new tab)
       </a>
       <Link role="menuitem" href="/test-log" onClick={onPick} className={cn(row, "text-foreground hover:bg-sky-50")}>
         Test log

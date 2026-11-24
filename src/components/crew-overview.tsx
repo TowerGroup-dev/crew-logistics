@@ -122,7 +122,7 @@ export function CrewReminders({
             <h2 className="text-base font-semibold tracking-tight">Reminders</h2>
           </div>
           <span className="text-xs text-muted-foreground">
-            {count ? `${board.week.length} this week · ${board.lookahead.length} next` : "Clear"}
+            {count ? `${board.week.length} this week · ${board.lookahead.length} next` : "None"}
           </span>
         </div>
         <RemindersList board={board} onOpen={(item) => open(item.rotationId, item.personId)} />
@@ -157,7 +157,7 @@ export function CrewReminders({
             <p className="mt-1.5 pl-10 text-xs text-stone-500">
               {count
                 ? `${board.week.length} this week · ${board.lookahead.length} next week`
-                : "Nothing pressing right now"}
+                : "No reminders due this week or next."}
             </p>
           </div>
           <button
@@ -264,7 +264,7 @@ export function CrewOverview({
       accent="sky"
       expanded={onSiteOpen}
       onExpandedChange={setOnSiteOpen}
-      aside={`${data.onSite.length} · leaving first`}
+      aside={`${data.onSite.length} people · soonest departures first`}
     >
       <OnSiteTable rows={data.onSite} onOpen={open} />
     </Panel>
@@ -316,7 +316,7 @@ export function CrewOverview({
           {!onSiteOpen ? onSitePanel : null}
         </div>
 
-        <Panel title="To do" accent="amber" defaultOpen aside={openCount ? `${openCount} open` : "Clear"}>
+        <Panel title="To do" accent="amber" defaultOpen aside={openCount ? `${openCount} open` : "None open"}>
           <ActionList
             groups={data.groups}
             asOf={asOf}
@@ -415,8 +415,8 @@ function RemindersSheet({
     return (
       <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
         <CircleCheck className="size-8 text-emerald-600/80" />
-        <p className="text-sm font-medium text-stone-800">All clear</p>
-        <p className="text-xs text-stone-500">Nothing pressing this week or next.</p>
+        <p className="text-sm font-medium text-stone-800">Nothing due</p>
+        <p className="text-xs text-stone-500">No open items this week or next.</p>
       </div>
     );
   }
@@ -487,7 +487,7 @@ function RemindersList({
   if (!board.week.length && !board.lookahead.length) {
     return (
       <p className="flex items-center gap-2 px-4 py-7 text-sm text-muted-foreground">
-        <CircleCheck className="size-4" /> Nothing pressing this week or next week.
+        <CircleCheck className="size-4" /> No open items this week or next.
       </p>
     );
   }
@@ -615,7 +615,7 @@ function WeekStoryList({
   if (!lines.length) {
     return (
       <p className="px-4 py-7 text-sm text-muted-foreground">
-        Quiet week so far, nothing on the move and nobody flagged as still on site.
+        No arrivals, departures, or people on site in this window.
       </p>
     );
   }
@@ -792,8 +792,8 @@ function ActionRow({
     <li className={cn("flex items-stretch", done && "bg-muted/15")}>
       <button
         type="button"
-        title={done ? "Undo cross out" : "Cross out"}
-        aria-label={done ? "Undo cross out" : "Cross out"}
+        title={done ? "Undo" : "Mark done"}
+        aria-label={done ? "Undo" : "Mark done"}
         onClick={onToggleDone}
         className={cn(
           "flex w-11 shrink-0 items-center justify-center border-r border-border/70 transition hover:bg-muted/50",
@@ -934,7 +934,7 @@ function ToGo({ row }: { row: OnSiteRow }) {
         {row.replacement
           ? ` · ${row.replacement}`
           : row.needsReplacement
-            ? " · extend or add person"
+            ? " · Extend stay or assign replacement"
             : ""}
       </span>
     </span>
@@ -1039,8 +1039,8 @@ function Movement({
                       {row.replacement
                         ? ` · ${row.replacement}`
                         : row.replacementNeeded
-                          ? " · extend or add person"
-                          : " · no one else needed"}
+                          ? " · Extend stay or assign replacement"
+                          : " · No replacement needed"}
                     </span>
                   </span>
                   <Labelled label="Home">

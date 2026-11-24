@@ -201,10 +201,10 @@ export function buildCrewBriefing(input: {
     `On site: ${overview.onSite} · Leaving this week: ${leavingThisWeek} · Leaving next week: ${leavingNextWeek} · Flights to book: ${flightsToBook}`,
     "",
     `THIS WEEK (${weekRange})`,
-    ...(weekRows.length ? weekRows.map((row) => `- ${row.date} · ${row.name}${row.site ? ` (${row.site})` : ""}: ${row.actions.join("; ")}`) : ["Nothing to action."]),
+    ...(weekRows.length ? weekRows.map((row) => `- ${row.date} · ${row.name}${row.site ? ` (${row.site})` : ""}: ${row.actions.join("; ")}`) : ["Nothing to act on."]),
     "",
     `NEXT WEEK (${nextRange})`,
-    ...(nextRows.length ? nextRows.map((row) => `- ${row.date} · ${row.name}${row.site ? ` (${row.site})` : ""}: ${row.actions.join("; ")}`) : ["Nothing to action."]),
+    ...(nextRows.length ? nextRows.map((row) => `- ${row.date} · ${row.name}${row.site ? ` (${row.site})` : ""}: ${row.actions.join("; ")}`) : ["Nothing to act on."]),
     "",
     ...(stayItems.length
       ? [`ACCOMMODATION TO CONFIRM (${stayItems.length})`, ...stayItems.map((row) => `- ${row.name}${row.site ? ` (${row.site})` : ""}, arrived ${row.arrived ? emailDate(row.arrived) : "-"}`), ""]
@@ -231,9 +231,9 @@ export function buildCrewBriefing(input: {
         ["Flights to book", flightsToBook],
       ])}
       ${sectionTitle("This week", weekRange)}
-      ${personTable(weekRows, "Nothing to action this week.")}
+      ${personTable(weekRows, "Nothing to act on this week.")}
       ${sectionTitle("Next week", nextRange)}
-      ${personTable(nextRows, "Nothing to action next week.")}
+      ${personTable(nextRows, "Nothing to act on next week.")}
       ${stayItems.length
         ? `${sectionTitle(`Accommodation to confirm (${stayItems.length})`, "Not yet marked as confirmed")}
            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 26px;font-size:13px">

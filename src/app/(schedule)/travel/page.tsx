@@ -1,9 +1,6 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Travel",
-};
-
+/** Travel is scheduled on the Month calendar — no separate Travel page. */
 export default function TravelPage() {
-  return null;
+  redirect("/month");
 }

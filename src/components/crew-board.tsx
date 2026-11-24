@@ -31,7 +31,6 @@ import {
   type CrewNotifySettings,
 } from "@/lib/crew-notify-settings";
 import {
-  CREW_PROJECTS,
   CREW_ROLE_ORDER,
   CREW_ROLES,
   CREW_SCHEDULE,
@@ -45,7 +44,6 @@ import {
   rotationFor,
   siteLabel,
   type CrewDutyStatus,
-  type CrewProject,
   type CrewSnapshot,
 } from "@/lib/crew-schedule";
 import {
@@ -55,7 +53,6 @@ import {
   discardProvisionalEmployee,
   loadRoster,
   mergePeople,
-  mergeProjects,
   employmentStatusFor,
   employmentStatusLabel,
   removePerson,
@@ -82,7 +79,6 @@ import { CrewRoleHeader } from "@/components/crew-role-header";
 import { CrewRoleAddDialog } from "@/components/crew-role-add-dialog";
 import { CrewMonthlyReportPanel } from "@/components/crew-reports";
 import { CrewAccommodationDesk } from "@/components/crew-accommodation-desk";
-import { CrewTravelDesk } from "@/components/crew-travel-desk";
 import { CrewYearTape } from "@/components/crew-year-tape";
 import { CrewRotationDrawer } from "@/components/crew-rotation-drawer";
 import {
@@ -315,7 +311,8 @@ export function CrewBoard({
   // Prefetch heavy tabs one-by-one while idle (not all at once — that freezes the UI).
   useEffect(() => {
     if (!hydrated) return;
-    const warm: CrewBoardView[] = ["travel", "month", "year", "list", "employees", "accommodation"];
+    // Warm Month only at first. Other tabs mount on visit — avoids "Rendering…" lag on Calendar.
+    const warm: CrewBoardView[] = boardView === "month" ? ["month"] : [boardView, "month"];
     let index = 0;
     let idleId: number | undefined;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -331,10 +328,11 @@ export function CrewBoard({
         });
         scheduleNext();
       };
+      const delay = index === 0 ? 0 : 400;
       if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-        idleId = window.requestIdleCallback(kick, { timeout: 1800 });
+        idleId = window.requestIdleCallback(kick, { timeout: 2000 + delay });
       } else {
-        timeoutId = setTimeout(kick, 400);
+        timeoutId = setTimeout(kick, delay || 200);
       }
     }
 
@@ -569,10 +567,6 @@ export function CrewBoard({
   // Stays from the Excel and the roster; booked moves between sites then reshape them for display.
   const basePeople = useMemo(() => mergePeople(CREW_SCHEDULE.people, roster), [roster]);
   const people = useMemo(() => applyRotationMoves(basePeople, rotationBook), [basePeople, rotationBook]);
-  const projects = useMemo(
-    () => mergeProjects(CREW_PROJECTS as CrewProject[], roster),
-    [roster],
-  );
   /** Overview / list / travel follow the selected year (live today inside the current year). */
   const asOf = useMemo(() => {
     const calendarYear = Number(today.slice(0, 4));
@@ -700,7 +694,7 @@ export function CrewBoard({
       today,
       opsBook,
       people,
-      projects,
+      projects: [],
       rotationBook,
       recipientName: notify.recipientName,
       recipientEmail: notify.recipientEmail,
@@ -1047,21 +1041,6 @@ export function CrewBoard({
                 setSelectedRotationId(rotationId);
                 setSelectedId(null);
               }}
-            />
-          </div>
-          </KeepAlive>
-        ) : null}
-
-        {seenViews.travel ? (
-          <KeepAlive active={boardView === "travel"}>
-          <div className={cn("border-t border-border p-3 sm:p-4", boardView !== "travel" && "hidden")}>
-            <CrewTravelDesk
-              rows={rows}
-              opsBook={opsBook}
-              flightBook={flightBook}
-              rotationBook={rotationBook}
-              today={asOf}
-              onOpen={openPersonRotation}
             />
           </div>
           </KeepAlive>
@@ -1680,13 +1659,13 @@ export function CrewBoard({
                       }}
                       className="h-8 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90"
                     >
-                      {inactive ? "Set active + add rotation" : "Add rotation"}
+                      {inactive ? "Set active and add rotation" : "Add rotation"}
                     </button>
                     <button
                       type="button"
                       onClick={() => {
                         const ok = window.confirm(
-                          `Delete ${row.person.name} permanently? This removes them from Employees and any placements painted for them.`,
+                          `Delete ${row.person.name} permanently? This removes them from Employees and any calendar placements for them.`,
                         );
                         if (!ok) return;
                         captureHistory();
@@ -2107,8 +2086,8 @@ function PersonProfile({
           <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">Employment</p>
           <p className="mt-1 text-sm">
             {isActive
-              ? "Included in live ops, travel, and action lists."
-              : "Under See more on Employees until set active again."}
+              ? "Included on Overview, Calendar, travel, and action lists."
+              : "Listed under See more on Employees until set active again."}
           </p>
         </div>
         <select
@@ -2279,7 +2258,7 @@ function PersonProfile({
         </label>
         {(snap.person.flights?.length ?? 0) > 0 ? (
           <div className="space-y-2 rounded-xl border border-border bg-card p-3">
-            <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">Sheet flights</p>
+            <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">Imported flights</p>
             <ul className="space-y-2 text-sm">
               {snap.person.flights!.map((flight, index) => (
                 <li key={`${snap.person.id}-flight-${index}`} className="rounded-lg bg-muted/50 px-3 py-2">
@@ -2351,7 +2330,7 @@ function PersonProfile({
       </section>
 
       <section className="grid gap-2">
-        <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">Work & travel timeline</p>
+        <p className="text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase">Work and travel timeline</p>
         {segments.length === 0 ? (
           <p className="text-sm text-muted-foreground">No dated marks for this person yet.</p>
         ) : (

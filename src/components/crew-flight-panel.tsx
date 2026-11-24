@@ -448,7 +448,7 @@ function FlightConfirmationForm({
               onClick={() => applyUsualRoute()}
               className="h-8 rounded-lg bg-sky-700 px-3 text-xs font-semibold text-white hover:opacity-90"
             >
-              {segmentsBlank ? "Fill itinerary" : "Replace itinerary with usual route"}
+              {segmentsBlank ? "Use usual route" : "Replace with usual route"}
             </button>
           </div>
         ) : (
@@ -687,7 +687,7 @@ function FlightConfirmationForm({
             onChange={(event) => setNotes(event.target.value)}
             rows={2}
             className="rounded-lg border border-input px-2 py-1.5 text-sm"
-            placeholder="Connecting flight notes, Manage My Trips tip, etc."
+            placeholder="Connecting flights, confirmation notes, or other details"
           />
         </label>
       </div>

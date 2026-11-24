@@ -128,7 +128,7 @@ export function CrewTripPlan({
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-xs font-medium text-emerald-800">Everything on this trip is planned.</p>
+        <p className="mt-2 text-xs font-medium text-emerald-800">All legs and hotels are entered.</p>
       )}
     </section>
   );

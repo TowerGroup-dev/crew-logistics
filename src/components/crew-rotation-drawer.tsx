@@ -641,7 +641,7 @@ function ChecklistHints({
   if (readiness.replacement === "missing") add("replacement", "Extend rotation or add another person");
   if (readiness.handover === "not_planned") add("handover", "Set handover / overlap dates");
   if (!hints.length) {
-    return <p className="text-sm text-muted-foreground">Nothing open on this rotation.</p>;
+    return <p className="text-sm text-muted-foreground">No open tasks for this rotation.</p>;
   }
   // Open items first, ticked ones underneath (kept so they can be unticked).
   const sorted = [...hints].sort((a, b) => Number(done.includes(a.id)) - Number(done.includes(b.id)));
@@ -963,7 +963,7 @@ function StayForm({
           <input type="date" value={value.checkOut || ""} readOnly className="h-9 rounded-lg border border-input bg-muted/40 px-2" />
         </label>
       </div>
-      <p className="text-xs text-muted-foreground">OUT always matches the end of the place. Extend the rotation to move it.</p>
+      <p className="text-xs text-muted-foreground">OUT is always the last day of the stay. Extend the rotation to change it.</p>
       <label className="inline-flex items-center gap-2">
         <input
           type="checkbox"
@@ -1035,7 +1035,7 @@ function ReplacementForm({
           className="h-9 rounded-lg border border-input px-2"
           disabled={!freePeople.length}
         >
-          <option value="">{freePeople.length ? "Select…" : "No one free for these dates"}</option>
+          <option value="">{freePeople.length ? "Select..." : "No one free for these dates"}</option>
           {freePeople.map((row) => (
             <option key={row.id} value={row.id}>
               {row.name}
@@ -1109,7 +1109,7 @@ function ReplacementForm({
   );
 }
 
-/** Note on this stay (e.g. "Lingering for snow"). Same note the Month calendar shows across the stay. */
+/** Note on this stay (e.g. "Held for weather"). Same note the Month calendar shows across the stay. */
 function StayNoteField({
   person,
   rotation,
@@ -1161,7 +1161,7 @@ function StayNoteField({
               save();
             }
           }}
-          placeholder="e.g. Lingering for snow"
+          placeholder="e.g. Held for weather"
           className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-card px-2 text-sm"
         />
         <button
@@ -1176,9 +1176,9 @@ function StayNoteField({
       <p className="text-xs text-muted-foreground">
         {status === "saved"
           ? text.trim()
-            ? "Saved. It shows across this stay on the Month calendar."
+            ? "Saved. The note appears across this stay on Month."
             : "Note removed."
-          : "Shows across this stay on the Month calendar."}
+          : "Appears across this stay on Month."}
       </p>
     </div>
   );
