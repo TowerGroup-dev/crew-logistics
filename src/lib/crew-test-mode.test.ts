@@ -104,7 +104,8 @@ describe("crew-test-mode", () => {
     mod.enterTestModeFromUrl();
     expect(mod.isTestMode()).toBe(true);
     expect(sessionStorage.getItem("crew-test-mode")).toBe("1");
-    expect(window.location.search).toBe("");
+    // Defaults practice onto the planning year so Month starts empty for 2027 work.
+    expect(window.location.search).toBe(`?year=${new Date().getFullYear() + 1}`);
     expect(window.location.hash).toBe("#x");
   });
 

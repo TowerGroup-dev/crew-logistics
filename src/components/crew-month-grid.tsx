@@ -2297,21 +2297,6 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             <button
               type="button"
               disabled={!canEdit}
-              title="Travel — paint empty days, then set From / To"
-              onClick={() => setPaintBrush({ kind: "travel" })}
-              className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 font-semibold transition-colors sm:px-2.5",
-                paintBrush.kind === "travel"
-                  ? "border-stone-500 bg-stone-200 text-stone-900 ring-2 ring-inset ring-stone-600/30"
-                  : "border-border bg-card text-muted-foreground hover:bg-muted",
-              )}
-            >
-              <span className="size-2.5 rounded-sm bg-stone-500" aria-hidden />
-              Travel
-            </button>
-            <button
-              type="button"
-              disabled={!canEdit}
               title="Return"
               onClick={() => setPaintBrush({ kind: "return" })}
               className={cn(

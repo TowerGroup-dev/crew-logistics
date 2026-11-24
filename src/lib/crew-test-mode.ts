@@ -55,6 +55,10 @@ export function enterTestModeFromUrl() {
   sessionStorage.setItem(FLAG, "1");
   url.searchParams.delete("test");
   url.searchParams.delete("practice");
+  // Practice on the planning year (2027 while the sheet year is still 2026).
+  if (!url.searchParams.get("year")) {
+    url.searchParams.set("year", String(new Date().getFullYear() + 1));
+  }
   window.history.replaceState(window.history.state, "", url.pathname + (url.search ? url.search : "") + url.hash);
 }
 

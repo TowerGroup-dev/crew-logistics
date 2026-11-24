@@ -155,9 +155,29 @@ describe("open stays carry into the next year", () => {
       rotations: [{ personId: "eric", plannedIn: "2026-11-23", moves: [newMove("IQA", "KUG", "2026-11-27")] }],
     } as unknown as RotationBook;
     const [out] = applyRotationMoves([eric], book);
+    // Open sheet stays end at calendarEnds (31 Dec 2026), not into the planning year.
     expect(siteOnDay(out!, "2026-12-31")).toBe("KUG");
-    expect(siteOnDay(out!, "2027-01-01")).toBe("KUG");
-    expect(siteOnDay(out!, "2027-03-15")).toBe("KUG");
+    expect(siteOnDay(out!, "2027-01-01")).toBe(null);
+    expect(siteOnDay(out!, "2027-03-15")).toBe(null);
+  });
+
+  it("app-placed 2027 stays still show on the planning year", () => {
+    const planned = {
+      id: "pat",
+      name: "Pat",
+      role: "Manager",
+      roles: ["Manager"],
+      homeSites: ["IQA"],
+      projectIds: [],
+      inDate: null,
+      outDate: null,
+      rotationDays: 42,
+      events: [],
+      stints: [{ from: "2027-01-10", out: "2027-01-20", site: "IQA", sites: ["IQA"] }],
+    } as unknown as CrewPerson;
+    expect(siteOnDay(planned, "2027-01-10")).toBe("IQA");
+    expect(siteOnDay(planned, "2027-01-19")).toBe("IQA");
+    expect(siteOnDay(planned, "2027-01-20")).toBe(null);
   });
 });
 

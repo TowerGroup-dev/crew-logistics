@@ -63,9 +63,14 @@ export const TEST_GUIDE: GuideSection[] = [
     title: "Calendar · Month",
     path: "/month",
     about:
-      "Month schedule. Switch to Edit to paint. Camp chips place stays; Travel paints empty travel days; Return paints the yellow window. Right-click for routes, Extend Stay, End stay, notes, tentative.",
+      "Month schedule for planning (start on 2027). Switch to Edit to paint. Camp chips place stays; Return paints the yellow window. Right-click IN/OUT for routes, Extend Stay, End stay, notes, tentative.",
     steps: [
       speed("month", "the Month grid"),
+      {
+        id: "month-year",
+        do: "Confirm the year control (top) shows 2027. Stay here for the rest of Month practice.",
+        expect: "You are on 2027. Empty days are ready to paint (2026 sheet stays do not fill this year).",
+      },
       {
         id: "month-scroll",
         do: "Scroll across the days and down the people.",
@@ -78,12 +83,12 @@ export const TEST_GUIDE: GuideSection[] = [
       },
       {
         id: "month-open-person",
-        do: "In View (or after a click that opens), open someone’s coloured stay.",
+        do: "In View (or after a click that opens), open someone’s coloured stay — place one first if 2027 is empty.",
         expect: "Their rotation opens: dates, flights, room. Close it.",
       },
       {
         id: "month-place",
-        do: "Switch to Edit, pick a camp colour (IQA/POND/ALRT/KUG), drag empty days on a row.",
+        do: "Switch to Edit, pick a camp colour (IQA/POND/ALRT/KUG), drag empty days on a row in 2027.",
         expect: "Stay sticks after you release: first day IN, last day OUT, camp colour.",
       },
       {
@@ -107,19 +112,14 @@ export const TEST_GUIDE: GuideSection[] = [
         expect: "OUT day stays camp-coloured with leave route (e.g. IQA → YOW), not a grey “OUT” label.",
       },
       {
-        id: "month-travel-days",
-        do: "Edit → Travel chip, drag empty days before a stay (or between camps). Set From/To, optional stop, Save.",
-        expect: "Hub nights stay grey; arrival into a camp uses that camp’s colour. Click a travel cell to edit.",
-      },
-      {
         id: "month-travel-suggest",
         do: "Add another similar route (same From/To) after saving one with a stop.",
         expect: "Previous routes appear; Accept fills stops. You still click Save.",
       },
       {
         id: "month-tentative",
-        do: "Right-click a stay → Mark tentative arrival (or through a later day). Check Overview To do.",
-        expect: "IN? on those days; Overview shows book-by ~2 weeks before. Confirm arrival locks real IN.",
+        do: "Right-click a stay day → Mark tentative arrival through that day (extend the IN? window). Check Overview To do.",
+        expect: "IN? on those days (arrival not set); Overview shows book-by ~2 weeks before. Confirm arrival locks real IN.",
       },
       {
         id: "month-search",
@@ -128,7 +128,7 @@ export const TEST_GUIDE: GuideSection[] = [
       },
       {
         id: "month-multi",
-        do: "Edit → Add multiple, pick two people, same camp and dates, Add to calendar.",
+        do: "Edit → Add multiple, pick two people, same camp and dates in 2027, Add to calendar.",
         expect: "Both rows get the stay on Month.",
       },
       {
@@ -148,13 +148,8 @@ export const TEST_GUIDE: GuideSection[] = [
       },
       {
         id: "month-delete",
-        do: "Click a grey travel cell and delete, or clear a placement from the menu.",
-        expect: "Travel or stay disappears; unrelated camps stay.",
-      },
-      {
-        id: "month-year",
-        do: "Use the year control (top) to go to 2027 and back to 2026.",
-        expect: "The grid changes year quickly; days under the scroll stay filled in.",
+        do: "Right-click a stay → Clear placement (or clear booking if you added routes).",
+        expect: "Stay disappears; unrelated camps stay.",
       },
     ],
   },

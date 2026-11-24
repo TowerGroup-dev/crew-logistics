@@ -259,7 +259,18 @@ export function CrewBoard({
   const [hydrated, setHydrated] = useState(false);
   const [role, setRole] = useState("");
   const [site, setSite] = useState("");
-  const [scheduleYear, setScheduleYear] = useState<number>(CREW_SCHEDULE.year);
+  const [scheduleYear, setScheduleYear] = useState<number>(() => {
+    if (typeof window === "undefined") return CREW_SCHEDULE.year;
+    try {
+      // Test Mode practices on the planning year (empty 2027), not the Excel sheet year.
+      if (sessionStorage.getItem("crew-test-mode") === "1") {
+        return new Date().getFullYear() + 1;
+      }
+    } catch {
+      /* ignore */
+    }
+    return CREW_SCHEDULE.year;
+  });
   const [scheduleYears, setScheduleYears] = useState<number[]>(() => [...loadScheduleYears()]);
   /** Only set when jumping from Year tape, keeps Month free-scroll starting at January. */
   const [monthScrollTo, setMonthScrollTo] = useState<string | null>(null);

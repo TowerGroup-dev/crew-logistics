@@ -940,15 +940,22 @@ export function resolvePlannedOut(person: CrewPerson, plannedIn: string) {
 }
 
 /**
- * Exclusive Out for a stint. Open (null) stays end the day after season end —
- * never "forever", so they cannot spill into the next schedule year.
+ * Exclusive Out for a stint. Open (null) stays end the day after that stay’s
+ * season end — never forever, so a null OUT in 2026 cannot paint all of 2027.
+ * App / typed OUT in a later year is kept so planning-year placements show.
  */
 export function exclusiveOutForStint(
-  stint: { out?: string | null },
+  stint: { from?: string; out?: string | null },
   scheduleYear = CREW_SCHEDULE.year,
 ): string {
-  const seasonExclusive = scheduleYearOutExclusive(scheduleYear);
+  const startYear =
+    stint.from && stint.from.length >= 4 ? Number(stint.from.slice(0, 4)) : scheduleYear;
+  const seasonExclusive = scheduleYearOutExclusive(
+    Number.isFinite(startYear) ? startYear : scheduleYear,
+  );
   if (!stint.out || stint.out.length < 10) return seasonExclusive;
+  // Planning ahead (OUT in a later year) must not be clipped to the Excel season.
+  if (Number(stint.out.slice(0, 4)) > startYear) return stint.out;
   return stint.out > seasonExclusive ? seasonExclusive : stint.out;
 }
 
