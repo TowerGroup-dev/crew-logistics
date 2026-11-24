@@ -4,9 +4,9 @@
  */
 
 import {
+  exclusiveOutForStint,
   isOffRotation,
   scheduleYearLastDay,
-  scheduleYearOutExclusive,
   statusOnDate,
   type CrewPerson,
   type CrewStint,
@@ -15,9 +15,10 @@ import { worksiteFromMark } from "@/lib/crew-sites";
 
 /** Worksite code (IQA, POND, ...) the person is on that day, or null when off site. */
 export function siteOnDay(person: CrewPerson, iso: string) {
-  const seasonExclusive = scheduleYearOutExclusive(Number(iso.slice(0, 4)));
   for (const stint of person.stints || []) {
-    const out = stint.out && stint.out < seasonExclusive ? stint.out : seasonExclusive;
+    // Open stays use the schedule season end — not the viewed day's year —
+    // so a null OUT in Nov 2026 cannot paint all of 2027.
+    const out = exclusiveOutForStint(stint);
     if (stint.from <= iso && iso < out) {
       const segment = segmentOn(stint.segments, iso);
       const lastSite = [...(stint.segments || [])].reverse().find((piece) => piece.kind === "site");
@@ -62,7 +63,8 @@ function segmentOn(segments: CrewStint["segments"], iso: string) {
 /** Travel day inside a stay (from the sheet): box label and full route. */
 export function travelSegmentOnDay(person: CrewPerson, iso: string) {
   for (const stint of person.stints || []) {
-    if (stint.from <= iso && (!stint.out || iso < stint.out)) {
+    const out = exclusiveOutForStint(stint);
+    if (stint.from <= iso && iso < out) {
       const segment = segmentOn(stint.segments, iso);
       return segment && segment.kind === "travel"
         ? { label: segment.label || "", route: segment.route || segment.label || "" }
@@ -75,7 +77,8 @@ export function travelSegmentOnDay(person: CrewPerson, iso: string) {
 /** Role for the stay covering that day (when the stay has its own role). */
 export function roleOnDay(person: CrewPerson, iso: string) {
   for (const stint of person.stints || []) {
-    if (stint.from <= iso && (!stint.out || iso < stint.out)) return stint.role || null;
+    const out = exclusiveOutForStint(stint);
+    if (stint.from <= iso && iso < out) return stint.role || null;
   }
   return null;
 }

@@ -66,7 +66,16 @@ function wipeOverlay() {
   const keys: string[] = [];
   for (let i = 0; i < sessionStorage.length; i++) {
     const key = sessionStorage.key(i);
-    if (key && (key.startsWith(OVERLAY) || key.startsWith(GONE) || key === LOADED || key === EMAILS || key.startsWith("crew-test-guide:"))) keys.push(key);
+    if (
+      key &&
+      (key.startsWith(OVERLAY) ||
+        key.startsWith(GONE) ||
+        key === LOADED ||
+        key === EMAILS ||
+        key.startsWith("crew-test-guide"))
+    ) {
+      keys.push(key);
+    }
   }
   for (const key of keys) sessionStorage.removeItem(key);
 }

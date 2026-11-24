@@ -6,6 +6,7 @@ import {
   CREW_ROLE_ORDER,
   CREW_ROLES,
   CREW_SCHEDULE,
+  exclusiveOutForStint,
   isCampSite,
   isOffRotation,
   normalizeRole,
@@ -48,7 +49,8 @@ function siteBarTone(site: string, sites: CrewSite[]) {
 
 function occupiedOn(person: CrewPerson, iso: string) {
   for (const stint of person.stints || []) {
-    if (stint.from <= iso && (!stint.out || iso < stint.out)) {
+    const out = exclusiveOutForStint(stint);
+    if (stint.from <= iso && iso < out) {
       return Boolean(worksiteFromMark(stint.site) || stint.sites.some((entry) => worksiteFromMark(entry)));
     }
   }

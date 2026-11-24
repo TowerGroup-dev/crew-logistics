@@ -101,6 +101,13 @@ export type RosterRotationPlan = {
   note?: string;
   /** First start date, kept when the IN is dragged, so bookings and notes stay attached. */
   idFrom?: string;
+  /**
+   * Preliminary arrival — shows IN? on the calendar and a Confirm / book-by
+   * reminder on Overview (2 weeks before the first possible IN).
+   */
+  tentative?: boolean;
+  /** Inclusive last day of the arrival window (one day or several). Defaults to `from`. */
+  tentativeThrough?: string;
 };
 
 /** Standard on-site length (6 weeks). Place/forms stop here unless extending past. */
@@ -131,6 +138,12 @@ export type CrewRosterBook = {
    * Move the IN of an imported stint. Key: `${personId}:${original start}` → new start.
    */
   stintInOverrides: Record<string, string>;
+  /**
+   * Mark / clear preliminary arrival on a stay (sheet or app).
+   * Key: `${personId}:${stintFrom}` → inclusive through date, or false when confirmed.
+   * Legacy `true` means a one-day window at the stay start.
+   */
+  stintTentativeOverrides: Record<string, string | boolean>;
   /**
    * Coordinator notes on any stay (sheet or app), keyed by {@link stayNoteKey}.
    * App plans also keep a copy on `RosterRotationPlan.note`.
@@ -166,6 +179,7 @@ export function emptyRoster(): CrewRosterBook {
     rotationPlans: {},
     stintOutOverrides: {},
     stintInOverrides: {},
+    stintTentativeOverrides: {},
     stayNotes: {},
     dateNotes: [],
     employees: [],
@@ -370,6 +384,10 @@ export function removePerson(roster: CrewRosterBook, personId: string): CrewRost
   for (const key of Object.keys(stintInOverrides)) {
     if (key.startsWith(`${personId}:`)) delete stintInOverrides[key];
   }
+  const stintTentativeOverrides = { ...(roster.stintTentativeOverrides ?? {}) };
+  for (const key of Object.keys(stintTentativeOverrides)) {
+    if (key.startsWith(`${personId}:`)) delete stintTentativeOverrides[key];
+  }
   const stayNotes = { ...(roster.stayNotes ?? {}) };
   for (const key of Object.keys(stayNotes)) {
     if (key.startsWith(`${personId}:`)) delete stayNotes[key];
@@ -383,6 +401,7 @@ export function removePerson(roster: CrewRosterBook, personId: string): CrewRost
     projectLinks,
     stintOutOverrides,
     stintInOverrides,
+    stintTentativeOverrides,
     stayNotes,
     removedPersonIds,
     dateNotes: (roster.dateNotes ?? []).filter((row) => row.personId !== personId),
@@ -453,6 +472,10 @@ export function readRoster(value: unknown): CrewRosterBook {
           if (typeof row.role === "string" && row.role.trim()) plan.role = row.role.trim();
           if (typeof row.note === "string" && row.note.trim()) plan.note = row.note.trim();
           if (typeof row.idFrom === "string" && row.idFrom.length >= 10) plan.idFrom = row.idFrom.slice(0, 10);
+          if (row.tentative === true) plan.tentative = true;
+          if (typeof row.tentativeThrough === "string" && row.tentativeThrough.length >= 10) {
+            plan.tentativeThrough = row.tentativeThrough.slice(0, 10);
+          }
           return plan;
         })
         .filter((item): item is RosterRotationPlan => Boolean(item));
@@ -462,6 +485,13 @@ export function readRoster(value: unknown): CrewRosterBook {
   if (raw.stintOutOverrides && typeof raw.stintOutOverrides === "object") {
     for (const [key, out] of Object.entries(raw.stintOutOverrides)) {
       if (typeof out === "string" && out.length >= 10) stintOutOverrides[key] = out.slice(0, 10);
+    }
+  }
+  const stintTentativeOverrides: Record<string, string | boolean> = {};
+  if (raw.stintTentativeOverrides && typeof raw.stintTentativeOverrides === "object") {
+    for (const [key, value] of Object.entries(raw.stintTentativeOverrides)) {
+      if (typeof value === "boolean") stintTentativeOverrides[key] = value;
+      else if (typeof value === "string" && value.length >= 10) stintTentativeOverrides[key] = value.slice(0, 10);
     }
   }
   const stintInOverrides: Record<string, string> = {};
@@ -507,6 +537,7 @@ export function readRoster(value: unknown): CrewRosterBook {
     rotationPlans,
     stintOutOverrides,
     stintInOverrides,
+    stintTentativeOverrides,
     stayNotes,
     dateNotes,
     employees,
@@ -717,6 +748,8 @@ type StintLike = {
   arrival: string;
   departure: string | null;
   tentative: boolean;
+  unsure?: boolean;
+  tentativeThrough?: string;
   note?: string;
   role?: string;
 };
@@ -761,7 +794,16 @@ export function setEmploymentStatus(
 export function addNextRotation(
   roster: CrewRosterBook,
   personId: string,
-  input: { site: string; from: string; out: string; role?: string; note?: string },
+  input: {
+    site: string;
+    from: string;
+    out: string;
+    role?: string;
+    note?: string;
+    tentative?: boolean;
+    /** Inclusive last day of arrival window (defaults to from). */
+    tentativeThrough?: string;
+  },
 ): CrewRosterBook {
   const site = input.site.trim().toUpperCase();
   const from = input.from.slice(0, 10);
@@ -771,6 +813,13 @@ export function addNextRotation(
   if (out > maxOut) out = maxOut;
   const role = input.role?.trim() || undefined;
   const note = clampStayNote(input.note || "") || undefined;
+  const lastInclusive = addDaysLocal(out, -1);
+  let tentativeThrough =
+    input.tentative && input.tentativeThrough ? input.tentativeThrough.slice(0, 10) : undefined;
+  if (tentativeThrough) {
+    if (tentativeThrough < from) tentativeThrough = from;
+    if (tentativeThrough > lastInclusive) tentativeThrough = lastInclusive;
+  }
   const plan: RosterRotationPlan = {
     id: `rot-${personId}-${from}-${Date.now()}`,
     site,
@@ -778,6 +827,12 @@ export function addNextRotation(
     out,
     role,
     note,
+    ...(input.tentative
+      ? {
+          tentative: true,
+          ...(tentativeThrough && tentativeThrough !== from ? { tentativeThrough } : {}),
+        }
+      : {}),
   };
   const existing = roster.rotationPlans?.[personId] ?? [];
   const withActive = setEmploymentStatus(roster, personId, "active");
@@ -1025,15 +1080,26 @@ export function extendStay(
   };
 }
 
-function applyStintOutOverrides<T extends { from: string; out: string | null; idFrom?: string }>(
+function applyStintOutOverrides<
+  T extends {
+    from: string;
+    out: string | null;
+    idFrom?: string;
+    tentative?: boolean;
+    unsure?: boolean;
+    tentativeThrough?: string;
+  },
+>(
   personId: string,
   stints: T[],
   overrides: Record<string, string> | undefined,
   inOverrides?: Record<string, string>,
+  tentativeOverrides?: Record<string, string | boolean>,
 ): T[] {
   const hasOut = overrides && Object.keys(overrides).length;
   const hasIn = inOverrides && Object.keys(inOverrides).length;
-  if (!hasOut && !hasIn) return stints;
+  const hasTentative = tentativeOverrides && Object.keys(tentativeOverrides).length;
+  if (!hasOut && !hasIn && !hasTentative) return stints;
   return stints.map((stint) => {
     const key = stintOverrideKey(personId, stint.from);
     let next = stint;
@@ -1042,6 +1108,19 @@ function applyStintOutOverrides<T extends { from: string; out: string | null; id
     if (override && override > stint.from) next = { ...next, out: override };
     const movedIn = inOverrides?.[key];
     if (movedIn && (!next.out || movedIn < next.out)) next = { ...next, from: movedIn, idFrom: stint.idFrom ?? stint.from };
+    const movedKey = stintOverrideKey(personId, next.from);
+    const tentativeFlag =
+      tentativeOverrides?.[movedKey] ??
+      tentativeOverrides?.[key] ??
+      (next.idFrom ? tentativeOverrides?.[stintOverrideKey(personId, next.idFrom)] : undefined);
+    if (tentativeFlag === false) {
+      next = { ...next, tentative: false, unsure: false, tentativeThrough: undefined };
+    } else if (typeof tentativeFlag === "string" && tentativeFlag.length >= 10) {
+      const through = tentativeFlag < next.from ? next.from : tentativeFlag;
+      next = { ...next, tentative: true, unsure: true, tentativeThrough: through };
+    } else if (tentativeFlag === true) {
+      next = { ...next, tentative: true, unsure: true, tentativeThrough: next.from };
+    }
     return next;
   });
 }
@@ -1071,6 +1150,88 @@ export function setStayIn(roster: CrewRosterBook, personId: string, currentFrom:
   if (original === stintOverrideKey(personId, next)) delete stintInOverrides[original];
   else stintInOverrides[original] = next;
   return { ...roster, stintInOverrides };
+}
+
+/**
+ * Confirm a preliminary arrival: lock IN to `confirmedIn`, clear tentative/IN?.
+ * Callers should also shift any outbound journey to land on this day.
+ */
+export function confirmStayArrival(
+  roster: CrewRosterBook,
+  personId: string,
+  stintFrom: string,
+  confirmedIn: string,
+): CrewRosterBook {
+  const from = stintFrom.slice(0, 10);
+  const confirmed = confirmedIn.slice(0, 10);
+  if (!from || !confirmed) return roster;
+  let next = roster;
+  if (confirmed !== from) {
+    next = setStayIn(next, personId, from, confirmed);
+  }
+  // Clear using the original key (still findable via idFrom / in-overrides).
+  next = setStayTentative(next, personId, from, false);
+  if (confirmed !== from) next = setStayTentative(next, personId, confirmed, false);
+  return next;
+}
+
+/**
+ * Mark or clear a preliminary (tentative) arrival window on a stay.
+ * `through` is the inclusive last possible arrival day (same as from = one day).
+ * App plans store the flag on the plan; sheet stays use an override.
+ */
+export function setStayTentative(
+  roster: CrewRosterBook,
+  personId: string,
+  stintFrom: string,
+  tentative: boolean | { through: string },
+): CrewRosterBook {
+  const from = stintFrom.slice(0, 10);
+  if (!from) return roster;
+  const on = tentative !== false;
+  let through = from;
+  if (typeof tentative === "object" && tentative.through) {
+    through = tentative.through.slice(0, 10);
+    if (through < from) through = from;
+  }
+  const plans = roster.rotationPlans?.[personId] ?? [];
+  const index = plans.findIndex((plan) => plan.from === from || plan.idFrom === from);
+  if (index >= 0) {
+    const current = plans[index]!;
+    const lastInclusive = addDaysLocal(current.out, -1);
+    if (through > lastInclusive) through = lastInclusive;
+    const nextPlans = [...plans];
+    if (!on) {
+      const { tentative: _t, tentativeThrough: _th, ...rest } = current;
+      nextPlans[index] = rest;
+    } else {
+      const nextPlan: RosterRotationPlan = { ...current, tentative: true };
+      if (through !== from) nextPlan.tentativeThrough = through;
+      else delete nextPlan.tentativeThrough;
+      nextPlans[index] = nextPlan;
+    }
+    return {
+      ...roster,
+      rotationPlans: {
+        ...(roster.rotationPlans ?? {}),
+        [personId]: nextPlans,
+      },
+    };
+  }
+  const original = Object.entries(roster.stintInOverrides ?? {}).find(
+    ([key, moved]) => moved === from && key.startsWith(`${personId}:`),
+  )?.[0];
+  const key = original ?? stintOverrideKey(personId, from);
+  const nextValue: string | boolean = on ? through : false;
+  const previous = roster.stintTentativeOverrides?.[key];
+  if (previous === nextValue) return roster;
+  return {
+    ...roster,
+    stintTentativeOverrides: {
+      ...(roster.stintTentativeOverrides ?? {}),
+      [key]: nextValue,
+    },
+  };
 }
 
 /**
@@ -1133,6 +1294,11 @@ function plansAsStints(plans: RosterRotationPlan[] | undefined): StintLike[] {
   if (!plans?.length) return [];
   return plans.map((plan) => {
     const meta = plan.role ? `Added in app · ${plan.role}` : "Added in app";
+    const tentative = plan.tentative === true;
+    const through =
+      tentative && plan.tentativeThrough && plan.tentativeThrough >= plan.from
+        ? plan.tentativeThrough
+        : undefined;
     return {
       site: plan.site,
       sites: [plan.site],
@@ -1140,8 +1306,14 @@ function plansAsStints(plans: RosterRotationPlan[] | undefined): StintLike[] {
       out: plan.out,
       arrival: "app",
       departure: "app",
-      tentative: false,
-      note: plan.note ? `${plan.note} · ${meta}` : meta,
+      tentative,
+      unsure: tentative,
+      ...(through ? { tentativeThrough: through } : {}),
+      note: plan.note
+        ? `${plan.note} · ${meta}${tentative ? " · tentative" : ""}`
+        : tentative
+          ? `${meta} · tentative`
+          : meta,
       role: plan.role,
       ...(plan.idFrom ? { idFrom: plan.idFrom } : {}),
     };
@@ -1161,6 +1333,7 @@ export function mergePeople(imported: ImportedPerson[], roster: CrewRosterBook):
       [...(person.stints ?? []), ...extra],
       roster.stintOutOverrides,
       roster.stintInOverrides,
+      roster.stintTentativeOverrides,
     );
     return {
       ...person,
@@ -1210,6 +1383,7 @@ export function mergePeople(imported: ImportedPerson[], roster: CrewRosterBook):
         plansAsStints(roster.rotationPlans?.[employee.id]),
         roster.stintOutOverrides,
         roster.stintInOverrides,
+        roster.stintTentativeOverrides,
       ),
       manual: true,
       provisional: employee.provisional === true,

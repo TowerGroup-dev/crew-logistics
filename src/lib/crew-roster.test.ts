@@ -15,6 +15,8 @@ import {
   setStayNote,
   MAX_STAY_NOTE_CHARS,
   setStayOut,
+  setStayTentative,
+  confirmStayArrival,
   stintOverrideKey,
 } from "@/lib/crew-roster";
 import type { CrewPerson } from "@/lib/crew-schedule";
@@ -93,6 +95,40 @@ describe("crew-roster rotation plans", () => {
   it("setStayOut shortens extracted sheet stays via override", () => {
     const shortened = setStayOut(emptyRoster(), "sheet-1", "2026-06-01", "2026-06-07");
     expect(shortened.stintOutOverrides[stintOverrideKey("sheet-1", "2026-06-01")]).toBe("2026-06-07");
+  });
+
+  it("setStayTentative marks sheet stays and app plans", () => {
+    const sheet = setStayTentative(emptyRoster(), "sheet-1", "2026-06-01", {
+      through: "2026-06-04",
+    });
+    expect(sheet.stintTentativeOverrides[stintOverrideKey("sheet-1", "2026-06-01")]).toBe(
+      "2026-06-04",
+    );
+    const withPlan = addNextRotation(emptyRoster(), "p1", {
+      site: "IQA",
+      from: "2026-12-01",
+      out: "2026-12-20",
+      tentative: true,
+      tentativeThrough: "2026-12-03",
+    });
+    expect(withPlan.rotationPlans.p1?.[0]?.tentative).toBe(true);
+    expect(withPlan.rotationPlans.p1?.[0]?.tentativeThrough).toBe("2026-12-03");
+    const confirmed = setStayTentative(withPlan, "p1", "2026-12-01", false);
+    expect(confirmed.rotationPlans.p1?.[0]?.tentative).toBeUndefined();
+  });
+
+  it("confirmStayArrival locks IN and clears tentative window", () => {
+    const placed = addNextRotation(emptyRoster(), "p1", {
+      site: "IQA",
+      from: "2026-12-01",
+      out: "2026-12-20",
+      tentative: true,
+      tentativeThrough: "2026-12-04",
+    });
+    const confirmed = confirmStayArrival(placed, "p1", "2026-12-01", "2026-12-03");
+    expect(confirmed.rotationPlans.p1?.[0]?.from).toBe("2026-12-03");
+    expect(confirmed.rotationPlans.p1?.[0]?.tentative).toBeUndefined();
+    expect(confirmed.rotationPlans.p1?.[0]?.tentativeThrough).toBeUndefined();
   });
 });
 

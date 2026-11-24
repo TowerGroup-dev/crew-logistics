@@ -4,7 +4,7 @@ import { SYNC_CHANGE_EVENT } from "@/lib/crew-sync";
 import { siteOnDay } from "@/lib/crew-site-days";
 import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, SlidersHorizontal, X } from "lucide-react";
+import { AlertTriangle, MoreVertical, SlidersHorizontal, X } from "lucide-react";
 import { useCrewUndo } from "@/components/crew-undo-provider";
 import {
   buildCrewBriefing,
@@ -64,6 +64,8 @@ import {
   setDateNote,
   setStayIn,
   setStayOut,
+  setStayTentative,
+  confirmStayArrival,
   slugEmployee,
   upsertEmployeeProfile,
   type CrewRosterBook,
@@ -90,6 +92,7 @@ import {
 import {
   currentRotationForPerson,
   extendRotationOut,
+  moveRotationIn,
   loadRotations,
   mergeRotationBook,
   dropAssumedFlights,
@@ -108,8 +111,10 @@ import {
   activeBookingFor,
   clearFlightsForPerson,
   loadFlights,
+  outboundBookingForStay,
   removeFlightBooking,
   saveFlights,
+  shiftBookingByDays,
   syncOpsFromFlights,
   upsertFlightBooking,
   type FlightBook,
@@ -124,6 +129,7 @@ import {
   paintStopoverDayMap,
   paintStopoverDays,
   setStopover,
+  stopoverOnDay,
   toggleStopover,
   type CrewStopoverBook,
 } from "@/lib/crew-stopovers";
@@ -164,7 +170,7 @@ import {
   type CrewTravelHubsBook,
 } from "@/lib/crew-travel-hubs";
 import { CrewSettingsPanel } from "@/components/crew-settings-panel";
-import { addDays, daysBetween, formatLong, formatMedium, todayInZone } from "@/lib/dates";
+import { addDays, daysBetween, formatLong, formatMedium, formatShort, todayInZone } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 export type CrewBoardView =
@@ -278,11 +284,18 @@ export function CrewBoard({
   const [scheduleView, setScheduleView] = useState<CrewScheduleViewPrefs>(() => loadScheduleViewPrefs());
   const [activityLog, setActivityLog] = useState<CrewActivityLog>(() => loadActivityLog());
   const [roleAddSection, setRoleAddSection] = useState<string | null>(null);
-  /** Keep heavy calendar panes mounted after first open so tab switches do not rebuild them. */
+  /** Calendar panes stay mounted so Month / Year / List switches do not cold-mount. */
   const [seenViews, setSeenViews] = useState<Partial<Record<CrewBoardView, true>>>(() => ({
+    overview: true,
+    month: true,
+    year: true,
+    list: true,
     [view]: true,
   }));
   const [employeeEditId, setEmployeeEditId] = useState<string | null>(null);
+  const [employeeMenuId, setEmployeeMenuId] = useState<string | null>(null);
+  /** Employees list: active people first (default), or inactive first. */
+  const [employeeSort, setEmployeeSort] = useState<"active-first" | "inactive-first">("active-first");
   const [employeeEditDraft, setEmployeeEditDraft] = useState({
     name: "",
     role: "",
@@ -304,47 +317,10 @@ export function CrewBoard({
   const skipHistoryRef = useRef(false);
   booksRef.current = { opsBook, roster, rotationBook, flightBook, stopoverBook };
 
-  useEffect(() => {
+  // Mark the active tab seen before paint so Year/List never flash empty under the nav.
+  useLayoutEffect(() => {
     setSeenViews((current) => (current[boardView] ? current : { ...current, [boardView]: true }));
   }, [boardView]);
-
-  // Prefetch heavy tabs one-by-one while idle (not all at once — that freezes the UI).
-  useEffect(() => {
-    if (!hydrated) return;
-    // Warm Month only at first. Other tabs mount on visit — avoids "Rendering…" lag on Calendar.
-    const warm: CrewBoardView[] = boardView === "month" ? ["month"] : [boardView, "month"];
-    let index = 0;
-    let idleId: number | undefined;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    let cancelled = false;
-
-    function scheduleNext() {
-      if (cancelled || index >= warm.length) return;
-      const kick = () => {
-        if (cancelled) return;
-        const view = warm[index++]!;
-        startTransition(() => {
-          setSeenViews((current) => (current[view] ? current : { ...current, [view]: true }));
-        });
-        scheduleNext();
-      };
-      const delay = index === 0 ? 0 : 400;
-      if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-        idleId = window.requestIdleCallback(kick, { timeout: 2000 + delay });
-      } else {
-        timeoutId = setTimeout(kick, delay || 200);
-      }
-    }
-
-    scheduleNext();
-    return () => {
-      cancelled = true;
-      if (idleId != null && typeof window !== "undefined" && "cancelIdleCallback" in window) {
-        window.cancelIdleCallback(idleId);
-      }
-      if (timeoutId != null) clearTimeout(timeoutId);
-    };
-  }, [hydrated]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -386,8 +362,10 @@ export function CrewBoard({
   useEffect(() => {
     const yearParam = Number(searchParams.get("year") || "");
     if (yearParam && Number.isInteger(yearParam)) {
-      setScheduleYear(yearParam);
-      setScheduleYears((current) => (current.includes(yearParam) ? current : addScheduleYear(current, yearParam)));
+      startTransition(() => {
+        setScheduleYear(yearParam);
+        setScheduleYears((current) => (current.includes(yearParam) ? current : addScheduleYear(current, yearParam)));
+      });
     }
     const monthParam = searchParams.get("month") || searchParams.get("start");
     if (monthParam && /^\d{4}-\d{2}/.test(monthParam)) {
@@ -855,8 +833,10 @@ export function CrewBoard({
         if (boardView === "employees") {
           const aInactive = a.person.active === false ? 1 : 0;
           const bInactive = b.person.active === false ? 1 : 0;
+          const inactiveOrder =
+            employeeSort === "inactive-first" ? bInactive - aInactive : aInactive - bInactive;
           return (
-            aInactive - bInactive ||
+            inactiveOrder ||
             roleRank(a.person.role) - roleRank(b.person.role) ||
             a.person.name.localeCompare(b.person.name)
           );
@@ -867,20 +847,36 @@ export function CrewBoard({
           a.person.name.localeCompare(b.person.name)
         );
       });
-  }, [boardView, query, role, site, workingRows]);
+  }, [boardView, employeeSort, query, role, site, workingRows]);
 
   const calendarRows = useMemo(() => {
-    const out: { person: (typeof rows)[number]["person"]; displayRole: string }[] = [];
-    for (const row of rows) {
+    // Month / Year: same Search + Role + Site filters as List / Employees.
+    const needle = query.trim().toLowerCase();
+    const source = workingRows.filter((row) => {
+      const roles = row.person.roles?.length ? row.person.roles : [row.person.role];
+      if (role && !roles.includes(role)) return false;
+      if (site && row.site !== site) return false;
+      if (
+        needle &&
+        !row.person.name.toLowerCase().includes(needle) &&
+        !roles.some((entry) => entry.toLowerCase().includes(needle))
+      ) {
+        return false;
+      }
+      return true;
+    });
+    const out: { person: (typeof workingRows)[number]["person"]; displayRole: string }[] = [];
+    for (const row of source) {
       if (scheduleView.hiddenPersonIds.includes(row.person.id)) continue;
       const memberships = membershipsForPerson(scheduleView, row.person.id, row.person.role);
       for (const displayRole of memberships) {
+        if (role && displayRole !== role) continue;
         if (isRoleRowHidden(scheduleView, row.person.id, displayRole)) continue;
         out.push({ person: row.person, displayRole });
       }
     }
     return out;
-  }, [rows, scheduleView]);
+  }, [query, role, scheduleView, site, workingRows]);
 
   const hiddenPeople = useMemo(() => {
     const byId = new Map(overview.rows.map((row) => [row.person.id, row.person]));
@@ -968,58 +964,99 @@ export function CrewBoard({
                 className="h-10 w-full rounded-lg border border-input bg-card px-2 text-sm text-foreground sm:h-9 sm:w-44"
               />
             </label>
-            <button
-              type="button"
-              onClick={() => setFiltersOpen((open) => !open)}
-              aria-expanded={filtersOpen}
-              className={cn(
-                "flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium sm:hidden",
-                filtersOpen || role || site ? "border-primary bg-primary/10 text-primary" : "border-input bg-card text-foreground",
-              )}
-            >
-              <SlidersHorizontal className="size-4" />
-              Filters{role || site ? ` · ${[role, site].filter(Boolean).length}` : ""}
-            </button>
-            <label className={cn("gap-1 text-sm text-muted-foreground sm:grid", filtersOpen ? "grid flex-1" : "hidden")}>
-              <span>Role</span>
-              <select
-                value={role}
-                onChange={(event) => setRole(event.target.value)}
-                className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
-              >
-                <option value="">All roles</option>
-                {CREW_ROLES.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={cn("gap-1 text-sm text-muted-foreground sm:grid", filtersOpen ? "grid flex-1" : "hidden")}>
-              <span>Site</span>
-              <select
-                value={site}
-                onChange={(event) => setSite(event.target.value)}
-                className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
-              >
-                <option value="">All sites</option>
-                {sitesBook.sites.map((entry) => (
-                  <option key={entry.code} value={entry.code}>
-                    {entry.code}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className={cn("ml-auto flex-wrap items-end gap-2 pb-0.5 sm:flex", filtersOpen ? "flex w-full justify-between sm:w-auto" : "hidden")}>
-              <p className="pb-2 text-sm text-muted-foreground">{rows.length} people</p>
+            <>
               <button
                 type="button"
-                onClick={() => setShowAddEmployee((open) => !open)}
-                className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
+                onClick={() => setFiltersOpen((open) => !open)}
+                aria-expanded={filtersOpen}
+                className={cn(
+                  "flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium sm:hidden",
+                  filtersOpen || role || site
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-input bg-card text-foreground",
+                )}
               >
-                Add employee
+                <SlidersHorizontal className="size-4" />
+                Filters{role || site ? ` · ${[role, site].filter(Boolean).length}` : ""}
               </button>
-            </div>
+              <label
+                className={cn(
+                  "gap-1 text-sm text-muted-foreground sm:grid",
+                  filtersOpen ? "grid flex-1" : "hidden",
+                )}
+              >
+                <span>Role</span>
+                <select
+                  value={role}
+                  onChange={(event) => setRole(event.target.value)}
+                  className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+                >
+                  <option value="">All roles</option>
+                  {CREW_ROLES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label
+                className={cn(
+                  "gap-1 text-sm text-muted-foreground sm:grid",
+                  filtersOpen ? "grid flex-1" : "hidden",
+                )}
+              >
+                <span>Site</span>
+                <select
+                  value={site}
+                  onChange={(event) => setSite(event.target.value)}
+                  className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+                >
+                  <option value="">All sites</option>
+                  {sitesBook.sites.map((entry) => (
+                    <option key={entry.code} value={entry.code}>
+                      {entry.code}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {boardView === "employees" ? (
+                <label
+                  className={cn(
+                    "gap-1 text-sm text-muted-foreground sm:grid",
+                    filtersOpen ? "grid flex-1" : "hidden",
+                  )}
+                >
+                  <span>Sort</span>
+                  <select
+                    value={employeeSort}
+                    onChange={(event) =>
+                      setEmployeeSort(event.target.value as "active-first" | "inactive-first")
+                    }
+                    className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+                  >
+                    <option value="active-first">Active first</option>
+                    <option value="inactive-first">Inactive first</option>
+                  </select>
+                </label>
+              ) : null}
+              <div
+                className={cn(
+                  "ml-auto flex-wrap items-end gap-2 pb-0.5 sm:flex",
+                  filtersOpen ? "flex w-full justify-between sm:w-auto" : "hidden",
+                )}
+              >
+                <p className="pb-2 text-sm text-muted-foreground">{rows.length} people</p>
+                {boardView === "employees" ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddEmployee((open) => !open)}
+                    className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
+                  >
+                    Add employee
+                  </button>
+                ) : null}
+              </div>
+            </>
           </div>
         ) : null}
 
@@ -1062,8 +1099,8 @@ export function CrewBoard({
           </KeepAlive>
         ) : null}
 
-        {seenViews.year ? (
-          <KeepAlive active={boardView === "year"}>
+        {seenViews.year || boardView === "year" ? (
+          <KeepAlive active={boardView === "year"} live={boardView === "overview"}>
           <div
             className={cn(
               "overflow-auto border-t border-border p-3 sm:p-4",
@@ -1122,8 +1159,13 @@ export function CrewBoard({
           </KeepAlive>
         ) : null}
 
-        {seenViews.month ? (
-          <KeepAlive active={boardView === "month"}>
+        {seenViews.month || boardView === "month" ? (
+          <KeepAlive
+            active={boardView === "month"}
+            // Live while Month is showing (so paints stick) and while Overview is open (warm Calendar).
+            // Freeze only when Year/List/etc hide Month.
+            live={boardView === "month" || boardView === "overview"}
+          >
           <div
             className={cn(
               "flex min-w-0 flex-col gap-4 overflow-x-hidden border-t border-border p-3 sm:p-4",
@@ -1366,6 +1408,98 @@ export function CrewBoard({
                   text: `${person?.name || personId} stay changed · out ${newOut}`,
                 });
               }}
+              onSetStayTentative={(personId, stintFrom, tentative) => {
+                captureHistory();
+                patchRoster((current) => setStayTentative(current, personId, stintFrom, tentative));
+                const person = overview.rows.find((row) => row.person.id === personId)?.person;
+                const through =
+                  typeof tentative === "object" ? tentative.through : stintFrom;
+                logActivity({
+                  kind: "stay_extend",
+                  personId,
+                  personName: person?.name,
+                  text:
+                    tentative === false
+                      ? `${person?.name || personId} arrival confirmed · ${stintFrom}`
+                      : through > stintFrom
+                        ? `${person?.name || personId} tentative arrival · ${stintFrom} – ${through}`
+                        : `${person?.name || personId} tentative arrival · ${stintFrom}`,
+                });
+              }}
+              onConfirmStayArrival={(personId, stintFrom, confirmedIn) => {
+                // Lock IN on the confirmed day; move outbound journey + grey days with it.
+                captureHistory();
+                const from = stintFrom.slice(0, 10);
+                const confirmed = confirmedIn.slice(0, 10);
+                const delta = daysBetween(from, confirmed);
+                patchRoster((current) => confirmStayArrival(current, personId, from, confirmed));
+                setRotationBook((current) => {
+                  const hit =
+                    current.rotations.find(
+                      (row) =>
+                        row.personId === personId &&
+                        row.plannedIn <= from &&
+                        from < row.plannedOut,
+                    ) ??
+                    current.rotations.find(
+                      (row) => row.personId === personId && row.plannedIn === from,
+                    );
+                  if (!hit || confirmed === hit.plannedIn) return current;
+                  const next = moveRotationIn(current, hit.id, confirmed);
+                  saveRotations(next);
+                  return next;
+                });
+                if (delta !== 0) {
+                  setFlightBook((prev) => {
+                    const booking = outboundBookingForStay(prev, personId, from);
+                    if (!booking) return prev;
+                    const oldSpan = journeyDateSpan(booking.segments);
+                    const shifted = shiftBookingByDays(booking, delta);
+                    const next = upsertFlightBooking(prev, shifted);
+                    saveFlights(next);
+                    if (oldSpan) {
+                      setStopoverBook((stopPrev) => {
+                        const hubs: { iso: string; hub: string }[] = [];
+                        for (
+                          let d = oldSpan.from;
+                          d <= oldSpan.to;
+                          d = addDays(d, 1)
+                        ) {
+                          const hub = stopoverOnDay(stopPrev, personId, d);
+                          if (hub) hubs.push({ iso: addDays(d, delta), hub });
+                        }
+                        let nextStop = clearStopoversInRange(
+                          stopPrev,
+                          personId,
+                          oldSpan.from,
+                          oldSpan.to,
+                        );
+                        nextStop = paintStopoverDayMap(nextStop, personId, hubs);
+                        saveStopovers(nextStop);
+                        return nextStop;
+                      });
+                    }
+                    setOpsBook((opsPrev) => {
+                      const synced = {
+                        ...opsPrev,
+                        [personId]: syncOpsFromFlights(opsPrev, next, personId),
+                      };
+                      saveCrewOps(synced);
+                      return synced;
+                    });
+                    return next;
+                  });
+                }
+                const person = overview.rows.find((row) => row.person.id === personId)?.person;
+                logActivity({
+                  kind: "stay_extend",
+                  personId,
+                  personName: person?.name,
+                  text: `${person?.name || personId} arrival confirmed · IN ${confirmed}${
+                    delta !== 0 ? " · journey moved" : ""
+                  }`,
+                });
+              }}
               onMoveStayIn={(personId, stintFrom, newFrom) => {
                 // Start the stay earlier or later; OUT, bookings, transfers and notes stay put.
                 captureHistory();
@@ -1586,15 +1720,21 @@ export function CrewBoard({
               </div>
             ) : null}
             {(() => {
-              const activeRows = rows.filter((row) => row.person.active !== false);
-              const inactiveRows = rows.filter((row) => row.person.active === false);
-              function employeeRow(row: (typeof rows)[number], inactive: boolean) {
+              const inactiveReasons: { value: EmploymentStatus; label: string }[] = [
+                { value: "pause", label: "Pause" },
+                { value: "terminated", label: "Terminated" },
+                { value: "resignation", label: "Resignation" },
+                { value: "retirement", label: "Retirement" },
+              ];
+              function employeeRow(row: (typeof rows)[number]) {
                 const status = employmentStatusFor(roster, row.person.id);
+                const inactive = row.person.active === false;
+                const menuOpen = employeeMenuId === row.person.id;
                 return (
                   <li
                     key={row.person.id}
                     className={cn(
-                      "flex flex-wrap items-center gap-3 px-4 py-3",
+                      "flex flex-wrap items-center gap-2 px-4 py-3 sm:gap-3",
                       inactive && "bg-stone-50/80 opacity-90",
                     )}
                   >
@@ -1613,34 +1753,13 @@ export function CrewBoard({
                       </p>
                       <p className="text-xs text-muted-foreground">{roleLabel(row.person)}</p>
                     </button>
-                    <label className="grid gap-0.5 text-[0.65rem] text-muted-foreground">
-                      <span className="sr-only">Employment</span>
-                      <select
-                        value={status === "inactive" ? "pause" : status}
-                        onChange={(event) =>
-                          patchRoster((current) =>
-                            setEmploymentStatus(current, row.person.id, event.target.value as EmploymentStatus),
-                          )
-                        }
-                        className={cn(
-                          "h-8 rounded-lg border border-input bg-card px-2 text-xs font-medium",
-                          inactive && "bg-stone-100 text-stone-700",
-                        )}
-                      >
-                        <option value="active">Active</option>
-                        <option value="pause">Pause</option>
-                        <option value="terminated">Terminated</option>
-                        <option value="resignation">Resignation</option>
-                        <option value="retirement">Retirement</option>
-                      </select>
-                    </label>
                     <span
                       className={cn(
                         "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
                         inactive ? "bg-stone-200 text-stone-700" : "bg-slate-100 text-slate-800",
                       )}
                     >
-                      {employmentStatusLabel(status)}
+                      {inactive ? employmentStatusLabel(status) : "Active"}
                     </span>
                     <button
                       type="button"
@@ -1659,45 +1778,103 @@ export function CrewBoard({
                       }}
                       className="h-8 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90"
                     >
-                      {inactive ? "Set active and add rotation" : "Add rotation"}
+                      Add rotation
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const ok = window.confirm(
-                          `Delete ${row.person.name} permanently? This removes them from Employees and any calendar placements for them.`,
-                        );
-                        if (!ok) return;
-                        captureHistory();
-                        patchRoster((current) => removePerson(current, row.person.id));
-                        purgePersonSideState(row.person.id);
-                        patchScheduleView((current) => showPerson(current, row.person.id));
-                      }}
-                      className="h-8 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-900 hover:bg-rose-100"
-                    >
-                      Delete
-                    </button>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        aria-label={`More for ${row.person.name}`}
+                        aria-expanded={menuOpen}
+                        onClick={() =>
+                          setEmployeeMenuId((current) =>
+                            current === row.person.id ? null : row.person.id,
+                          )
+                        }
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-input text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <MoreVertical className="size-4" />
+                      </button>
+                      {menuOpen ? (
+                        <>
+                          <button
+                            type="button"
+                            aria-label="Close menu"
+                            className="fixed inset-0 z-40 cursor-default"
+                            onClick={() => setEmployeeMenuId(null)}
+                          />
+                          <div
+                            role="menu"
+                            className="absolute top-9 right-0 z-50 w-48 rounded-xl border border-border bg-card py-1 shadow-lg"
+                          >
+                            {inactive ? (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full px-3 py-2 text-left text-sm font-medium hover:bg-muted"
+                                onClick={() => {
+                                  patchRoster((current) =>
+                                    setEmploymentStatus(current, row.person.id, "active"),
+                                  );
+                                  setEmployeeMenuId(null);
+                                }}
+                              >
+                                Set active
+                              </button>
+                            ) : null}
+                            <p className="px-3 pt-2 pb-1 text-[0.65rem] font-semibold tracking-wide text-muted-foreground uppercase">
+                              Inactive
+                            </p>
+                            {inactiveReasons.map((reason) => (
+                              <button
+                                key={reason.value}
+                                type="button"
+                                role="menuitem"
+                                className={cn(
+                                  "flex w-full px-3 py-1.5 pl-5 text-left text-sm hover:bg-muted",
+                                  (status === reason.value ||
+                                    (reason.value === "pause" && status === "inactive")) &&
+                                    "font-semibold",
+                                )}
+                                onClick={() => {
+                                  patchRoster((current) =>
+                                    setEmploymentStatus(current, row.person.id, reason.value),
+                                  );
+                                  setEmployeeMenuId(null);
+                                }}
+                              >
+                                {reason.label}
+                              </button>
+                            ))}
+                            <div className="my-1 border-t border-border" />
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="flex w-full px-3 py-2 text-left text-sm font-medium text-rose-800 hover:bg-rose-50"
+                              onClick={() => {
+                                setEmployeeMenuId(null);
+                                const ok = window.confirm(
+                                  `Delete ${row.person.name} permanently? This removes them from Employees and any calendar placements for them.`,
+                                );
+                                if (!ok) return;
+                                captureHistory();
+                                patchRoster((current) => removePerson(current, row.person.id));
+                                purgePersonSideState(row.person.id);
+                                patchScheduleView((current) => showPerson(current, row.person.id));
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
                   </li>
                 );
               }
-              if (!activeRows.length && !inactiveRows.length) {
+              if (!rows.length) {
                 return <p className="px-4 py-8 text-sm text-muted-foreground">No crew match these filters.</p>;
               }
-              return (
-                <div>
-                  <ul className="divide-y divide-border">{activeRows.map((row) => employeeRow(row, false))}</ul>
-                  {inactiveRows.length ? (
-                    <details className="border-t border-border">
-                      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-stone-600 hover:bg-muted/40">
-                        See more · {inactiveRows.length} inactive
-                      </summary>
-                      <ul className="divide-y divide-border border-t border-border">
-                        {inactiveRows.map((row) => employeeRow(row, true))}
-                      </ul>
-                    </details>
-                  ) : null}
-                </div>
-              );
+              return <ul className="divide-y divide-border">{rows.map((row) => employeeRow(row))}</ul>;
             })()}
           </div>
           </KeepAlive>
@@ -1756,8 +1933,8 @@ export function CrewBoard({
                           </span>
                         </span>
                         <span className="flex flex-wrap gap-x-3 text-[13px] tabular-nums text-muted-foreground">
-                          <span>IN {row.plannedIn ? formatMedium(row.plannedIn) : "-"}</span>
-                          <span>OUT {row.plannedOut ? formatMedium(row.plannedOut) : "-"}</span>
+                          <span>IN {row.plannedIn ? formatShort(row.plannedIn) : "-"}</span>
+                          <span>OUT {row.plannedOut ? formatShort(row.plannedOut) : "-"}</span>
                           {row.rotationDay != null ? <span>Day {row.rotationDay}/{stayLength(row)}</span> : null}
                         </span>
                         <span
@@ -1791,10 +1968,10 @@ export function CrewBoard({
                         </span>
                       </span>
                       <span className="phone:hidden text-sm tabular-nums text-muted-foreground">
-                        {row.plannedIn ? formatMedium(row.plannedIn) : "-"}
+                        {row.plannedIn ? formatShort(row.plannedIn) : "-"}
                       </span>
                       <span className="phone:hidden text-sm tabular-nums text-muted-foreground">
-                        {row.plannedOut ? formatMedium(row.plannedOut) : "-"}
+                        {row.plannedOut ? formatShort(row.plannedOut) : "-"}
                       </span>
                       <span className="phone:hidden text-sm tabular-nums text-muted-foreground">
                         {row.rotationDay == null ? "-" : `Day ${row.rotationDay} of ${stayLength(row)}`}

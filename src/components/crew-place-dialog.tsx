@@ -13,6 +13,10 @@ export type PlaceRotationInput = {
   role: string;
   /** Optional coordinator note on this placement (NAV-08). */
   note?: string;
+  /** Preliminary arrival — Overview reminds to book 2 weeks before IN. */
+  tentative?: boolean;
+  /** Inclusive last day of the arrival window (one day or several). */
+  tentativeThrough?: string;
 };
 
 export function CrewPlaceDialog({
@@ -46,6 +50,8 @@ export function CrewPlaceDialog({
   );
   const [role, setRole] = useState(() => (defaultRole || "Labourer").trim());
   const [note, setNote] = useState("");
+  const [tentative, setTentative] = useState(false);
+  const [tentativeThrough, setTentativeThrough] = useState(from);
   const [error, setError] = useState("");
   const roleOptions = roles.length ? roles : ["Labourer", "Operator/Truck Driver", "Surveyor", "Manager", "Mechanic"];
 
@@ -66,7 +72,18 @@ export function CrewPlaceDialog({
       return;
     }
     setError("");
-    onSave({ site, from, out, role, note: note.trim() || undefined });
+    let through = tentativeThrough.slice(0, 10);
+    if (through < from) through = from;
+    if (through > inclusiveTo) through = inclusiveTo;
+    onSave({
+      site,
+      from,
+      out,
+      role,
+      note: note.trim() || undefined,
+      tentative: tentative || undefined,
+      tentativeThrough: tentative && through !== from ? through : undefined,
+    });
   }
 
   return (
@@ -131,6 +148,38 @@ export function CrewPlaceDialog({
               className="h-9 rounded-lg border border-input px-2"
             />
           </label>
+
+          <label className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm">
+            <input
+              type="checkbox"
+              checked={tentative}
+              onChange={(event) => setTentative(event.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium">Tentative arrival</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                One day or a window — shows IN? on those days. Overview reminds you to book 2 weeks before the first day.
+              </span>
+            </span>
+          </label>
+
+          {tentative ? (
+            <label className="grid gap-1 text-sm">
+              <span className="text-muted-foreground">Arrival window ends (inclusive)</span>
+              <input
+                type="date"
+                value={tentativeThrough}
+                min={from}
+                max={inclusiveTo}
+                onChange={(event) => setTentativeThrough(event.target.value)}
+                className="h-9 rounded-lg border border-input px-2"
+              />
+              <span className="text-xs text-muted-foreground">
+                Same as IN = one day. Later = several days of IN?.
+              </span>
+            </label>
+          ) : null}
 
           <div className="flex flex-wrap gap-2 text-[0.8125rem] text-muted-foreground">
             {siteList.map((row) => (

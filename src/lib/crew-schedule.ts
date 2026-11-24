@@ -76,6 +76,11 @@ export type CrewStint = {
   arrival: string;
   departure: string | null;
   tentative: boolean;
+  /**
+   * Inclusive last day of a tentative arrival window (one day or several).
+   * Missing → window is just `from`.
+   */
+  tentativeThrough?: string;
   note?: string;
   /** Role for this stretch only, can differ from the person's usual roles. */
   role?: string;
@@ -90,6 +95,34 @@ export type CrewStint = {
   /** Shaded on the sheet with no site code: site taken from the Location column, needs confirming. */
   unsure?: boolean;
 };
+
+/** Inclusive last day of a preliminary arrival window, or null when not tentative. */
+export function tentativeArrivalThrough(stint: {
+  from: string;
+  tentative?: boolean;
+  unsure?: boolean;
+  tentativeThrough?: string;
+}): string | null {
+  if (!stint.tentative && !stint.unsure) return null;
+  const through = stint.tentativeThrough?.slice(0, 10);
+  if (through && through >= stint.from) return through;
+  return stint.from.slice(0, 10);
+}
+
+/** True when this calendar day sits in the tentative arrival window (one day or several). */
+export function isTentativeArrivalDay(
+  stint: {
+    from: string;
+    tentative?: boolean;
+    unsure?: boolean;
+    tentativeThrough?: string;
+  },
+  iso: string,
+): boolean {
+  const through = tentativeArrivalThrough(stint);
+  const day = iso.slice(0, 10);
+  return Boolean(through && day >= stint.from && day <= through);
+}
 
 export type CrewStintSegment = {
   from: string;
@@ -906,11 +939,22 @@ export function resolvePlannedOut(person: CrewPerson, plannedIn: string) {
   return seasonExclusive;
 }
 
-/** Exclusive Out for a sheet stint. Open stints run through season end (Out = Dec 18). */
-function stintOut(_person: CrewPerson, stint: CrewStint) {
-  const seasonExclusive = scheduleYearOutExclusive();
-  if (!stint.out) return seasonExclusive;
+/**
+ * Exclusive Out for a stint. Open (null) stays end the day after season end —
+ * never "forever", so they cannot spill into the next schedule year.
+ */
+export function exclusiveOutForStint(
+  stint: { out?: string | null },
+  scheduleYear = CREW_SCHEDULE.year,
+): string {
+  const seasonExclusive = scheduleYearOutExclusive(scheduleYear);
+  if (!stint.out || stint.out.length < 10) return seasonExclusive;
   return stint.out > seasonExclusive ? seasonExclusive : stint.out;
+}
+
+/** Exclusive Out for a sheet stint. Open stints run through season end. */
+function stintOut(_person: CrewPerson, stint: CrewStint) {
+  return exclusiveOutForStint(stint);
 }
 
 /** Last day on site (place end). Out in the UI is always this date; extensions move it. */

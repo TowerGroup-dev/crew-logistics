@@ -15,9 +15,15 @@ import {
   type RotationTravel,
 } from "@/lib/crew-rotations";
 import { bookingNeedsAttention, opsFor, type CrewOpsBook } from "@/lib/crew-ops";
-import { roleLabel, type CrewPerson, type CrewSnapshot, type CrewStint } from "@/lib/crew-schedule";
+import {
+  roleLabel,
+  tentativeArrivalThrough,
+  type CrewPerson,
+  type CrewSnapshot,
+  type CrewStint,
+} from "@/lib/crew-schedule";
 import { siteOnDay } from "@/lib/crew-site-days";
-import { addDays, daysBetween, formatMedium, weekBounds } from "@/lib/dates";
+import { addDays, daysBetween, formatShort, weekBounds } from "@/lib/dates";
 
 export { ASSUMED_BOOKED_BEFORE, BOOK_BEFORE_ARRIVAL_DAYS };
 
@@ -48,7 +54,8 @@ export type WeekStoryLine = {
 function whenPhrase(iso: string, asOf: string) {
   if (iso === asOf) return "today";
   if (iso === addDays(asOf, 1)) return "tomorrow";
-  return formatMedium(iso);
+  // Overview stays in the working year — day + month is enough.
+  return formatShort(iso);
 }
 
 /** Calendar stint for this rotation (live Month grid beats a stale travel-desk site). */
@@ -119,7 +126,8 @@ export function tentativeConfirmItems(
   for (const row of rows) {
     if (row.person.active === false) continue;
     for (const stint of row.person.stints || []) {
-      if (!stint.tentative || !stint.from) continue;
+      // Preliminary planning: explicit tentative, or sheet "unsure" IN? dates.
+      if ((!stint.tentative && !stint.unsure) || !stint.from) continue;
       if (isAssumedBookedDone(stint.from)) continue;
       if (stint.from < asOf) continue;
       const id = `${row.person.id}:tentative:${stint.from}`;
@@ -128,17 +136,23 @@ export function tentativeConfirmItems(
       const rotation =
         book.rotations.find((r) => r.personId === row.person.id && r.plannedIn === stint.from) ||
         latestStartedRotation(book, row.person.id, stint.from);
+      const through = tentativeArrivalThrough(stint) || stint.from;
+      const windowLabel =
+        through > stint.from
+          ? `${formatShort(stint.from)} – ${formatShort(through)}`
+          : formatShort(stint.from);
+      const bookBy = addDays(stint.from, -BOOK_BEFORE_ARRIVAL_DAYS);
       items.push({
         id,
         rotationId: rotation?.id || `tentative:${row.person.id}:${stint.from}`,
         personId: row.person.id,
         personName: row.person.name,
-        title: `Confirm arrival · ${formatMedium(stint.from)}`,
+        title: `Confirm arrival · ${windowLabel}`,
         detail: stint.site
-          ? `Tentative at ${stint.site} · book by ${formatMedium(addDays(stint.from, -BOOK_BEFORE_ARRIVAL_DAYS))}`
-          : `Tentative date · book by ${formatMedium(addDays(stint.from, -BOOK_BEFORE_ARRIVAL_DAYS))}`,
-        dueOn: addDays(stint.from, -BOOK_BEFORE_ARRIVAL_DAYS),
-        priority: addDays(stint.from, -BOOK_BEFORE_ARRIVAL_DAYS) <= asOf ? "urgent" : "normal",
+          ? `Tentative at ${stint.site} · book by ${formatShort(bookBy)}`
+          : `Tentative window · book by ${formatShort(bookBy)}`,
+        dueOn: bookBy,
+        priority: bookBy <= asOf ? "urgent" : "normal",
       });
     }
   }
@@ -180,7 +194,7 @@ export function buildWeekStory({
     const tentativeId = `${rotation.personId}:tentative:${rotation.plannedIn}`;
     const row = rows.find((r) => r.person.id === rotation.personId);
     const stintTentative = (row?.person.stints || []).some(
-      (stint) => stint.from === rotation.plannedIn && stint.tentative,
+      (stint) => stint.from === rotation.plannedIn && (stint.tentative || stint.unsure),
     );
     // Unconfirmed tentatives stay in To do only; confirmed ones appear here.
     const showArrival = !stintTentative || confirmedTentativeIds.has(tentativeId);

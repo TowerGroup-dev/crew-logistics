@@ -1,22 +1,20 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Suspense, startTransition, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { CrewBoardView } from "@/components/crew-board";
 import { CrewNav } from "@/components/crew-nav";
 import { startSync } from "@/lib/crew-sync";
 
 /**
- * Client-only board: localStorage + schedule paint on first frame (no SSR empty → Loading flash).
- * Shared data is pulled from the server first (capped at a few seconds), so the board
- * opens on everyone's latest bookings, moves and notes.
+ * Board loads immediately; sync runs in parallel so Calendar is not blank while waiting.
  */
 const CrewBoard = dynamic(
-  () =>
-    Promise.race([startSync(), new Promise((resolve) => setTimeout(resolve, 5000))]).then(() =>
-      import("@/components/crew-board").then((mod) => mod.CrewBoard),
-    ),
+  () => {
+    void startSync();
+    return import("@/components/crew-board").then((mod) => mod.CrewBoard);
+  },
   { ssr: false },
 );
 
@@ -38,15 +36,16 @@ function viewFromPath(pathname: string): CrewBoardView {
 export function CrewWorkspace() {
   const pathname = usePathname();
   const router = useRouter();
-  const [view, setView] = useState<CrewBoardView>(() => viewFromPath(pathname));
+  const routeView = viewFromPath(pathname);
+  // Instant Month/Year/List (and Calendar) switches — do not wait on the router.
+  const [pendingView, setPendingView] = useState<CrewBoardView | null>(null);
+  const view = pendingView ?? routeView;
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [reminderCount, setReminderCount] = useState(0);
 
-  // Defer heavy view swaps so the nav stays responsive while Month/Year catch up.
   useEffect(() => {
-    const next = viewFromPath(pathname);
-    startTransition(() => setView(next));
-  }, [pathname]);
+    if (pendingView != null && routeView === pendingView) setPendingView(null);
+  }, [pendingView, routeView]);
 
   // Old /reminders route → open the popup on Overview instead of a full page.
   useEffect(() => {
@@ -66,7 +65,12 @@ export function CrewWorkspace() {
   return (
     <div className="flex min-w-0 flex-col gap-5 overflow-x-hidden">
       <Suspense fallback={null}>
-        <CrewNav onOpenReminders={() => setRemindersOpen(true)} reminderCount={reminderCount} />
+        <CrewNav
+          view={view}
+          onNavigateView={setPendingView}
+          onOpenReminders={() => setRemindersOpen(true)}
+          reminderCount={reminderCount}
+        />
       </Suspense>
       <Suspense fallback={null}>
         <CrewBoard

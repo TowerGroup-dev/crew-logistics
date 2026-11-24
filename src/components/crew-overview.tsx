@@ -41,7 +41,7 @@ import {
   unmarkChecklistDone,
   type ChecklistDoneBook,
 } from "@/lib/crew-checklist-done";
-import { daysBetween, formatMedium, formatShort, parseISODate } from "@/lib/dates";
+import { daysBetween, formatShort, parseISODate } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 function emptyDoneSafe() {
@@ -278,7 +278,7 @@ export function CrewOverview({
             title="This week"
             accent="sky"
             defaultOpen
-            aside={`${formatMedium(weekStory.weekStart)} – ${formatMedium(weekStory.weekEnd)}`}
+            aside={`${formatShort(weekStory.weekStart)} – ${formatShort(weekStory.weekEnd)}`}
           >
             <WeekStoryList
               lines={weekStory.lines}
@@ -424,12 +424,12 @@ function RemindersSheet({
   const windows: { label: string; range: string; sections: ReminderSectionGroup[] }[] = [
     {
       label: "This week",
-      range: `${formatMedium(board.weekStart)} – ${formatMedium(board.weekEnd)}`,
+      range: `${formatShort(board.weekStart)} – ${formatShort(board.weekEnd)}`,
       sections: board.weekSections,
     },
     {
       label: "Next week",
-      range: `${formatMedium(board.lookaheadStart)} – ${formatMedium(board.lookaheadEnd)}`,
+      range: `${formatShort(board.lookaheadStart)} – ${formatShort(board.lookaheadEnd)}`,
       sections: board.lookaheadSections,
     },
   ];
@@ -495,7 +495,7 @@ function RemindersList({
     <div className="divide-y divide-border">
       <ReminderWindow
         label="This week"
-        range={`${formatMedium(board.weekStart)} to ${formatMedium(board.weekEnd)}`}
+        range={`${formatShort(board.weekStart)} to ${formatShort(board.weekEnd)}`}
         sections={board.weekSections}
         count={board.week.length}
         onOpen={onOpen}
@@ -503,7 +503,7 @@ function RemindersList({
       />
       <ReminderWindow
         label="Next week"
-        range={`${formatMedium(board.lookaheadStart)} to ${formatMedium(board.lookaheadEnd)}`}
+        range={`${formatShort(board.lookaheadStart)} to ${formatShort(board.lookaheadEnd)}`}
         sections={board.lookaheadSections}
         count={board.lookahead.length}
         onOpen={onOpen}

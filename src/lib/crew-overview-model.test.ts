@@ -269,6 +269,7 @@ describe("tentative confirm", () => {
                 arrival: "2026-12-01",
                 departure: null,
                 tentative: true,
+                tentativeThrough: "2026-12-03",
               },
             ],
           }),
@@ -279,6 +280,37 @@ describe("tentative confirm", () => {
     );
     expect(items).toHaveLength(1);
     expect(items[0]!.title).toContain("Confirm arrival");
+    expect(items[0]!.title).toMatch(/–/);
     expect(items[0]!.id).toBe("p2:tentative:2026-12-01");
+    expect(items[0]!.detail).toContain("book by");
+  });
+
+  it("lists sheet unsure IN? dates as preliminary arrivals", () => {
+    const items = tentativeConfirmItems(
+      [
+        snap(
+          person({
+            id: "p3",
+            name: "Unsure Pat",
+            stints: [
+              {
+                from: "2026-12-10",
+                out: "2026-12-24",
+                site: "KUG",
+                sites: ["KUG"],
+                arrival: "2026-12-10",
+                departure: null,
+                tentative: false,
+                unsure: true,
+              },
+            ],
+          }),
+        ),
+      ],
+      { version: 1, rotations: [] },
+      "2026-11-20",
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]!.id).toBe("p3:tentative:2026-12-10");
   });
 });

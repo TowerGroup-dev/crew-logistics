@@ -8,7 +8,7 @@
 import { bookingNeedsAttention, opsFor, type CrewOpsBook } from "@/lib/crew-ops";
 import type { RotationBook } from "@/lib/crew-rotations";
 import type { CrewSnapshot } from "@/lib/crew-schedule";
-import { addDays, daysBetween, formatMedium, weekBounds } from "@/lib/dates";
+import { addDays, daysBetween, formatShort, weekBounds } from "@/lib/dates";
 
 export type ReminderSection = "leaving" | "accommodation" | "flights" | "check_in";
 
@@ -63,7 +63,7 @@ function leavePhrase(days: number | null) {
 
 function shortDate(iso: string | null) {
   if (!iso) return "No date";
-  return formatMedium(iso);
+  return formatShort(iso);
 }
 
 function bucketForDate(
@@ -323,12 +323,12 @@ export function formatRemindersForMail(board: SituationReminderBoard) {
   }
   addWindow(
     "This week",
-    `${formatMedium(board.weekStart)} to ${formatMedium(board.weekEnd)}`,
+    `${formatShort(board.weekStart)} to ${formatShort(board.weekEnd)}`,
     board.weekSections,
   );
   addWindow(
     "Next week",
-    `${formatMedium(board.lookaheadStart)} to ${formatMedium(board.lookaheadEnd)}`,
+    `${formatShort(board.lookaheadStart)} to ${formatShort(board.lookaheadEnd)}`,
     board.lookaheadSections,
   );
   return blocks;

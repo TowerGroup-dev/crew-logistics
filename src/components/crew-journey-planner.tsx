@@ -12,7 +12,6 @@ import {
 import type { FlightBook, FlightDirection, FlightSegment } from "@/lib/crew-flights";
 import { suggestRoutesFor } from "@/lib/crew-route-suggestions";
 import { formatMedium } from "@/lib/dates";
-import { cn } from "@/lib/cn";
 import { siteOnDay } from "@/lib/crew-site-days";
 import type { CrewPerson } from "@/lib/crew-schedule";
 
@@ -28,6 +27,12 @@ export type JourneyPlannerApply = {
   notes?: string;
 };
 
+const ROUTE_TYPES: { value: JourneyType; label: string }[] = [
+  { value: "coming", label: "Home → Site" },
+  { value: "home", label: "Site → Home" },
+  { value: "transfer", label: "Site → Site" },
+];
+
 function guessType(from: string, to: string): JourneyType {
   const camps = new Set(CAMP_AIRPORTS.map((row) => row.code));
   const f = from.trim().toUpperCase();
@@ -35,6 +40,12 @@ function guessType(from: string, to: string): JourneyType {
   if (camps.has(f) && camps.has(t)) return "transfer";
   if (camps.has(f) && !camps.has(t)) return "home";
   return "coming";
+}
+
+function typeNote(journeyType: JourneyType) {
+  if (journeyType === "transfer") return "site to site";
+  if (journeyType === "home") return "site to home";
+  return "home to site";
 }
 
 /** Compact calendar travel editor — Excel-simple, any From/To, optional stops. */
@@ -64,6 +75,7 @@ export function CrewJourneyPlanner({
   initialFrom?: string;
   initialDirection?: FlightDirection;
   initialStops?: string[];
+  /** Kept for callers; overnight is inferred from dates + stops. */
   initialOvernight?: boolean;
   initialOvernightHub?: string;
   initialNotes?: string;
@@ -78,17 +90,23 @@ export function CrewJourneyPlanner({
   const campNear = person ? siteOnDay(person, initialDate) : null;
   const defaultTo = initialTo || campNear || "IQA";
   const defaultFrom = initialFrom || (campNear ? campNear : "YOW");
+  // If an overnight hub was saved without being in stops, keep it as the first stop.
+  const seedStops =
+    initialStops.length > 0
+      ? initialStops
+      : initialOvernightHub && initialOvernight
+        ? [initialOvernightHub]
+        : [];
+  const seedEnd = (initialEndDate || initialDate).slice(0, 10);
 
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
-  const [stops, setStops] = useState<string[]>(initialStops);
+  const [stops, setStops] = useState<string[]>(seedStops);
   const [journeyType, setJourneyType] = useState<JourneyType>(() =>
     initialDirection === "return" ? "home" : guessType(defaultFrom, defaultTo),
   );
-  const [overnight, setOvernight] = useState(initialOvernight);
-  const [overnightHub, setOvernightHub] = useState(initialOvernightHub);
   const [startDate, setStartDate] = useState(initialDate.slice(0, 10));
-  const [endDate, setEndDate] = useState((initialEndDate || initialDate).slice(0, 10));
+  const [endDate, setEndDate] = useState(seedEnd);
   const [notes, setNotes] = useState(initialNotes);
 
   const airports = useMemo(
@@ -99,17 +117,22 @@ export function CrewJourneyPlanner({
     () => suggestRoutesFor(flightBook, from, to),
     [flightBook, from, to],
   );
+  const multiDay = endDate > startDate;
   const preview = useMemo(
     () =>
       buildJourneyPlan({
         airports,
         startDate,
-        endDate: overnight || endDate > startDate ? endDate : startDate,
+        endDate: multiDay ? endDate : startDate,
         journeyType,
-        overnightHub: overnight ? overnightHub : "",
+        overnightHub: multiDay && stops[0] ? stops[0] : "",
       }),
-    [airports, startDate, endDate, overnight, overnightHub, journeyType],
+    [airports, startDate, endDate, multiDay, stops, journeyType],
   );
+
+  // Home places = hubs; Site places = camps. Match the route type.
+  const fromPlaces = journeyType === "coming" ? hubs : CAMP_AIRPORTS;
+  const toPlaces = journeyType === "home" ? hubs : CAMP_AIRPORTS;
 
   function setStop(index: number, code: string) {
     setStops((current) => current.map((row, i) => (i === index ? code : row)));
@@ -121,12 +144,6 @@ export function CrewJourneyPlanner({
 
   function apply() {
     if (!preview) return;
-    const typeNote =
-      journeyType === "transfer"
-        ? "transfer"
-        : journeyType === "home"
-          ? "going home"
-          : "coming to camp";
     onApply({
       direction: journeyTypeToDirection(journeyType),
       journeyType,
@@ -136,7 +153,7 @@ export function CrewJourneyPlanner({
       startDate: preview.startDate,
       arriveDate: preview.arriveDate,
       bookingId,
-      notes: [typeNote, notes.trim(), preview.pathLabel].filter(Boolean).join(" · "),
+      notes: [typeNote(journeyType), notes.trim(), preview.pathLabel].filter(Boolean).join(" · "),
     });
   }
 
@@ -145,9 +162,9 @@ export function CrewJourneyPlanner({
       <div
         role="dialog"
         aria-labelledby="travel-editor-title"
-        className="max-h-[min(92vh,34rem)] w-full max-w-md overflow-auto rounded-2xl border border-border bg-card p-4 shadow-2xl"
+        className="flex max-h-[min(70vh,28rem)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 pt-3.5 pb-3">
           <div>
             <p id="travel-editor-title" className="text-base font-semibold">
               Add travel
@@ -167,26 +184,46 @@ export function CrewJourneyPlanner({
           </button>
         </div>
 
-        <div className="mt-3 grid gap-3">
-          <div>
-            <p className="mb-1.5 text-sm font-medium">Route</p>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <div className="grid gap-3">
+            <label className="grid gap-1.5 text-sm font-medium">
+              Route
+              <select
+                value={journeyType}
+                onChange={(event) => setJourneyType(event.target.value as JourneyType)}
+                className="h-9 rounded-lg border border-input bg-card px-2 text-sm font-medium text-foreground"
+              >
+                {ROUTE_TYPES.map((row) => (
+                  <option key={row.value} value={row.value}>
+                    {row.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <div className="grid grid-cols-2 gap-2">
               <label className="grid gap-1 text-xs text-muted-foreground">
                 From
-                <AirportSelect value={from} onChange={setFrom} hubs={hubs} placeholder="e.g. Ottawa" />
+                <AirportSelect
+                  value={from}
+                  onChange={setFrom}
+                  hubs={fromPlaces}
+                  placeholder="Choose place"
+                />
               </label>
               <label className="grid gap-1 text-xs text-muted-foreground">
                 To
                 <AirportSelect
                   value={to}
                   onChange={setTo}
-                  hubs={[...CAMP_AIRPORTS, ...hubs]}
-                  placeholder="e.g. IQA"
+                  hubs={toPlaces}
+                  placeholder="Choose place"
                 />
               </label>
             </div>
+
             {suggestions.length ? (
-              <div className="mt-2 rounded-lg border border-dashed border-border bg-muted/20 px-2.5 py-2">
+              <div className="rounded-lg border border-dashed border-border bg-muted/30 px-2.5 py-2">
                 <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   Previous routes
                 </p>
@@ -199,12 +236,8 @@ export function CrewJourneyPlanner({
                         setFrom(row.airports[0] || from);
                         setTo(row.airports[row.airports.length - 1] || to);
                         setStops(row.airports.length > 2 ? row.airports.slice(1, -1) : []);
-                        if (row.airports.length > 2) {
-                          setOvernight(true);
-                          setOvernightHub(row.airports[1] || "");
-                        }
                       }}
-                      className="rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-sky-50"
+                      className="rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-muted"
                     >
                       <span className="font-semibold">{row.pathLabel}</span>
                       <span className="ml-1.5 text-muted-foreground">· used {row.uses}×</span>
@@ -216,163 +249,99 @@ export function CrewJourneyPlanner({
                 </p>
               </div>
             ) : null}
-          </div>
 
-          <div>
-            <p className="mb-1.5 text-sm font-medium">Travel type</p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {(
-                [
-                  ["coming", "Coming to camp"],
-                  ["home", "Going home"],
-                  ["transfer", "Camp transfer"],
-                ] as const
-              ).map(([value, label]) => (
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <p className="text-sm font-medium">Connecting stops</p>
                 <button
-                  key={value}
                   type="button"
-                  onClick={() => setJourneyType(value)}
-                  className={cn(
-                    "rounded-lg border px-2 py-2 text-center text-xs font-semibold",
-                    journeyType === value
-                      ? "border-sky-500 bg-sky-50 text-sky-950"
-                      : "border-border text-muted-foreground hover:bg-muted",
-                  )}
+                  onClick={() => setStops((current) => [...current, ""])}
+                  className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
-                  {label}
+                  <Plus className="size-3.5" /> Add stop
                 </button>
-              ))}
+              </div>
+              {stops.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No stops. Direct From to To. Add a stop if they sleep over on the way.
+                </p>
+              ) : (
+                <div className="grid gap-2">
+                  {stops.map((stop, index) => (
+                    <div key={`stop-${index}`} className="flex items-center gap-2">
+                      <AirportSelect
+                        value={stop}
+                        onChange={(code) => setStop(index, code)}
+                        hubs={hubs}
+                        includeCamps={false}
+                        placeholder={`Stop ${index + 1}`}
+                        className="flex-1"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Remove stop"
+                        onClick={() => removeStop(index)}
+                        className="rounded-lg p-2 text-muted-foreground hover:bg-rose-50 hover:text-rose-800"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
 
-          <div>
-            <p className="mb-1.5 text-sm font-medium">Overnight stay?</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {(
-                [
-                  [false, "No overnight"],
-                  [true, "Overnight"],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={String(value)}
-                  type="button"
-                  onClick={() => {
-                    setOvernight(value);
-                    if (value && endDate <= startDate) setEndDate(startDate);
-                  }}
-                  className={cn(
-                    "rounded-lg border px-2 py-2 text-center text-xs font-semibold",
-                    overnight === value
-                      ? "border-sky-500 bg-sky-50 text-sky-950"
-                      : "border-border text-muted-foreground hover:bg-muted",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {overnight ? (
-              <label className="mt-2 grid gap-1 text-xs text-muted-foreground">
-                Overnight city
-                <AirportSelect
-                  value={overnightHub}
-                  onChange={setOvernightHub}
-                  hubs={hubs}
-                  placeholder="e.g. Edmonton"
+            <div className="grid grid-cols-2 gap-2">
+              <label className="grid gap-1 text-xs text-muted-foreground">
+                Departure
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(event) => setStartDate(event.target.value)}
+                  className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
                 />
               </label>
-            ) : null}
-          </div>
-
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <p className="text-sm font-medium">Connecting stops</p>
-              <button
-                type="button"
-                onClick={() => setStops((current) => [...current, ""])}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <Plus className="size-3.5" /> Add stop
-              </button>
+              <label className="grid gap-1 text-xs text-muted-foreground">
+                Arrival
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(event) => setEndDate(event.target.value)}
+                  className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+                />
+              </label>
             </div>
-            {stops.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No stops. Direct From to To.</p>
-            ) : (
-              <div className="grid gap-2">
-                {stops.map((stop, index) => (
-                  <div key={`stop-${index}`} className="flex items-center gap-2">
-                    <AirportSelect
-                      value={stop}
-                      onChange={(code) => setStop(index, code)}
-                      hubs={hubs}
-                      placeholder={`Stop ${index + 1}`}
-                      className="flex-1"
-                    />
-                    <button
-                      type="button"
-                      aria-label="Remove stop"
-                      onClick={() => removeStop(index)}
-                      className="rounded-lg p-2 text-muted-foreground hover:bg-rose-50 hover:text-rose-800"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
 
-          <div className="grid grid-cols-2 gap-2">
             <label className="grid gap-1 text-xs text-muted-foreground">
-              Departure
+              Notes (optional)
               <input
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Flight number or notes"
                 className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
               />
             </label>
-            <label className="grid gap-1 text-xs text-muted-foreground">
-              Arrival
-              <input
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-                className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
-              />
-            </label>
-          </div>
 
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            Notes (optional)
-            <input
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              placeholder="Flight number or notes"
-              className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
-            />
-          </label>
-
-          <div className="rounded-xl border border-sky-200 bg-sky-50/60 px-3 py-2.5 text-sm">
-            {preview ? (
-              <>
-                <p className="font-semibold tracking-tight">{preview.pathLabel}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {formatMedium(preview.startDate)}
-                  {preview.arriveDate !== preview.startDate
-                    ? ` to ${formatMedium(preview.arriveDate)}`
-                    : ". Same day"}
-                  . Shown as travel days on the calendar.
-                </p>
-              </>
-            ) : (
-              <p className="text-muted-foreground">Enter From and To.</p>
-            )}
+            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm">
+              {preview ? (
+                <>
+                  <p className="font-semibold tracking-tight">{preview.pathLabel}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatMedium(preview.startDate)}
+                    {preview.arriveDate !== preview.startDate
+                      ? ` to ${formatMedium(preview.arriveDate)}`
+                      : ". Same day"}
+                    . Shown as travel days on the calendar.
+                  </p>
+                </>
+              ) : (
+                <p className="text-muted-foreground">Choose From and To.</p>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3">
           {onDelete && bookingId ? (
             <button
               type="button"

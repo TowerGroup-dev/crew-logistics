@@ -24,12 +24,7 @@ export function loadScheduleYears(): number[] {
     const extra = Array.isArray(raw)
       ? raw.map(Number).filter((year) => Number.isInteger(year) && year >= 2020 && year <= 2100)
       : [];
-    const years = [...new Set([...base, ...rolling, ...extra])].sort((a, b) => a - b);
-    // Persist the live calendar year so 2027 appears on Jan 1 without a manual + Year.
-    if (!extra.includes(calendarYear()) && !(CREW_AVAILABLE_YEARS as readonly number[]).includes(calendarYear())) {
-      saveScheduleYears(years);
-    }
-    return years;
+    return [...new Set([...base, ...rolling, ...extra])].sort((a, b) => a - b);
   } catch {
     return [...new Set([...base, ...rolling])].sort((a, b) => a - b);
   }

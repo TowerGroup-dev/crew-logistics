@@ -241,13 +241,20 @@ function TestGuide() {
     setTicks(t);
   }, []);
 
-  if (pathname.startsWith("/sign-in")) return null;
+  if (pathname.startsWith("/sign-in") || pathname.startsWith("/test-log")) return null;
   const section = sectionForPath(pathname);
   const index = TEST_GUIDE.findIndex((s) => s.id === section.id);
   const next = TEST_GUIDE[index + 1];
+  const prev = index > 0 ? TEST_GUIDE[index - 1] : null;
   const done = section.steps.filter((s) => ticks[s.id]).length;
   const total = TEST_GUIDE.reduce((n, s) => n + s.steps.length, 0);
   const allDone = Object.values(ticks).filter(Boolean).length;
+
+  function goGuide(path: string) {
+    const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const year = params?.get("year");
+    router.push(year ? `${path}?year=${encodeURIComponent(year)}` : path);
+  }
 
   function toggleOpen(value: boolean) {
     setOpen(value);
@@ -353,10 +360,19 @@ function TestGuide() {
               Report <ExternalLink className="size-3" />
             </a>
           ) : null}
+          {prev ? (
+            <button
+              type="button"
+              onClick={() => goGuide(prev.path)}
+              className="inline-flex items-center gap-1 rounded-lg border border-input px-2.5 py-1.5 text-xs font-semibold hover:bg-muted"
+            >
+              Back
+            </button>
+          ) : null}
           {next ? (
             <button
               type="button"
-              onClick={() => router.push(next.path)}
+              onClick={() => goGuide(next.path)}
               className="inline-flex items-center gap-1 rounded-lg bg-[#1b2433] px-3 py-1.5 text-xs font-semibold text-white hover:bg-black"
             >
               Next: {next.title} <ChevronRight className="size-3.5" />

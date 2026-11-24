@@ -4,6 +4,8 @@ import {
   captionFromSheetRoute,
   formatLegCaption,
   journeyDayCaption,
+  journeyDayDestination,
+  journeyDayLeaveCaption,
   normalizeAirportCode,
   segmentsForPersonDay,
 } from "@/lib/crew-journey-legs";
@@ -71,6 +73,41 @@ describe("overnight journey into camp", () => {
   it("shows overnight hub while sitting between legs", () => {
     const segments = [leg("YUL", "YK", "2026-12-01"), leg("YK", "IQA", "2026-12-03")];
     expect(journeyDayCaption(segments, "2026-12-02", { siteOnIso: null })).toBe("→ YK");
+  });
+
+  it("colours by that day's destination (hub grey, camp purple)", () => {
+    const segments = [leg("YUL", "YK", "2026-12-01"), leg("YK", "KUG", "2026-12-02")];
+    expect(journeyDayDestination(segments, "2026-12-01")).toBe(null);
+    expect(journeyDayDestination(segments, "2026-12-02")).toBe("KUG");
+  });
+});
+
+describe("journeyDayDestination same-day into camp", () => {
+  it("uses the camp for a same-day YUL → YK → KUG hop", () => {
+    const segments = [leg("YUL", "YK", "2026-12-01"), leg("YK", "KUG", "2026-12-01")];
+    expect(journeyDayDestination(segments, "2026-12-01")).toBe("KUG");
+  });
+
+  it("stays grey when flying home", () => {
+    const segments = [leg("KUG", "YK", "2026-12-20"), leg("YK", "YUL", "2026-12-20")];
+    expect(journeyDayDestination(segments, "2026-12-20")).toBe(null);
+  });
+});
+
+describe("journeyDayLeaveCaption", () => {
+  it("shows → YUL on the OUT day when leaving camp", () => {
+    const segments = [leg("KUG", "YUL", "2026-12-20")];
+    expect(journeyDayLeaveCaption(segments, "2026-12-20", { siteOnIso: "KUG" })).toBe("→ YUL");
+  });
+
+  it("shows YK → YUL when leaving via a hub", () => {
+    const segments = [leg("KUG", "YK", "2026-12-20"), leg("YK", "YUL", "2026-12-20")];
+    expect(journeyDayLeaveCaption(segments, "2026-12-20", { siteOnIso: "KUG" })).toBe("YK → YUL");
+  });
+
+  it("does not treat inbound as leave", () => {
+    const segments = [leg("YUL", "YK", "2026-12-01"), leg("YK", "KUG", "2026-12-01")];
+    expect(journeyDayLeaveCaption(segments, "2026-12-01", { siteOnIso: "KUG" })).toBe("");
   });
 });
 

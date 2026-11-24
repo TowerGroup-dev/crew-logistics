@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Bell,
@@ -12,10 +12,17 @@ import {
   Menu,
   MoreHorizontal,
 } from "lucide-react";
-import { CREW_SCHEDULE } from "@/lib/crew-schedule";
+import { CREW_AVAILABLE_YEARS, CREW_SCHEDULE } from "@/lib/crew-schedule";
 import { loadScheduleYears } from "@/lib/crew-years";
 import { cn } from "@/lib/cn";
 import { CrewSyncStatus } from "@/components/crew-sync-status";
+
+/** First-paint year list only (no localStorage) so server HTML matches the client. */
+function defaultScheduleYears() {
+  const now = new Date().getFullYear();
+  const scheduleYear = CREW_SCHEDULE.year || now;
+  return [...new Set([...CREW_AVAILABLE_YEARS, scheduleYear, now, now + 1])].sort((a, b) => a - b);
+}
 
 type Section = {
   key: string;
@@ -59,9 +66,14 @@ function basePath(pathname: string) {
 }
 
 export function CrewNav({
+  view,
+  onNavigateView,
   onOpenReminders,
   reminderCount = 0,
 }: {
+  /** Optimistic board view — tabs highlight before the router finishes. */
+  view?: string;
+  onNavigateView?: (view: "overview" | "month" | "year" | "list" | "employees" | "reports" | "settings") => void;
   onOpenReminders?: () => void;
   reminderCount?: number;
 }) {
@@ -70,14 +82,31 @@ export function CrewNav({
   const search = useSearchParams();
   const yearParam = Number(search.get("year") || "");
   const monthParam = search.get("month");
-  const [storedYears, setYears] = useState<number[]>(() => [...loadScheduleYears()]);
+  const [storedYears, setYears] = useState<number[]>(defaultScheduleYears);
   const [menuOpen, setMenuOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  /** Avoid SSR/client mismatch for sync label and reminder badge (local data). */
+  const [clientReady, setClientReady] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const year =
     yearParam && Number.isInteger(yearParam) ? yearParam : CREW_SCHEDULE.year || new Date().getFullYear();
-  const inCalendar =
-    pathname.startsWith("/month") || pathname.startsWith("/year") || pathname.startsWith("/list");
+  const activeView = view || (
+    pathname.startsWith("/month") || pathname.startsWith("/travel")
+      ? "month"
+      : pathname.startsWith("/year")
+        ? "year"
+        : pathname.startsWith("/list")
+          ? "list"
+          : pathname.startsWith("/employees")
+            ? "employees"
+            : pathname.startsWith("/reports")
+              ? "reports"
+              : pathname.startsWith("/settings")
+                ? "settings"
+                : "overview"
+  );
+  const inCalendar = activeView === "month" || activeView === "year" || activeView === "list";
+  const shownReminderCount = clientReady ? reminderCount : 0;
 
   function hrefFor(path: string, forYear = year) {
     const params = new URLSearchParams({ year: String(forYear) });
@@ -86,8 +115,20 @@ export function CrewNav({
   }
 
   function goToYear(next: number) {
-    router.push(hrefFor(basePath(pathname), next), { scroll: false });
+    // Keep the nav snappy; Month remounts the day strip in a transition.
+    startTransition(() => {
+      router.push(hrefFor(basePath(pathname), next), { scroll: false });
+    });
   }
+
+  function goTo(path: string, nextView: "overview" | "month" | "year" | "list" | "employees" | "reports" | "settings") {
+    onNavigateView?.(nextView);
+    router.push(hrefFor(path), { scroll: false });
+  }
+
+  useEffect(() => {
+    setClientReady(true);
+  }, []);
 
   useEffect(() => {
     setYears(loadScheduleYears());
@@ -120,7 +161,7 @@ export function CrewNav({
   const prevYear = yearIndex > 0 ? years[yearIndex - 1] : null;
   const nextYear = yearIndex >= 0 && yearIndex < years.length - 1 ? years[yearIndex + 1] : null;
 
-  const moreActive = MENU_ITEMS.some((item) => item.match(pathname));
+  const moreActive = MENU_ITEMS.some((item) => item.key === activeView);
 
   return (
     <>
@@ -128,41 +169,63 @@ export function CrewNav({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 py-1.5 sm:py-2">
         {/* Phones use the tab bar at the bottom instead. */}
         <div className="-mb-px hidden flex-wrap items-center gap-1 sm:flex">
-          {PRIMARY.map((section) => (
-            <NavTab
-              key={section.key}
-              section={section}
-              href={hrefFor(section.href)}
-              active={section.match(pathname)}
-            />
-          ))}
+          {PRIMARY.map((section) => {
+            const active =
+              section.key === "calendar"
+                ? inCalendar
+                : section.key === "overview"
+                  ? activeView === "overview"
+                  : section.match(pathname);
+            return (
+              <NavTab
+                key={section.key}
+                section={section}
+                href={hrefFor(section.href)}
+                active={active}
+                onNavigate={() =>
+                  goTo(
+                    section.href,
+                    section.key === "calendar" ? "month" : "overview",
+                  )
+                }
+              />
+            );
+          })}
         </div>
 
         {/* Phones: the page name sits where the tabs were. */}
         {!inCalendar ? (
           <h1 className="text-base font-semibold sm:hidden">
-            {[...PRIMARY, ...MENU_ITEMS].find((item) => item.match(pathname))?.label ?? ""}
+            {[...PRIMARY, ...MENU_ITEMS].find((item) => item.key === activeView || item.match(pathname))?.label ?? ""}
           </h1>
         ) : null}
         {inCalendar ? (
           <div className="flex rounded-lg border border-input bg-card p-0.5" role="group" aria-label="Calendar view">
-            {CALENDAR_VIEWS.map((view) => {
-              const active = pathname.startsWith(view.href);
+            {CALENDAR_VIEWS.map((item) => {
+              const active =
+                (item.href === "/month" && activeView === "month") ||
+                (item.href === "/year" && activeView === "year") ||
+                (item.href === "/list" && activeView === "list");
               return (
-                <Link
-                  key={view.href}
-                  href={hrefFor(view.href)}
-                  scroll={false}
+                <button
+                  key={item.href}
+                  type="button"
                   aria-current={active ? "page" : undefined}
+                  onClick={() =>
+                    goTo(
+                      item.href,
+                      item.href === "/year" ? "year" : item.href === "/list" ? "list" : "month",
+                    )
+                  }
                   className={cn(
-                    "rounded-md px-3 py-1 text-sm font-medium transition",
+                    "rounded-md px-3 py-1 text-sm font-medium",
                     active
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {view.label}
-                </Link>
+                  {item.label}
+                </button>
               );
             })}
           </div>
@@ -170,59 +233,66 @@ export function CrewNav({
 
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
           <span className="hidden sm:contents">
-            <CrewSyncStatus />
+            {clientReady ? <CrewSyncStatus /> : (
+              <span className="inline-flex h-8 min-w-[5.5rem] items-center rounded-lg border border-input bg-card px-2.5 text-xs text-muted-foreground">
+                Syncing...
+              </span>
+            )}
           </span>
           {onOpenReminders ? (
             <button
               type="button"
               onClick={onOpenReminders}
-              aria-label={reminderCount ? `Reminders · ${reminderCount}` : "Reminders"}
+              aria-label={shownReminderCount ? `Reminders · ${shownReminderCount}` : "Reminders"}
               title="Reminders"
               className="relative flex size-8 items-center justify-center rounded-lg border border-input bg-card text-muted-foreground transition hover:text-foreground"
             >
-              <Bell className="size-4" />
-              {reminderCount > 0 ? (
+              <Bell className="size-4" aria-hidden />
+              {shownReminderCount > 0 ? (
                 <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-semibold text-white">
-                  {reminderCount > 99 ? "99+" : reminderCount}
+                  {shownReminderCount > 99 ? "99+" : shownReminderCount}
                 </span>
               ) : null}
             </button>
           ) : null}
-          <div className="flex items-center rounded-lg border border-input bg-card">
-            <button
-              type="button"
-              onClick={() => prevYear != null && goToYear(prevYear)}
-              disabled={prevYear == null}
-              aria-label="Previous year"
-              className="flex h-8 w-7 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
-            >
-              <ChevronLeft className="size-4" />
-            </button>
-            <label className="sr-only" htmlFor="crew-nav-year">
-              Schedule year
-            </label>
-            <select
-              id="crew-nav-year"
-              value={year}
-              onChange={(event) => goToYear(Number(event.target.value))}
-              className="h-8 appearance-none bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-foreground focus:outline-none"
-            >
-              {years.map((entry) => (
-                <option key={entry} value={entry}>
-                  {entry}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => nextYear != null && goToYear(nextYear)}
-              disabled={nextYear == null}
-              aria-label="Next year"
-              className="flex h-8 w-7 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
-            >
-              <ChevronRight className="size-4" />
-            </button>
-          </div>
+          {/* Year control is for Calendar planning — hide on Overview. */}
+          {activeView !== "overview" ? (
+            <div className="flex items-center rounded-lg border border-input bg-card">
+              <button
+                type="button"
+                onClick={() => prevYear != null && goToYear(prevYear)}
+                disabled={prevYear == null}
+                aria-label="Previous year"
+                className="flex h-8 w-7 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+              <label className="sr-only" htmlFor="crew-nav-year">
+                Schedule year
+              </label>
+              <select
+                id="crew-nav-year"
+                value={year}
+                onChange={(event) => goToYear(Number(event.target.value))}
+                className="h-8 appearance-none bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-foreground focus:outline-none"
+              >
+                {years.map((entry) => (
+                  <option key={entry} value={entry}>
+                    {entry}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => nextYear != null && goToYear(nextYear)}
+                disabled={nextYear == null}
+                aria-label="Next year"
+                className="flex h-8 w-7 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
+              >
+                <ChevronRight className="size-4" />
+              </button>
+            </div>
+          ) : null}
 
           <div className="relative hidden sm:block" ref={menuRef}>
             <button
@@ -250,24 +320,29 @@ export function CrewNav({
                 className="absolute top-full right-0 z-50 mt-1 min-w-[14rem] overflow-hidden rounded-md border border-border bg-card py-0.5 shadow-lg"
               >
                 {MENU_ITEMS.map((item) => {
-                  const active = item.match(pathname);
+                  const active = activeView === item.key;
                   return (
-                    <Link
+                    <button
                       key={item.key}
+                      type="button"
                       role="menuitem"
-                      href={hrefFor(item.href)}
-                      scroll={false}
                       aria-current={active ? "page" : undefined}
-                      onClick={() => setMenuOpen(false)}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        goTo(
+                          item.href,
+                          item.key as "employees" | "reports" | "settings",
+                        );
+                      }}
                       className={cn(
-                        "block border-b border-border/70 px-4 py-2.5 text-sm last:border-b-0",
+                        "block w-full border-b border-border/70 px-4 py-2.5 text-left text-sm last:border-b-0",
                         active
-                          ? "bg-sky-100 font-medium text-sky-950"
-                          : "text-foreground hover:bg-sky-50",
+                          ? "bg-muted font-medium text-foreground"
+                          : "text-foreground hover:bg-muted",
                       )}
                     >
                       {item.label}
-                    </Link>
+                    </button>
                   );
                 })}
                 <TestModeLinks pathname={pathname} onPick={() => setMenuOpen(false)} />
@@ -291,22 +366,24 @@ export function CrewNav({
             <CrewSyncStatus />
           </div>
           {MENU_ITEMS.map((item) => {
-            const active = item.match(pathname);
+            const active = activeView === item.key;
             return (
-              <Link
+              <button
                 key={item.key}
+                type="button"
                 role="menuitem"
-                href={hrefFor(item.href)}
-                scroll={false}
                 aria-current={active ? "page" : undefined}
-                onClick={() => setMoreOpen(false)}
+                onClick={() => {
+                  setMoreOpen(false);
+                  goTo(item.href, item.key as "employees" | "reports" | "settings");
+                }}
                 className={cn(
-                  "block border-b border-border/70 px-4 py-3.5 text-base last:border-b-0",
-                  active ? "bg-sky-100 font-semibold text-sky-950" : "text-foreground active:bg-sky-50",
+                  "block w-full border-b border-border/70 px-4 py-3.5 text-left text-base last:border-b-0",
+                  active ? "bg-muted font-semibold text-foreground" : "text-foreground active:bg-muted",
                 )}
               >
                 {item.label}
-              </Link>
+              </button>
             );
           })}
           <TestModeLinks pathname={pathname} onPick={() => setMoreOpen(false)} large />
@@ -322,14 +399,21 @@ export function CrewNav({
       <div className="grid grid-cols-4">
         {PRIMARY.map((section) => {
           const Icon = section.icon;
-          const active = section.match(pathname) && !moreOpen;
+          const active =
+            !moreOpen &&
+            (section.key === "calendar" ? inCalendar : activeView === "overview");
           return (
-            <Link
+            <button
               key={section.key}
-              href={hrefFor(section.href)}
-              scroll={false}
+              type="button"
               aria-current={active ? "page" : undefined}
-              onClick={() => setMoreOpen(false)}
+              onClick={() => {
+                setMoreOpen(false);
+                goTo(
+                  section.href,
+                  section.key === "calendar" ? "month" : "overview",
+                );
+              }}
               className={cn(
                 "flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium [@media(max-height:511px)]:h-10 [@media(max-height:511px)]:flex-row [@media(max-height:511px)]:gap-1.5 [@media(max-height:511px)]:text-xs",
                 active ? "text-primary" : "text-slate-500",
@@ -337,7 +421,7 @@ export function CrewNav({
             >
               <Icon className={cn("size-5", active && "stroke-[2.25]")} />
               {section.label}
-            </Link>
+            </button>
           );
         })}
         <button
@@ -385,21 +469,37 @@ function TestModeLinks({ pathname, onPick, large }: { pathname: string; onPick: 
   );
 }
 
-function NavTab({ section, href, active }: { section: Section; href: string; active: boolean }) {
+function NavTab({
+  section,
+  href,
+  active,
+  onNavigate,
+}: {
+  section: Section;
+  href: string;
+  active: boolean;
+  onNavigate?: () => void;
+}) {
   const Icon = section.icon;
   return (
     <Link
       href={href}
       scroll={false}
       aria-current={active ? "page" : undefined}
+      suppressHydrationWarning
+      onClick={(event) => {
+        if (!onNavigate) return;
+        event.preventDefault();
+        onNavigate();
+      }}
       className={cn(
-        "flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition",
+        "flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium",
         active
           ? "border-primary text-primary"
           : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900",
       )}
     >
-      <Icon className="size-4" />
+      <Icon className="size-4" aria-hidden suppressHydrationWarning />
       {section.label}
     </Link>
   );

@@ -1,5 +1,6 @@
 /** Canadian North flight booking records, no airline API, no costs. */
 
+import { addDays } from "@/lib/dates";
 import type { CrewBookingStatus, CrewOpsBook, CrewPersonOps } from "@/lib/crew-ops";
 import { emptyCrewOps, opsFor } from "@/lib/crew-ops";
 
@@ -298,6 +299,53 @@ export function bookingCoveringDay(
     );
   });
   return matches[0] ?? null;
+}
+
+/** Outbound journey tied to a stay IN (rotationDate or covering that day). */
+export function outboundBookingForStay(
+  book: FlightBook,
+  personId: string,
+  stayFrom: string,
+): FlightBooking | null {
+  const from = stayFrom.slice(0, 10);
+  const active = book.bookings.filter(
+    (row) =>
+      row.personId === personId &&
+      row.direction === "outbound" &&
+      row.status !== "cancelled" &&
+      row.segments?.length,
+  );
+  return (
+    active.find((row) => row.rotationDate === from) ||
+    bookingCoveringDay(book, personId, from) ||
+    active.find((row) => {
+      const last = row.segments[row.segments.length - 1];
+      const arrive = last?.arriveDate || last?.departDate || "";
+      return arrive === from || row.rotationDate === from;
+    }) ||
+    null
+  );
+}
+
+/** Shift every date on a booking (confirm arrival moves IN + journey together). */
+export function shiftBookingByDays(booking: FlightBooking, dayDelta: number): FlightBooking {
+  if (!dayDelta) return booking;
+  const shift = (iso: string) =>
+    iso && iso.length >= 10 ? addDays(iso.slice(0, 10), dayDelta) : iso;
+  return {
+    ...booking,
+    rotationDate: booking.rotationDate ? shift(booking.rotationDate) : null,
+    segments: booking.segments.map((leg) => ({
+      ...leg,
+      departDate: shift(leg.departDate),
+      arriveDate: shift(leg.arriveDate),
+    })),
+    hotels: (booking.hotels || []).map((hotel) => ({
+      ...hotel,
+      checkIn: shift(hotel.checkIn),
+      checkOut: shift(hotel.checkOut),
+    })),
+  };
 }
 
 export function applyFlightToOpsBook(

@@ -650,6 +650,42 @@ export function extendRotationOut(book: RotationBook, rotationId: string, newOut
   });
 }
 
+/** Move planned IN later/earlier; OUT stays put (stay shortens/lengthens at the front). */
+export function moveRotationIn(book: RotationBook, rotationId: string, newIn: string): RotationBook {
+  const rotation = book.rotations.find((row) => row.id === rotationId);
+  if (!rotation) return book;
+  const nextIn = newIn.slice(0, 10);
+  if (!nextIn || nextIn === rotation.plannedIn || nextIn >= rotation.plannedOut) return book;
+  const endInclusive = addDays(rotation.plannedOut, -1);
+  const delta = daysBetween(rotation.plannedIn, nextIn);
+  const shift = (iso: string | null) => (iso && iso.length >= 10 ? addDays(iso, delta) : iso);
+  const shiftTravel = (travel: RotationTravel): RotationTravel => ({
+    ...travel,
+    departDate: shift(travel.departDate),
+    arriveDate: shift(travel.arriveDate),
+    segments: (travel.segments || []).map((leg) => ({
+      ...leg,
+      departDate: shift(leg.departDate) || leg.departDate,
+      arriveDate: shift(leg.arriveDate) || leg.arriveDate,
+    })),
+    hotels: (travel.hotels || []).map((hotel) => ({
+      ...hotel,
+      checkIn: shift(hotel.checkIn) || hotel.checkIn,
+      checkOut: shift(hotel.checkOut) || hotel.checkOut,
+    })),
+  });
+  return upsertRotation(book, {
+    ...rotation,
+    plannedIn: nextIn,
+    rotationDays: Math.max(1, daysBetween(nextIn, endInclusive) + 1),
+    stay: {
+      ...rotation.stay,
+      checkIn: nextIn,
+    },
+    outbound: shiftTravel(rotation.outbound),
+  });
+}
+
 export function linkReplacement(
   book: RotationBook,
   outgoingId: string,

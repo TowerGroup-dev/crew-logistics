@@ -4,11 +4,13 @@
  * Rules (codes only):
  * - Same-day hop with stops into camp: camp-coloured box, caption like `YUL → YK`
  *   (intermediates that day; final camp is the box colour, not repeated in the caption).
- * - Overnight: grey travel days show `YUL → YK`; arrival camp day shows `→ YK`.
+ * - Overnight: grey while flying to a hub (Home → YK); camp colour when that day's
+ *   destination is a site (YK → KUG). Arrival camp day shows `→ YK`.
  * - Never show sheet prose ("Leaving… confirmed by…") — only airport codes.
  */
 
 import type { FlightSegment } from "@/lib/crew-flights";
+import { addDays } from "@/lib/dates";
 import { flightPlaceOnDay } from "@/lib/crew-routes";
 
 export const CAMP_SITE_CODES = new Set(["IQA", "POND", "ALRT", "KUG"]);
@@ -66,7 +68,41 @@ function uniquePath(codes: string[]) {
 }
 
 /**
- * Caption under one day box for a booked (or drafted) multi-leg trip.
+ * Camp code this travel day should be coloured with, or null for grey (hub / home).
+ * Colour follows that day's destination — not the whole trip's final site on every day.
+ */
+export function journeyDayDestination(
+  segments: FlightSegment[],
+  iso: string,
+  opts?: { campCodes?: Set<string> },
+): string | null {
+  const day = iso.slice(0, 10);
+  const camps = opts?.campCodes ?? CAMP_SITE_CODES;
+  const legs = sortedLegs(segments);
+  if (!legs.length) return null;
+
+  // Prefer a camp landed on today (same-day multi-hop ends at camp).
+  const arriving = legs.filter((leg) => leg.arriveDate === day && leg.to);
+  for (let i = arriving.length - 1; i >= 0; i -= 1) {
+    const to = arriving[i]!.to;
+    if (to && isCamp(to, camps)) return normalizeAirportCode(to);
+  }
+
+  // Departures that land today at a camp (same calendar day hop).
+  const departing = legs.filter((leg) => leg.departDate === day);
+  for (let i = departing.length - 1; i >= 0; i -= 1) {
+    const leg = departing[i]!;
+    if (leg.to && isCamp(leg.to, camps) && leg.arriveDate === day) {
+      return normalizeAirportCode(leg.to);
+    }
+  }
+
+  // Hub overnight / flying home — grey (no camp destination today).
+  return null;
+}
+
+/**
+ * Inbound caption (left of box): stops before camp on arrival day, or route on travel days.
  */
 export function journeyDayCaption(
   segments: FlightSegment[],
@@ -88,7 +124,7 @@ export function journeyDayCaption(
   );
   const onCampToday = Boolean(site && isCamp(site, camps));
 
-  // Arrival on camp (site-coloured box).
+  // Arrival on camp (site-coloured box) — inbound only.
   if (onCampToday && landingAtCamp) {
     const sameDayChain = legs.filter((leg) => leg.departDate === day && leg.arriveDate === day);
     if (sameDayChain.length) {
@@ -106,7 +142,10 @@ export function journeyDayCaption(
     if (landingAtCamp.from) return formatLegCaption([landingAtCamp.from]);
   }
 
-  // Grey travel day: legs that leave today.
+  // Do not put leave routes in the inbound caption (OUT day uses journeyDayLeaveCaption).
+  if (onCampToday) return "";
+
+  // Travel day (not on camp): legs that leave today.
   const departing = legs.filter((leg) => leg.departDate === day);
   if (departing.length) {
     const codes: string[] = [];
@@ -114,9 +153,8 @@ export function journeyDayCaption(
       if (leg.from) codes.push(leg.from);
       if (leg.to) codes.push(leg.to);
     }
-    // If they also land at camp same day, camp caption handled above.
     const path = uniquePath(codes);
-    if (path.length && isCamp(path[path.length - 1]!, camps) && onCampToday) {
+    if (path.length && isCamp(path[path.length - 1]!, camps)) {
       path.pop();
     }
     return formatLegCaption(path);
@@ -132,6 +170,63 @@ export function journeyDayCaption(
   const place = flightPlaceOnDay(segments, day);
   if (place && !isCamp(place, camps)) return formatLegCaption([place]);
   return "";
+}
+
+/**
+ * Leave caption for the OUT day (right of box), e.g. `→ YUL` or `YK → YUL`.
+ */
+export function journeyDayLeaveCaption(
+  segments: FlightSegment[],
+  iso: string,
+  opts?: {
+    siteOnIso?: string | null;
+    campCodes?: Set<string>;
+  },
+): string {
+  const day = iso.slice(0, 10);
+  const camps = opts?.campCodes ?? CAMP_SITE_CODES;
+  const site = opts?.siteOnIso ? normalizeAirportCode(opts.siteOnIso) : "";
+  const legs = sortedLegs(segments);
+  if (!legs.length) return "";
+
+  // Arriving at camp today is inbound — not a leave caption.
+  if (
+    site &&
+    legs.some((leg) => leg.arriveDate === day && leg.to === site)
+  ) {
+    return "";
+  }
+
+  const departing = legs.filter((leg) => leg.departDate === day);
+  if (!departing.length) {
+    // Multi-day leave: first day of a spanning return leg.
+    const spanning = legs.find(
+      (leg) =>
+        leg.departDate === day || (leg.departDate < day && day <= leg.arriveDate),
+    );
+    if (
+      spanning?.from &&
+      spanning.to &&
+      (!site || spanning.from === site || !isCamp(spanning.to, camps))
+    ) {
+      const path = uniquePath([spanning.from, spanning.to]).filter((code) => code !== site);
+      return formatLegCaption(path);
+    }
+    return "";
+  }
+
+  // Leave only when departing from this camp (or no site given).
+  if (site && !departing.some((leg) => leg.from === site)) return "";
+
+  const codes: string[] = [];
+  for (const leg of departing) {
+    if (leg.from) codes.push(leg.from);
+    if (leg.to) codes.push(leg.to);
+  }
+  const path = uniquePath(codes).filter((code) => code !== site);
+  if (!path.length) return "";
+  if (path.length && isCamp(path[path.length - 1]!, camps)) return "";
+  return formatLegCaption(path);
 }
 
 /**
@@ -157,14 +252,17 @@ export function segmentsForPersonDay(
   // Prefer the booking that actually covers this calendar day.
   const covering = active.filter((row) => coversDay(row.segments));
   if (covering.length === 1) return covering[0]!.segments;
+  const lastInclusive =
+    stayOutExclusive && /^\d{4}-\d{2}-\d{2}$/.test(stayOutExclusive.slice(0, 10))
+      ? addDays(stayOutExclusive.slice(0, 10), -1)
+      : null;
+
   if (covering.length > 1) {
     if (stayFrom && day === stayFrom.slice(0, 10)) {
       const outbound = covering.find((row) => row.direction === "outbound");
       if (outbound) return outbound.segments;
     }
-    const outDay = stayOutExclusive ? stayOutExclusive.slice(0, 10) : null;
-    // Last on-site day is stayOut - 1 day conceptually; match return by coverage.
-    if (outDay) {
+    if (lastInclusive && day === lastInclusive) {
       const ret = covering.find((row) => row.direction === "return");
       if (ret) return ret.segments;
     }
@@ -172,9 +270,15 @@ export function segmentsForPersonDay(
   }
 
   // Fallback: rotationDate near stay edges.
-  if (stayFrom && Math.abs(day.localeCompare(stayFrom.slice(0, 10))) <= 0) {
-    const outbound = active.find((row) => row.direction === "outbound" && row.rotationDate === stayFrom.slice(0, 10));
+  if (stayFrom && day === stayFrom.slice(0, 10)) {
+    const outbound = active.find((row) => row.direction === "outbound");
     if (outbound) return outbound.segments;
+  }
+  if (lastInclusive && day === lastInclusive) {
+    const ret = active.find((row) => row.direction === "return" && coversDay(row.segments));
+    if (ret) return ret.segments;
+    const anyReturn = active.find((row) => row.direction === "return");
+    if (anyReturn) return anyReturn.segments;
   }
   return [];
 }

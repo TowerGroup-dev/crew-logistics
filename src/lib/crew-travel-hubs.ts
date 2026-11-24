@@ -25,7 +25,6 @@ export const DEFAULT_TRAVEL_HUBS: TravelHub[] = [
   { code: "YEG", name: "Edmonton" },
   { code: "CAM", name: "Campbell" },
   { code: "YK", name: "Yellowknife" },
-  { code: "YF", name: "Yellowknife" },
   { code: "YXP", name: "Pangnirtung" },
   { code: "YHZ", name: "Halifax" },
   { code: "YYT", name: "St Johns" },
@@ -69,8 +68,8 @@ export function readTravelHubsBook(raw: unknown): CrewTravelHubsBook {
     ? (raw as CrewTravelHubsBook).hubs
         .map(readHub)
         .filter((item): item is TravelHub => Boolean(item) && !WORK_SITE_CODES.has(item!.code))
-        // Drop old airport codes that duplicated camp city names (YCO/YFB/YIO).
-        .filter((item) => !["YCO", "YFB", "YIO"].includes(item.code))
+        // Drop old duplicates: camp city airport codes, and YF (alias of YK Yellowknife).
+        .filter((item) => !["YCO", "YFB", "YIO", "YF"].includes(item.code))
     : [];
   return hubs.length ? { version: 1, hubs } : emptyTravelHubsBook();
 }
