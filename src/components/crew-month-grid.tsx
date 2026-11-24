@@ -1644,14 +1644,14 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
         return;
       }
       closeCellMenu();
-      showFlash("Cleared stay");
+      showFlash("Cleared stay dates");
     };
     const ops = opsFor(opsBook, staySelection.personId);
     if (placementHasBookedFlights(ops)) {
       setConfirmAsk({
-        title: "Clear this stay?",
+        title: "Clear stay dates?",
         message: "This person already has booked or confirmed flights.",
-        confirmLabel: "Clear stay",
+        confirmLabel: "Clear stay dates",
         onConfirm: run,
       });
       return;
@@ -1775,7 +1775,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       } else {
         return;
       }
-      showFlash("Cleared stay");
+      showFlash("Cleared stay dates");
       return;
     }
 
@@ -1792,7 +1792,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             : "not_started",
       }));
       setStaySelection(null);
-      showFlash("Cleared return window");
+      showFlash("Cleared expected departure");
       return;
     }
 
@@ -1809,7 +1809,9 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       const range = orderedRange(active.start, active.end);
       setReturnWindow(active.personId, range.from, range.to);
       setStaySelection(null);
-      showFlash(`Return window · ${formatMedium(range.from)} – ${formatMedium(range.to)}`);
+      showFlash(
+        `Expected departure · ${formatMedium(range.from)} – ${formatMedium(range.to)}`,
+      );
       return;
     }
 
@@ -1983,7 +1985,9 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     });
     if (!range) return;
     setReturnWindow(personId, range.from, range.to);
-    showFlash(`Return window · ${formatMedium(range.from)} – ${formatMedium(range.to)}`);
+    showFlash(
+      `Expected departure · ${formatMedium(range.from)} – ${formatMedium(range.to)}`,
+    );
   }
 
   function openCellMenu(personId: string, iso: string, clientX: number, clientY: number) {
@@ -3336,7 +3340,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                             label="Clear window"
                             onPick={() => {
                               onSetStayTentative(cellMenu.personId, stint.from, false);
-                              showFlash("Preliminary cleared");
+                              showFlash("Planned arrival cleared");
                             }}
                           />
                         ) : null}
@@ -3442,12 +3446,12 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                                 onRemoveRotation(personId, plan.id);
                               }
                             }
-                            showFlash("Cleared stay");
+                            showFlash("Cleared stay dates");
                           },
                         });
                       }}
                     >
-                      Remove stay dates
+                      Clear stay dates
                     </button>
                   ) : null}
 

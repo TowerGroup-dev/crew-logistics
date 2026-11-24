@@ -435,7 +435,7 @@ function bookingWindowItems(
         rotationId,
         personId,
         personName: name,
-        title: "Return window set: book return flight",
+        title: "Expected departure set: book return flight",
         detail: `Window ${ops.returnBookFrom} → ${ops.returnBookTo}`,
         // Sort/show by window start (travel date), not the later end bound.
         dueOn: ops.returnBookFrom,

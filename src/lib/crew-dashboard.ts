@@ -396,7 +396,7 @@ export function buildDashboard(
         personId: row.person.id,
         personName: name,
         title: "Confirm actual arrival",
-        detail: `Planned IN ${formatMedium(row.plannedIn)}`,
+        detail: `Planned arrival ${formatMedium(row.plannedIn)}`,
         priority: "normal",
         dueOn: asOf,
       });

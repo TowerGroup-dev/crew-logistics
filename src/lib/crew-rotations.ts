@@ -865,7 +865,7 @@ export function buildKatrinaChecklist(
           personId: rotation.personId,
           personName: name,
           title: "Book outbound flight",
-          detail: `To site · IN ${rotation.plannedIn}`,
+          detail: `To site · arrives ${rotation.plannedIn}`,
           dueOn: bookBy,
           priority: asOf >= bookBy ? "urgent" : "high",
         });
@@ -893,7 +893,7 @@ export function buildKatrinaChecklist(
           personId: rotation.personId,
           personName: name,
           title: "Book return flight",
-          detail: `4 weeks in · OUT ${endInclusive}`,
+          detail: `4 weeks in · departs ${endInclusive}`,
           dueOn: endInclusive,
           priority: left <= thresholds.escalateDays ? "urgent" : "high",
         });
@@ -908,8 +908,8 @@ export function buildKatrinaChecklist(
           rotationId: rotation.id,
           personId: rotation.personId,
           personName: name,
-          title: "Extend rotation or add another person",
-          detail: `Leaving ${endInclusive}`,
+          title: "Extend stay or arrange replacement",
+          detail: `Departure ${endInclusive}`,
           dueOn: endInclusive,
           priority: left <= thresholds.escalateDays ? "urgent" : "high",
         });
@@ -950,7 +950,7 @@ export function buildKatrinaChecklist(
         personId: rotation.personId,
         personName: name,
         title: "Confirm actual departure",
-        detail: `Planned OUT ${endInclusive}`,
+        detail: `Planned departure ${endInclusive}`,
         dueOn: asOf,
         priority: "urgent",
       });
@@ -964,7 +964,7 @@ export function buildKatrinaChecklist(
         personId: rotation.personId,
         personName: name,
         title: "Confirm actual arrival",
-        detail: `Planned IN ${rotation.plannedIn}`,
+        detail: `Planned arrival ${rotation.plannedIn}`,
         dueOn: rotation.plannedIn,
         priority: "normal",
       });

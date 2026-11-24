@@ -156,7 +156,7 @@ export function CrewPlaceDialog({
               onChange={(event) => setTentative(event.target.checked)}
               className="size-4 rounded border-input"
             />
-            Preliminary arrival
+            Planned arrival
           </label>
 
           {tentative ? (

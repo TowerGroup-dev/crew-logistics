@@ -134,10 +134,10 @@ export function CrewRotationDrawer({
         <header className="border-b border-border bg-card px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 sm:px-6 sm:py-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">Rotation</p>
-              <h2 className="mt-1 truncate text-lg font-semibold text-foreground">{person.name}</h2>
+              <h2 className="truncate text-lg font-semibold text-foreground">{person.name}</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                {draft.role} · {draft.site || "-"} · {formatMedium(draft.plannedIn)} → {formatMedium(outInclusive)}
+                {draft.role} · {draft.site || "-"} · {formatMedium(draft.plannedIn)} –{" "}
+                {formatMedium(outInclusive)}
               </p>
             </div>
             <button
@@ -154,7 +154,7 @@ export function CrewRotationDrawer({
                 ["overview", "Overview", null],
                 ["travel", "Travel", "plane"],
                 ["stay", "Stay", "bed"],
-                ["replacement", "Extension", null],
+                ["replacement", "Schedule changes", null],
               ] as const
             ).map(([id, label, icon]) => (
               <button
@@ -183,8 +183,8 @@ export function CrewRotationDrawer({
               <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
                 <Fact label="Role" value={draft.role} />
                 <Fact label="Site" value={draft.site || "-"} />
-                <Fact label="Planned IN" value={formatMedium(draft.plannedIn)} />
-                <Fact label="OUT" value={`${formatMedium(outInclusive)} · end of stay`} />
+                <Fact label="Arrival" value={formatMedium(draft.plannedIn)} />
+                <Fact label="Departure" value={formatMedium(outInclusive)} />
                 <Fact label="Duration" value={dayCountLabel(draft.rotationDays)} />
                 <Fact
                   label="Progress"
@@ -330,7 +330,7 @@ export function CrewRotationDrawer({
                 <div>
                   <p className="font-medium">Stay · {draft.stay.confirmed ? "Booked" : "Not booked"}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Accommodation covers the whole stay and is confirmed once for this rotation.
+                    Accommodation covers the whole stay and is confirmed once for these dates.
                   </p>
                 </div>
               </div>
@@ -348,20 +348,33 @@ export function CrewRotationDrawer({
 
           {section === "replacement" ? (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                When this stay ends: extend the rotation, or add another person.
-              </p>
+              <div>
+                <p className="text-sm font-semibold text-foreground">What happens next?</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Update {person.name.split(" ")[0]}&apos;s stay or arrange coverage for their departure.
+                </p>
+              </div>
 
               <div className="rounded-xl border border-border bg-muted/20 p-4">
-                <p className="font-medium">Extend rotation</p>
+                <p className="font-medium">Extend stay</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Keep {person.name} on site longer. OUT moves with the new place end. Current stay{" "}
-                  {stayDays} day{stayDays === 1 ? "" : "s"}
-                  {stayDays > STANDARD_ROTATION_DAYS ? " · past 6 weeks" : ` · standard is ${STANDARD_ROTATION_DAYS}`}.
+                  {person.name.split(" ")[0]} will remain at {draft.site || "site"} beyond their scheduled
+                  departure date.
+                  {stayDays > 0
+                    ? ` Current stay ${dayCountLabel(stayDays)}${
+                        stayDays > STANDARD_ROTATION_DAYS
+                          ? " · past 6 weeks"
+                          : ` · standard is ${STANDARD_ROTATION_DAYS}`
+                      }.`
+                    : ""}
+                </p>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Current departure:{" "}
+                  <span className="font-medium text-foreground">{formatMedium(outInclusive)}</span>
                 </p>
                 <div className="mt-3 flex flex-wrap items-end gap-2">
                   <label className="grid gap-1 text-sm">
-                    <span className="text-muted-foreground">New OUT (end of stay)</span>
+                    <span className="text-muted-foreground">New departure date</span>
                     <input
                       type="date"
                       value={extendOut}
@@ -385,27 +398,30 @@ export function CrewRotationDrawer({
                       setDraft(next);
                       setExtendOut(extendOut);
                       onSaveBook(extendRotationOut(book, draft.id, newOut));
-                      onSaveRoster((roster) => extendStay(roster, draft.personId, draft.plannedIn, newOut));
+                      onSaveRoster((roster) =>
+                        extendStay(roster, draft.personId, draft.plannedIn, newOut),
+                      );
                     }}
                     className="h-9 rounded-lg border border-input px-3 text-sm font-medium disabled:opacity-50"
                   >
-                    Extend · move OUT
+                    Update departure date
                   </button>
                 </div>
               </div>
 
               {replacement ? (
                 <div className="rounded-xl border border-border bg-muted/30 p-4">
-                  <p className="font-medium">Another person linked</p>
+                  <p className="font-medium">Replacement linked</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {people.find((row) => row.id === replacement.personId)?.name || replacement.personId}
                     {" · "}
                     {replacement.role} · {replacement.site}
-                    {" · IN "}
+                    {" · arrives "}
                     {formatMedium(replacement.plannedIn)}
                   </p>
                   <p className="mt-2 text-sm">
-                    Travel {replacement.outbound.confirmed ? "✓" : "✗"} · Stay {replacement.stay.confirmed ? "✓" : "✗"}
+                    Travel {replacement.outbound.confirmed ? "✓" : "✗"} · Stay{" "}
+                    {replacement.stay.confirmed ? "✓" : "✗"}
                   </p>
                   {draft.handoverFrom && draft.handoverTo ? (
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -417,23 +433,23 @@ export function CrewRotationDrawer({
                 </div>
               ) : draft.replacementNeeded === false ? (
                 <div className="rounded-xl border border-border bg-muted/30 p-4">
-                  <p className="font-medium">No one else needed</p>
+                  <p className="font-medium">No change</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    This rotation ends with no handoff (extended, or coverage stops).
+                    Keep {person.name.split(" ")[0]}&apos;s current schedule.
                   </p>
                   <button
                     type="button"
                     onClick={() => commit({ ...draft, replacementNeeded: true })}
                     className="mt-3 h-9 rounded-lg border border-input px-3 text-sm font-medium"
                   >
-                    Change, add another person
+                    Change options
                   </button>
                 </div>
               ) : (
                 <div className="rounded-xl border border-border bg-muted/20 p-4">
-                  <p className="font-medium">Add another person</p>
+                  <p className="font-medium">Arrange replacement</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Bring someone else in when this rotation ends.
+                    Schedule another employee to take over when {person.name.split(" ")[0]} leaves.
                   </p>
                 </div>
               )}
@@ -445,7 +461,7 @@ export function CrewRotationDrawer({
                     onClick={() => setReplaceOpen(true)}
                     className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
                   >
-                    Add another person
+                    Select replacement
                   </button>
                   <button
                     type="button"
@@ -460,7 +476,7 @@ export function CrewRotationDrawer({
                     }
                     className="h-9 rounded-lg border border-input px-3 text-sm font-medium"
                   >
-                    No one else needed
+                    Keep current schedule
                   </button>
                 </div>
               ) : null}
@@ -611,7 +627,7 @@ function ChecklistHints({
   ) {
     add(
       "return-window",
-      `Return window set (${formatMedium(personOps.returnBookFrom)} to ${formatMedium(personOps.returnBookTo)}): book return flight`,
+      `Expected departure set (${formatMedium(personOps.returnBookFrom)} to ${formatMedium(personOps.returnBookTo)}): book return flight`,
     );
   }
   if (
@@ -629,10 +645,11 @@ function ChecklistHints({
   if (!readiness.travelOutbound) add("outbound", "Book outbound flight to site");
   if (!readiness.stay) add("stay", "Book accommodation for the whole stay");
   if (day >= 28 && !readiness.travelReturn) add("return", "4 weeks in: book return flight");
-  if (readiness.replacement === "missing") add("replacement", "Extend rotation or add another person");
+  if (readiness.replacement === "missing")
+    add("replacement", "Extend stay or arrange replacement");
   if (readiness.handover === "not_planned") add("handover", "Set handover / overlap dates");
   if (!hints.length) {
-    return <p className="text-sm text-muted-foreground">No open tasks for this rotation.</p>;
+    return <p className="text-sm text-muted-foreground">No open tasks for this stay.</p>;
   }
   // Open items first, ticked ones underneath (kept so they can be unticked).
   const sorted = [...hints].sort((a, b) => Number(done.includes(a.id)) - Number(done.includes(b.id)));
@@ -682,7 +699,7 @@ function ReturnWindowEditor({
 }) {
   return (
     <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3">
-      <p className="text-sm font-medium text-amber-950">Return window</p>
+      <p className="text-sm font-medium text-amber-950">Expected departure</p>
       <p className="mt-1 text-xs text-amber-900/80">
         Days for the return flight. Paint yellow on the Month calendar with right-click or drag.
       </p>
@@ -942,15 +959,17 @@ function StayForm({
       </label>
       <div className="grid grid-cols-2 gap-3">
         <label className="grid gap-1">
-          <span className="text-muted-foreground">Check-in · stay start</span>
+          <span className="text-muted-foreground">Arrival · stay start</span>
           <input type="date" value={value.checkIn || ""} readOnly className="h-9 rounded-lg border border-input bg-muted/40 px-2" />
         </label>
         <label className="grid gap-1">
-          <span className="text-muted-foreground">OUT · end of stay</span>
+          <span className="text-muted-foreground">Departure · end of stay</span>
           <input type="date" value={value.checkOut || ""} readOnly className="h-9 rounded-lg border border-input bg-muted/40 px-2" />
         </label>
       </div>
-      <p className="text-xs text-muted-foreground">OUT is always the last day of the stay. Extend the rotation to change it.</p>
+      <p className="text-xs text-muted-foreground">
+        Departure is always the last day of the stay. Use Schedule changes to update it.
+      </p>
       <label className="inline-flex items-center gap-2">
         <input
           type="checkbox"
@@ -1012,7 +1031,7 @@ function ReplacementForm({
 
   return (
     <div className="space-y-3 rounded-xl border border-border p-4">
-      <p className="font-medium">Add another person</p>
+      <p className="font-medium">Arrange replacement</p>
       <p className="text-sm text-muted-foreground">Only people free for the incoming dates are listed.</p>
       <label className="grid gap-1">
         <span className="text-muted-foreground">Employee</span>
@@ -1050,7 +1069,7 @@ function ReplacementForm({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <label className="grid gap-1">
-          <span className="text-muted-foreground">Incoming IN</span>
+          <span className="text-muted-foreground">Arrival</span>
           <input type="date" value={plannedIn} onChange={(event) => setPlannedIn(event.target.value)} className="h-9 rounded-lg border border-input px-2" />
         </label>
         <label className="grid gap-1">
@@ -1068,7 +1087,9 @@ function ReplacementForm({
           <input type="date" value={handoverTo} onChange={(event) => setHandoverTo(event.target.value)} className="h-9 rounded-lg border border-input px-2" />
         </label>
       </div>
-      <p className="text-sm text-muted-foreground">OUT {formatMedium(inclusiveOut(outgoing))}</p>
+      <p className="text-sm text-muted-foreground">
+        Current departure {formatMedium(inclusiveOut(outgoing))}
+      </p>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-input px-3 text-sm font-medium">
           Cancel
@@ -1089,7 +1110,7 @@ function ReplacementForm({
           }
           className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
-          Create next rotation
+          Save replacement
         </button>
       </div>
     </div>

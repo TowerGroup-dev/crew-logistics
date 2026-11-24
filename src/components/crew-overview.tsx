@@ -934,7 +934,7 @@ function ToGo({ row }: { row: OnSiteRow }) {
         {row.replacement
           ? ` · ${row.replacement}`
           : row.needsReplacement
-            ? " · Extend stay or assign replacement"
+            ? " · Extend stay or arrange replacement"
             : ""}
       </span>
     </span>
@@ -1039,7 +1039,7 @@ function Movement({
                       {row.replacement
                         ? ` · ${row.replacement}`
                         : row.replacementNeeded
-                          ? " · Extend stay or assign replacement"
+                          ? " · Extend stay or arrange replacement"
                           : " · No replacement needed"}
                     </span>
                   </span>
