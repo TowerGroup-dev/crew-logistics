@@ -1006,7 +1006,7 @@ export function applyRotationMoves(people: CrewPerson[], book: RotationBook): Cr
     if (!rotation.moves?.length) continue;
     // Key by current IN and by rotation id suffix so colours stay put after IN edge drag.
     byStay.set(`${rotation.personId}|${rotation.plannedIn}`, rotation.moves);
-    const idFrom = rotation.id.includes(":") ? rotation.id.split(":").pop() : "";
+    const idFrom = rotation.id?.includes(":") ? rotation.id.split(":").pop() : "";
     if (idFrom && idFrom !== rotation.plannedIn) {
       byStay.set(`${rotation.personId}|${idFrom}`, rotation.moves);
     }
