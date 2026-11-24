@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { AirportSelect, CAMP_AIRPORTS, useTravelHubs } from "@/components/crew-airport-select";
+import { CrewConfirmDialog } from "@/components/crew-confirm-dialog";
 import {
   buildJourneyPlan,
   journeyTypeToDirection,
@@ -54,8 +55,9 @@ export function CrewJourneyPlanner({
   person,
   initialDate,
   initialEndDate,
-  initialTo,
   initialFrom,
+  initialTo,
+  initialSite,
   initialDirection = "outbound",
   initialStops = [],
   initialOvernight = false,
@@ -71,8 +73,11 @@ export function CrewJourneyPlanner({
   person?: CrewPerson | null;
   initialDate: string;
   initialEndDate?: string;
-  initialTo?: string;
+  /** Always From → To. Prefer explicit props; site is context only. */
   initialFrom?: string;
+  initialTo?: string;
+  /** Camp near this day (stay colour) — fills From or To by direction, never both. */
+  initialSite?: string;
   initialDirection?: FlightDirection;
   initialStops?: string[];
   /** Kept for callers; overnight is inferred from dates + stops. */
@@ -87,9 +92,23 @@ export function CrewJourneyPlanner({
   onClose: () => void;
 }) {
   const hubs = useTravelHubs();
-  const campNear = person ? siteOnDay(person, initialDate) : null;
-  const defaultTo = initialTo || campNear || "IQA";
-  const defaultFrom = initialFrom || (campNear ? campNear : "YOW");
+  const campCodes = useMemo(() => new Set(CAMP_AIRPORTS.map((row) => row.code)), []);
+  const campNear =
+    (initialSite || "").trim().toUpperCase() ||
+    (person ? siteOnDay(person, initialDate) : null) ||
+    "";
+  const homeHub = hubs[0]?.code || "YOW";
+  // From → To by direction. Never default both ends to the same camp.
+  const defaultFrom =
+    (initialFrom || "").trim().toUpperCase() ||
+    (initialDirection === "return" ? campNear || "IQA" : homeHub);
+  let defaultTo =
+    (initialTo || "").trim().toUpperCase() ||
+    (initialDirection === "return" ? homeHub : campNear || "IQA");
+  // Travel from a camp with no To yet → site transfer; leave To blank.
+  if (!(initialTo || "").trim() && campCodes.has(defaultFrom) && defaultTo === defaultFrom) {
+    defaultTo = "";
+  }
   // If an overnight hub was saved without being in stops, keep it as the first stop.
   const seedStops =
     initialStops.length > 0
@@ -102,16 +121,22 @@ export function CrewJourneyPlanner({
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
   const [stops, setStops] = useState<string[]>(seedStops);
-  const [journeyType, setJourneyType] = useState<JourneyType>(() =>
-    initialDirection === "return" ? "home" : guessType(defaultFrom, defaultTo),
-  );
+  const [directFlight, setDirectFlight] = useState(seedStops.length === 0);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [journeyType, setJourneyType] = useState<JourneyType>(() => {
+    if (initialDirection === "return") return "home";
+    if (!defaultTo && campCodes.has(defaultFrom)) return "transfer";
+    return guessType(defaultFrom, defaultTo || campNear || "IQA");
+  });
   const [startDate, setStartDate] = useState(initialDate.slice(0, 10));
   const [endDate, setEndDate] = useState(seedEnd);
   const [notes, setNotes] = useState(initialNotes);
 
+  const activeStops = directFlight ? [] : stops;
+
   const airports = useMemo(
-    () => normalizeJourneyAirports([from, ...stops, to]),
-    [from, stops, to],
+    () => normalizeJourneyAirports([from, ...activeStops, to]),
+    [from, activeStops, to],
   );
   const suggestions = useMemo(
     () => suggestRoutesFor(flightBook, from, to),
@@ -125,9 +150,9 @@ export function CrewJourneyPlanner({
         startDate,
         endDate: multiDay ? endDate : startDate,
         journeyType,
-        overnightHub: multiDay && stops[0] ? stops[0] : "",
+        overnightHub: multiDay && activeStops[0] ? activeStops[0] : "",
       }),
-    [airports, startDate, endDate, multiDay, stops, journeyType],
+    [airports, startDate, endDate, multiDay, activeStops, journeyType],
   );
 
   // Home places = hubs; Site places = camps. Match the route type.
@@ -158,6 +183,7 @@ export function CrewJourneyPlanner({
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-stone-900/40 p-3 sm:items-center">
       <div
         role="dialog"
@@ -223,49 +249,53 @@ export function CrewJourneyPlanner({
             </div>
 
             {suggestions.length ? (
-              <div className="rounded-lg border border-dashed border-border bg-muted/30 px-2.5 py-2">
-                <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                  Previous routes
-                </p>
-                <div className="mt-1.5 flex flex-col gap-1">
-                  {suggestions.map((row) => (
-                    <button
-                      key={row.pathLabel}
-                      type="button"
-                      onClick={() => {
-                        setFrom(row.airports[0] || from);
-                        setTo(row.airports[row.airports.length - 1] || to);
-                        setStops(row.airports.length > 2 ? row.airports.slice(1, -1) : []);
-                      }}
-                      className="rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-muted"
-                    >
-                      <span className="font-semibold">{row.pathLabel}</span>
-                      <span className="ml-1.5 text-muted-foreground">· used {row.uses}×</span>
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-1 text-[10px] text-muted-foreground">
-                  Suggestion only. Not a booked flight.
-                </p>
+              <div className="flex flex-wrap gap-1.5">
+                {suggestions.map((row) => (
+                  <button
+                    key={row.pathLabel}
+                    type="button"
+                    onClick={() => {
+                      setFrom(row.airports[0] || from);
+                      setTo(row.airports[row.airports.length - 1] || to);
+                      const nextStops =
+                        row.airports.length > 2 ? row.airports.slice(1, -1) : [];
+                      setStops(nextStops);
+                      setDirectFlight(nextStops.length === 0);
+                    }}
+                    className="rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-muted"
+                  >
+                    {row.pathLabel}
+                  </button>
+                ))}
               </div>
             ) : null}
 
-            <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <p className="text-sm font-medium">Connecting stops</p>
-                <button
-                  type="button"
-                  onClick={() => setStops((current) => [...current, ""])}
-                  className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <Plus className="size-3.5" /> Add stop
-                </button>
-              </div>
-              {stops.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  No stops. Direct From to To. Add a stop if they sleep over on the way.
-                </p>
-              ) : (
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={directFlight}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setDirectFlight(next);
+                  if (!next && stops.length === 0) setStops([""]);
+                }}
+                className="size-4 rounded border-input"
+              />
+              Direct flight
+            </label>
+
+            {!directFlight ? (
+              <div>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <p className="text-sm font-medium">Connecting stops</p>
+                  <button
+                    type="button"
+                    onClick={() => setStops((current) => [...current, ""])}
+                    className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <Plus className="size-3.5" /> Add stop
+                  </button>
+                </div>
                 <div className="grid gap-2">
                   {stops.map((stop, index) => (
                     <div key={`stop-${index}`} className="flex items-center gap-2">
@@ -288,8 +318,8 @@ export function CrewJourneyPlanner({
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-2 gap-2">
               <label className="grid gap-1 text-xs text-muted-foreground">
@@ -313,31 +343,22 @@ export function CrewJourneyPlanner({
             </div>
 
             <label className="grid gap-1 text-xs text-muted-foreground">
-              Notes (optional)
+              Notes
               <input
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
-                placeholder="Flight number or notes"
+                placeholder="Flight # / notes"
                 className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
               />
             </label>
 
-            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm">
-              {preview ? (
-                <>
-                  <p className="font-semibold tracking-tight">{preview.pathLabel}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {formatMedium(preview.startDate)}
-                    {preview.arriveDate !== preview.startDate
-                      ? ` to ${formatMedium(preview.arriveDate)}`
-                      : ". Same day"}
-                    . Shown as travel days on the calendar.
-                  </p>
-                </>
-              ) : (
-                <p className="text-muted-foreground">Choose From and To.</p>
-              )}
-            </div>
+            {preview ? (
+              <p className="text-sm font-semibold tracking-tight">{preview.pathLabel}</p>
+            ) : (
+              <p className="text-sm font-medium text-rose-700">
+                <span aria-hidden>*</span> Choose the travel route.
+              </p>
+            )}
           </div>
         </div>
 
@@ -345,9 +366,7 @@ export function CrewJourneyPlanner({
           {onDelete && bookingId ? (
             <button
               type="button"
-              onClick={() => {
-                if (window.confirm("Delete this travel route? Camp days stay.")) onDelete();
-              }}
+              onClick={() => setConfirmDelete(true)}
               className="h-9 rounded-lg px-3 text-sm font-medium text-rose-800 hover:bg-rose-50"
             >
               Delete
@@ -375,5 +394,17 @@ export function CrewJourneyPlanner({
         </div>
       </div>
     </div>
+    {confirmDelete ? (
+      <CrewConfirmDialog
+        title="Delete this travel?"
+        confirmLabel="Delete travel"
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          onDelete?.();
+        }}
+      />
+    ) : null}
+    </>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Cloud, CloudOff, FlaskConical, Loader2, TriangleAlert } from "lucide-react";
+import { Cloud, CloudOff, FlaskConical, Loader2 } from "lucide-react";
 import { getSyncStatus, subscribeSync, type SyncStatus } from "@/lib/crew-sync";
 import { cn } from "@/lib/cn";
 
@@ -23,11 +23,9 @@ export function CrewSyncStatus() {
       ? { icon: <Loader2 className="size-3.5 animate-spin" />, text: "Saving...", tone: "text-muted-foreground" }
       : status.state === "offline"
         ? { icon: <CloudOff className="size-3.5" />, text: "Offline, will sync", tone: "border-amber-300 bg-amber-50 text-amber-900" }
-        : status.state === "error"
-          ? { icon: <TriangleAlert className="size-3.5" />, text: "Not saved", tone: "border-rose-300 bg-rose-50 text-rose-800" }
-          : status.state === "starting"
-            ? { icon: <Loader2 className="size-3.5 animate-spin" />, text: "Syncing...", tone: "text-muted-foreground" }
-            : { icon: <Cloud className="size-3.5" />, text: status.savedAt ? `Saved · ${time(status.savedAt)}` : "Up to date", tone: "text-emerald-800" };
+        : status.state === "error" || status.state === "starting"
+          ? { icon: <Loader2 className="size-3.5 animate-spin" />, text: "Syncing...", tone: "text-muted-foreground" }
+          : { icon: <Cloud className="size-3.5" />, text: status.savedAt ? `Saved · ${time(status.savedAt)}` : "Up to date", tone: "text-emerald-800" };
   return (
     <span
       role="status"

@@ -16,10 +16,13 @@ import {
   MAX_STAY_NOTE_CHARS,
   setStayOut,
   setStayTentative,
+  clearStayPlacement,
   confirmStayArrival,
+  setStayIn,
   stintOverrideKey,
 } from "@/lib/crew-roster";
 import type { CrewPerson } from "@/lib/crew-schedule";
+import { siteOnDay } from "@/lib/crew-site-days";
 
 /** NAV-01 / NAV-07 / NAV-08, rotation plan CRUD (Excel place / clear / note). */
 describe("crew-roster rotation plans", () => {
@@ -117,6 +120,32 @@ describe("crew-roster rotation plans", () => {
     expect(confirmed.rotationPlans.p1?.[0]?.tentative).toBeUndefined();
   });
 
+  it("setStayTentative window grows earlier and later without moving IN", () => {
+    const placed = addNextRotation(emptyRoster(), "p1", {
+      site: "IQA",
+      from: "2027-01-05",
+      out: "2027-01-20",
+    });
+    const back = setStayTentative(placed, "p1", "2027-01-05", { through: "2027-01-08" });
+    expect(back.rotationPlans.p1?.[0]?.from).toBe("2027-01-05");
+    expect(back.rotationPlans.p1?.[0]?.tentativeThrough).toBe("2027-01-08");
+    // Earlier day before IN is clamped — IN stays put; window grows later.
+    const both = setStayTentative(back, "p1", "2027-01-05", {
+      start: "2027-01-02",
+      through: "2027-01-10",
+    });
+    expect(both.rotationPlans.p1?.[0]?.from).toBe("2027-01-05");
+    expect(both.rotationPlans.p1?.[0]?.tentativeThrough).toBe("2027-01-10");
+    // Inside the stay: window start can sit after IN.
+    const mid = setStayTentative(both, "p1", "2027-01-05", {
+      start: "2027-01-06",
+      through: "2027-01-10",
+    });
+    expect(mid.rotationPlans.p1?.[0]?.from).toBe("2027-01-05");
+    expect(mid.rotationPlans.p1?.[0]?.tentativeFrom).toBe("2027-01-06");
+    expect(mid.rotationPlans.p1?.[0]?.tentativeThrough).toBe("2027-01-10");
+  });
+
   it("confirmStayArrival locks IN and clears tentative window", () => {
     const placed = addNextRotation(emptyRoster(), "p1", {
       site: "IQA",
@@ -129,6 +158,121 @@ describe("crew-roster rotation plans", () => {
     expect(confirmed.rotationPlans.p1?.[0]?.from).toBe("2026-12-03");
     expect(confirmed.rotationPlans.p1?.[0]?.tentative).toBeUndefined();
     expect(confirmed.rotationPlans.p1?.[0]?.tentativeThrough).toBeUndefined();
+  });
+
+  it("setStayIn keeps the same placement (idFrom) when dragging the IN edge", () => {
+    const placed = addNextRotation(emptyRoster(), "p1", {
+      site: "IQA",
+      from: "2026-11-01",
+      out: "2026-12-13",
+    });
+    const moved = setStayIn(placed, "p1", "2026-11-01", "2026-11-05");
+    expect(moved.rotationPlans.p1).toHaveLength(1);
+    expect(moved.rotationPlans.p1?.[0]?.from).toBe("2026-11-05");
+    expect(moved.rotationPlans.p1?.[0]?.idFrom).toBe("2026-11-01");
+    expect(moved.rotationPlans.p1?.[0]?.out).toBe("2026-12-13");
+    const again = setStayIn(moved, "p1", "2026-11-05", "2026-10-28");
+    expect(again.rotationPlans.p1).toHaveLength(1);
+    expect(again.rotationPlans.p1?.[0]?.from).toBe("2026-10-28");
+    expect(again.rotationPlans.p1?.[0]?.idFrom).toBe("2026-11-01");
+  });
+
+  it("clearStayPlacement removes an app stay", () => {
+    const placed = addNextRotation(emptyRoster(), "p1", {
+      site: "IQA",
+      from: "2026-11-01",
+      out: "2026-12-13",
+    });
+    const planId = placed.rotationPlans.p1?.[0]?.id;
+    const cleared = clearStayPlacement(placed, "p1", "2026-11-01", planId);
+    expect(cleared.rotationPlans.p1 ?? []).toHaveLength(0);
+  });
+
+  it("clearStayPlacement removes duplicate plans on the same IN", () => {
+    let roster = emptyRoster();
+    for (let i = 0; i < 4; i += 1) {
+      const existing = roster.rotationPlans.p1 ?? [];
+      roster = {
+        ...roster,
+        rotationPlans: {
+          ...roster.rotationPlans,
+          p1: [
+            ...existing,
+            {
+              id: `rot-p1-2027-01-01-${i}`,
+              site: "IQA",
+              from: "2027-01-01",
+              out: "2027-01-02",
+              role: "Manager",
+            },
+          ],
+        },
+      };
+    }
+    expect(roster.rotationPlans.p1).toHaveLength(4);
+    const cleared = clearStayPlacement(roster, "p1", "2027-01-01", roster.rotationPlans.p1![0]!.id);
+    expect(cleared.rotationPlans.p1 ?? []).toHaveLength(0);
+  });
+
+  it("addNextRotation replaces an overlapping plan instead of stacking", () => {
+    const first = addNextRotation(emptyRoster(), "p1", {
+      site: "IQA",
+      from: "2027-01-01",
+      out: "2027-01-02",
+    });
+    const second = addNextRotation(first, "p1", {
+      site: "IQA",
+      from: "2027-01-01",
+      out: "2027-01-02",
+    });
+    expect(second.rotationPlans.p1).toHaveLength(1);
+  });
+
+  it("addNextRotation keeps a stay that crosses New Year (Nov → March)", () => {
+    const roster = addNextRotation(emptyRoster(), "p1", {
+      site: "IQA",
+      from: "2026-11-30",
+      out: "2027-03-15",
+    });
+    const plan = roster.rotationPlans.p1?.[0];
+    expect(plan?.from).toBe("2026-11-30");
+    expect(plan?.out).toBe("2027-03-15");
+    const people = mergePeople(
+      [
+        {
+          id: "p1",
+          name: "Maegan",
+          role: "Labourer",
+          roles: ["Labourer"],
+          homeSites: ["IQA"],
+          projectIds: [],
+          inDate: null,
+          outDate: null,
+          rotationDays: 42,
+          events: [],
+          stints: [],
+        },
+      ] as never[],
+      roster,
+    );
+    const person = people[0]!;
+    expect(siteOnDay(person, "2026-12-31")).toBe("IQA");
+    expect(siteOnDay(person, "2027-01-01")).toBe("IQA");
+    expect(siteOnDay(person, "2027-03-14")).toBe("IQA");
+    expect(siteOnDay(person, "2027-03-15")).toBe(null);
+  });
+
+  it("clearStayPlacement collapses a sheet stay even after IN was dragged", () => {
+    const sheetFrom = "2026-11-23";
+    const key = stintOverrideKey("eric", sheetFrom);
+    const roster = {
+      ...emptyRoster(),
+      stintInOverrides: { [key]: "2026-11-25" },
+      stintOutOverrides: { [key]: "2027-01-04" },
+    };
+    const cleared = clearStayPlacement(roster, "eric", "2026-11-25");
+    expect(cleared.stintInOverrides?.[key]).toBeUndefined();
+    expect(cleared.stintOutOverrides?.[key]).toBe(sheetFrom);
   });
 });
 

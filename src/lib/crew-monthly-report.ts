@@ -9,7 +9,7 @@ import type { CrewPerson } from "@/lib/crew-schedule";
 import type { CrewStopoverBook } from "@/lib/crew-stopovers";
 import { stopoverDatesFor, stopoverOnDay } from "@/lib/crew-stopovers";
 import { formatJourneyNames, type TravelHub } from "@/lib/crew-travel-hubs";
-import { addDays, formatMedium } from "@/lib/dates";
+import { addDays, dayCountLabel, formatMedium } from "@/lib/dates";
 
 export type MonthlyReportLine = {
   id: string;
@@ -101,7 +101,7 @@ export function buildMonthlyReport(input: {
         id: `stop-${person.id}-${from}`,
         sort: stopDates[0]!,
         personId: person.id,
-        text: `${person.name} · stopovers ${hubs.join(", ")} · ${stopDates.length} day(s) in ${label}`,
+        text: `${person.name} · stopovers ${hubs.join(", ")} · ${dayCountLabel(stopDates.length)} in ${label}`,
       });
     }
 

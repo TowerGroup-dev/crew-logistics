@@ -16,10 +16,10 @@ export function returnWindowFromStayDay(input: {
   if (click < from) return null;
   if (input.stayOutExclusive && click >= input.stayOutExclusive.slice(0, 10)) return null;
 
+  // Explicit OUT (including into next year) wins; open sheet stays stop at season end.
   const lastInclusive = input.stayOutExclusive
     ? addDays(input.stayOutExclusive.slice(0, 10), -1)
     : input.seasonEnd;
-  const cappedEnd = lastInclusive > input.seasonEnd ? input.seasonEnd : lastInclusive;
-  if (cappedEnd < click) return { from: click, to: click };
-  return { from: click, to: cappedEnd };
+  if (lastInclusive < click) return { from: click, to: click };
+  return { from: click, to: lastInclusive };
 }

@@ -63,7 +63,7 @@ export const TEST_GUIDE: GuideSection[] = [
     title: "Calendar · Month",
     path: "/month",
     about:
-      "Month schedule for planning (start on 2027). Switch to Edit to paint. Camp chips place stays; Return paints the yellow window. Right-click IN/OUT for routes, Extend Stay, End stay, notes, tentative.",
+      "Month for planning (start on 2027). Edit → camp chips place stays. Right-click: Preliminary, Confirm, Coming from, Going home, Travel from here. Always easy to change.",
     steps: [
       speed("month", "the Month grid"),
       {
@@ -92,6 +92,36 @@ export const TEST_GUIDE: GuideSection[] = [
         expect: "Stay sticks after you release: first day IN, last day OUT, camp colour.",
       },
       {
+        id: "month-tentative",
+        do: "Right-click a day near the start → Preliminary. Right-click an earlier or later day to grow the window both ways (or an empty day just before the stay to extend front).",
+        expect: "Those days are shaded (no IN yet). The window grows earlier and later.",
+      },
+      {
+        id: "month-confirm",
+        do: "Later (e.g. after a planning meeting), right-click the real arrival day → Confirm on that day. You can Preliminary again anytime to change.",
+        expect: "Shade clears; that day becomes the one IN. Right-click still lets you change it.",
+      },
+      {
+        id: "month-travel-in",
+        do: "Right-click the IN day → Coming from…. Set From (home), optional stop, Save.",
+        expect: "IN day shows the arrive route. Right-click → Edit travel to change.",
+      },
+      {
+        id: "month-travel-mid",
+        do: "Right-click a mid-stay day → Travel from here…. To another camp or place, optional stop, Save.",
+        expect: "Route paints on the calendar; if To is a camp, the stay colour moves from that day.",
+      },
+      {
+        id: "month-travel-out",
+        do: "Right-click the OUT day → Going home…. To Ottawa (or home), optional stop, Save.",
+        expect: "OUT day stays camp-coloured with leave route, not a grey OUT label.",
+      },
+      {
+        id: "month-travel-suggest",
+        do: "Add another similar route (same From/To) after saving one with a stop.",
+        expect: "Previous routes appear; Accept fills stops. You still click Save.",
+      },
+      {
         id: "month-extend",
         do: "Right-click a stay → Extend Stay, then click the new last day — or drag the OUT end further right.",
         expect: "The OUT day moves later. Flash confirms the new last day.",
@@ -100,26 +130,6 @@ export const TEST_GUIDE: GuideSection[] = [
         id: "month-end",
         do: "Right-click a stay day → End stay on this day.",
         expect: "That day becomes OUT; days after clear.",
-      },
-      {
-        id: "month-travel-in",
-        do: "Right-click the IN day → Add route in. From Ottawa (or home) To the camp, Save.",
-        expect: "IN day shows the arrive route (e.g. → IQA). Click the cell to edit again.",
-      },
-      {
-        id: "month-travel-out",
-        do: "Right-click the OUT day → Add route home. To Ottawa (or home), Save.",
-        expect: "OUT day stays camp-coloured with leave route (e.g. IQA → YOW), not a grey “OUT” label.",
-      },
-      {
-        id: "month-travel-suggest",
-        do: "Add another similar route (same From/To) after saving one with a stop.",
-        expect: "Previous routes appear; Accept fills stops. You still click Save.",
-      },
-      {
-        id: "month-tentative",
-        do: "Right-click a stay day → Mark tentative arrival through that day (extend the IN? window). Check Overview To do.",
-        expect: "IN? on those days (arrival not set); Overview shows book-by ~2 weeks before. Confirm arrival locks real IN.",
       },
       {
         id: "month-search",

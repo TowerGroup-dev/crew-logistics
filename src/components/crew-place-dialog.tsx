@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { MAX_ROTATION_DAYS, MAX_STAY_NOTE_CHARS, STANDARD_ROTATION_DAYS } from "@/lib/crew-roster";
 import { DEFAULT_SITES, siteColour, type CrewSite } from "@/lib/crew-sites";
-import { addDays, daysBetween, formatMedium } from "@/lib/dates";
+import { addDays, dayCountLabel, daysBetween, formatMedium } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 export type PlaceRotationInput = {
@@ -135,7 +135,7 @@ export function CrewPlaceDialog({
           </label>
 
           <label className="grid gap-1 text-sm">
-            <span className="text-muted-foreground">Note (optional · {MAX_STAY_NOTE_CHARS} chars)</span>
+            <span className="text-muted-foreground">Note</span>
             <input
               value={note}
               onChange={(event) => setNote(event.target.value.slice(0, MAX_STAY_NOTE_CHARS))}
@@ -149,24 +149,19 @@ export function CrewPlaceDialog({
             />
           </label>
 
-          <label className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
             <input
               type="checkbox"
               checked={tentative}
               onChange={(event) => setTentative(event.target.checked)}
-              className="mt-0.5"
+              className="size-4 rounded border-input"
             />
-            <span>
-              <span className="font-medium">Tentative arrival</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">
-                One day or a window — shows IN? on those days. Overview reminds you to book 2 weeks before the first day.
-              </span>
-            </span>
+            Preliminary arrival
           </label>
 
           {tentative ? (
             <label className="grid gap-1 text-sm">
-              <span className="text-muted-foreground">Arrival window ends (inclusive)</span>
+              <span className="text-muted-foreground">Window ends</span>
               <input
                 type="date"
                 value={tentativeThrough}
@@ -175,9 +170,6 @@ export function CrewPlaceDialog({
                 onChange={(event) => setTentativeThrough(event.target.value)}
                 className="h-9 rounded-lg border border-input px-2"
               />
-              <span className="text-xs text-muted-foreground">
-                Same as IN = one day. Later = several days of IN?.
-              </span>
             </label>
           ) : null}
 
@@ -192,14 +184,15 @@ export function CrewPlaceDialog({
         </div>
 
         {overlapError || error ? (
-          <p className="mt-3 text-sm text-rose-700">{overlapError || error}</p>
-        ) : (
-          <p className="mt-3 text-xs text-muted-foreground">
-            {pastSixWeeks
-              ? `This stay is past the usual 6 weeks (${STANDARD_ROTATION_DAYS} days). Ceiling is ${MAX_ROTATION_DAYS} days.`
-              : `Standard stay is ${STANDARD_ROTATION_DAYS} days (6 weeks). Drag further to extend past 6 weeks if needed.`}
+          <p className="mt-3 text-sm font-medium text-rose-700">
+            <span aria-hidden>*</span> {overlapError || error}
           </p>
-        )}
+        ) : pastSixWeeks ? (
+          <p className="mt-3 text-sm font-medium text-rose-700">
+            <span aria-hidden>*</span> Past {dayCountLabel(STANDARD_ROTATION_DAYS)} · max{" "}
+            {dayCountLabel(MAX_ROTATION_DAYS)}.
+          </p>
+        ) : null}
 
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-input px-3 text-sm font-medium">

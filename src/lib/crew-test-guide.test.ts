@@ -17,20 +17,25 @@ describe("crew-test-guide", () => {
     expect(sectionForPath("/settings").id).toBe("settings");
   });
 
-  it("Month steps cover 2027 place, right-click routes, and tentative — no Travel chip", () => {
+  it("Month steps cover 2027 place, preliminary/confirm, and right-click travel — no Travel chip", () => {
     const month = TEST_GUIDE.find((s) => s.id === "month");
     expect(month).toBeTruthy();
     const ids = new Set(month!.steps.map((s) => s.id));
     expect(ids.has("month-place")).toBe(true);
+    expect(ids.has("month-tentative")).toBe(true);
+    expect(ids.has("month-confirm")).toBe(true);
     expect(ids.has("month-travel-in")).toBe(true);
+    expect(ids.has("month-travel-mid")).toBe(true);
     expect(ids.has("month-travel-out")).toBe(true);
     expect(ids.has("month-extend")).toBe(true);
-    expect(ids.has("month-tentative")).toBe(true);
     expect(ids.has("month-filters")).toBe(true);
     expect(ids.has("month-year")).toBe(true);
     expect(ids.has("month-travel-days")).toBe(false);
     const blob = month!.steps.map((s) => `${s.do} ${s.expect}`).join(" ");
     expect(blob).toMatch(/2027/);
+    expect(blob).toMatch(/Preliminary/i);
+    expect(blob).toMatch(/Travel from here/i);
+    expect(blob).toMatch(/shaded/i);
     expect(blob.toLowerCase()).not.toMatch(/travel chip/);
     for (const step of month!.steps) {
       expect(step.do.includes("Select Travel")).toBe(false);

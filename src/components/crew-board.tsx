@@ -57,6 +57,7 @@ import {
   employmentStatusLabel,
   removePerson,
   removeRotationPlan,
+  clearStayPlacement,
   saveRoster,
   setEmploymentStatus,
   setRotationPlanNote,
@@ -78,6 +79,7 @@ import { CrewNextRotationForm } from "@/components/crew-next-rotation";
 import { CrewOverview, CrewReminders } from "@/components/crew-overview";
 import { buildSituationReminders } from "@/lib/crew-situation-reminders";
 import { CrewRoleHeader } from "@/components/crew-role-header";
+import { CrewConfirmDialog } from "@/components/crew-confirm-dialog";
 import { CrewRoleAddDialog } from "@/components/crew-role-add-dialog";
 import { CrewMonthlyReportPanel } from "@/components/crew-reports";
 import { CrewAccommodationDesk } from "@/components/crew-accommodation-desk";
@@ -170,7 +172,15 @@ import {
   type CrewTravelHubsBook,
 } from "@/lib/crew-travel-hubs";
 import { CrewSettingsPanel } from "@/components/crew-settings-panel";
-import { addDays, daysBetween, formatLong, formatMedium, formatShort, todayInZone } from "@/lib/dates";
+import {
+  addDays,
+  dayCountLabel,
+  daysBetween,
+  formatLong,
+  formatMedium,
+  formatShort,
+  todayInZone,
+} from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 export type CrewBoardView =
@@ -305,6 +315,10 @@ export function CrewBoard({
   }));
   const [employeeEditId, setEmployeeEditId] = useState<string | null>(null);
   const [employeeMenuId, setEmployeeMenuId] = useState<string | null>(null);
+  const [confirmDeletePerson, setConfirmDeletePerson] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   /** Employees list: active people first (default), or inactive first. */
   const [employeeSort, setEmployeeSort] = useState<"active-first" | "inactive-first">("active-first");
   const [employeeEditDraft, setEmployeeEditDraft] = useState({
@@ -576,17 +590,28 @@ export function CrewBoard({
   }, [scheduleYear, today]);
 
   function openPersonRotation(personId: string, iso = asOf, travel: "outbound" | "return" | "moves" | null = null) {
-    setOpenTravelFor(travel);
     // Prefer the stay covering the clicked day, else current/next from today, never a past rotation.
     const hit =
       rotationForPersonOnDay(rotationBook, personId, iso) ||
       currentRotationForPerson(rotationBook, personId, asOf) ||
       (iso !== asOf ? currentRotationForPerson(rotationBook, personId, iso) : null);
+    // Same cell again → close (undo the open).
+    if (hit && selectedRotationId === hit.id && !travel) {
+      setSelectedRotationId(null);
+      setOpenTravelFor(null);
+      return;
+    }
+    if (selectedId === personId && !hit && !travel) {
+      setSelectedId(null);
+      return;
+    }
+    setOpenTravelFor(travel);
     if (hit) {
       setSelectedRotationId(hit.id);
       setSelectedId(null);
       return;
     }
+    setSelectedRotationId(null);
     setSelectedId(personId);
   }
 
@@ -1376,6 +1401,43 @@ export function CrewBoard({
                   text: `${person?.name || personId}: cleared booking (${result.cleared.flights} flights, ${result.cleared.stopoverDays} travel days)`,
                 });
               }}
+              onClearStay={(personId, stayFrom, stayOutExclusive, planId) => {
+                // One action: remove travel + the stay itself (app or sheet).
+                captureHistory();
+                const result = clearStayBooking({
+                  personId,
+                  stayFrom,
+                  stayOutExclusive,
+                  flightBook,
+                  stopoverBook,
+                  rotationBook,
+                });
+                setFlightBook(result.flightBook);
+                saveFlights(result.flightBook);
+                setStopoverBook(result.stopoverBook);
+                saveStopovers(result.stopoverBook);
+                setRotationBook(result.rotationBook);
+                saveRotations(result.rotationBook);
+                setOpsBook((prev) => {
+                  const next = {
+                    ...prev,
+                    [personId]: syncOpsFromFlights(prev, result.flightBook, personId),
+                  };
+                  saveCrewOps(next);
+                  return next;
+                });
+                patchRoster(
+                  (current) => clearStayPlacement(current, personId, stayFrom, planId),
+                  { history: false },
+                );
+                const person = overview.rows.find((row) => row.person.id === personId)?.person;
+                logActivity({
+                  kind: "stay_place",
+                  personId,
+                  personName: person?.name,
+                  text: `${person?.name || personId}: cleared stay`,
+                });
+              }}
               onSetRotationNote={(personId, planId, note) =>
                 patchRoster((current) => setRotationPlanNote(current, personId, planId, note), {
                   history: true,
@@ -1436,16 +1498,18 @@ export function CrewBoard({
                 const person = overview.rows.find((row) => row.person.id === personId)?.person;
                 const through =
                   typeof tentative === "object" ? tentative.through : stintFrom;
+                const start =
+                  typeof tentative === "object" && tentative.start ? tentative.start : stintFrom;
                 logActivity({
                   kind: "stay_extend",
                   personId,
                   personName: person?.name,
                   text:
                     tentative === false
-                      ? `${person?.name || personId} arrival confirmed · ${stintFrom}`
-                      : through > stintFrom
-                        ? `${person?.name || personId} tentative arrival · ${stintFrom} – ${through}`
-                        : `${person?.name || personId} tentative arrival · ${stintFrom}`,
+                      ? `${person?.name || personId} preliminary cleared · ${stintFrom}`
+                      : start !== through
+                        ? `${person?.name || personId} preliminary · ${start} – ${through}`
+                        : `${person?.name || personId} preliminary · ${start}`,
                 });
               }}
               onConfirmStayArrival={(personId, stintFrom, confirmedIn) => {
@@ -1523,9 +1587,25 @@ export function CrewBoard({
                 });
               }}
               onMoveStayIn={(personId, stintFrom, newFrom) => {
-                // Start the stay earlier or later; OUT, bookings, transfers and notes stay put.
+                // Same placement: only the IN edge moves. Flights keep their dates (idFrom).
                 captureHistory();
                 patchRoster((current) => setStayIn(current, personId, stintFrom, newFrom));
+                setRotationBook((current) => {
+                  const hit =
+                    current.rotations.find(
+                      (row) =>
+                        row.personId === personId &&
+                        row.plannedIn <= stintFrom &&
+                        stintFrom < row.plannedOut,
+                    ) ??
+                    current.rotations.find(
+                      (row) => row.personId === personId && row.plannedIn === stintFrom,
+                    );
+                  if (!hit || hit.plannedIn === newFrom) return current;
+                  const next = moveRotationIn(current, hit.id, newFrom);
+                  saveRotations(next);
+                  return next;
+                });
                 const person = overview.rows.find((row) => row.person.id === personId)?.person;
                 logActivity({
                   kind: "stay_extend",
@@ -1874,14 +1954,10 @@ export function CrewBoard({
                               className="flex w-full px-3 py-2 text-left text-sm font-medium text-rose-800 hover:bg-rose-50"
                               onClick={() => {
                                 setEmployeeMenuId(null);
-                                const ok = window.confirm(
-                                  `Delete ${row.person.name} permanently? This removes them from Employees and any calendar placements for them.`,
-                                );
-                                if (!ok) return;
-                                captureHistory();
-                                patchRoster((current) => removePerson(current, row.person.id));
-                                purgePersonSideState(row.person.id);
-                                patchScheduleView((current) => showPerson(current, row.person.id));
+                                setConfirmDeletePerson({
+                                  id: row.person.id,
+                                  name: row.person.name,
+                                });
                               }}
                             >
                               Delete
@@ -2020,6 +2096,23 @@ export function CrewBoard({
           )}
         </div>
       </section>
+
+      {confirmDeletePerson ? (
+        <CrewConfirmDialog
+          title={`Delete ${confirmDeletePerson.name}?`}
+          message="This removes them from Employees and any calendar placements for them."
+          confirmLabel="Delete"
+          onCancel={() => setConfirmDeletePerson(null)}
+          onConfirm={() => {
+            const { id } = confirmDeletePerson;
+            setConfirmDeletePerson(null);
+            captureHistory();
+            patchRoster((current) => removePerson(current, id));
+            purgePersonSideState(id);
+            patchScheduleView((current) => showPerson(current, id));
+          }}
+        />
+      ) : null}
 
       {roleAddSection ? (
         <CrewRoleAddDialog
@@ -2336,7 +2429,7 @@ function PersonProfile({
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <Fact label="Site" value={snap.site ? siteLabel(snap.site) : "No current assignment"} />
           <Fact label="Status" value={dutyLabel(snap.duty)} />
-          <Fact label="Planned stay" value={`${stayLength(snap)} days`} />
+          <Fact label="Planned stay" value={dayCountLabel(stayLength(snap))} />
           <Fact
             label="Days on site"
             value={

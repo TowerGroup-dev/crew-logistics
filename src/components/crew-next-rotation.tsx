@@ -96,11 +96,6 @@ export function CrewNextRotationForm({
     <section className="grid gap-3 rounded-xl border border-border bg-card p-4">
       <div>
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Next rotation</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {isActive
-            ? `Site + IN. Change role for this stay if needed. Standard ${DEFAULT_ROTATION_DAYS} days; up to ${MAX_ROTATION_DAYS}.`
-            : `Sets them active and places the next stay (standard ${DEFAULT_ROTATION_DAYS}, up to ${MAX_ROTATION_DAYS}).`}
-        </p>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">

@@ -105,6 +105,8 @@ export function CrewTripForm({
     const end = direction === "outbound" ? legs[0]?.fromAirport : legs[legs.length - 1]?.toAirport;
     return end || usualHomeAirport(book, personId);
   });
+  const [wantHotel, setWantHotel] = useState(() => value.hotels.length > 0);
+  const [wantCar, setWantCar] = useState(() => Boolean(value.carService.trim()));
   const chain = move
     ? routeBetweenSites(routes, move.fromSite, move.toSite)
     : home && camp
@@ -154,25 +156,33 @@ export function CrewTripForm({
     return hints.slice(0, 6);
   }
 
-  function applySuggestion(suggestion: RouteSuggestion) {
-    const next = legsForRoute(suggestion.airports, travelDate).map((leg, index) => ({
+  /** Append a suggested path — never wipe what is already on the itinerary. */
+  function appendSuggestion(suggestion: RouteSuggestion) {
+    const anchor = legs[legs.length - 1];
+    const startDate = anchor?.arriveDate || anchor?.departDate || travelDate;
+    const added = legsForRoute(suggestion.airports, startDate).map((leg, index) => ({
       ...leg,
       mode: suggestion.modes[index] ?? "flight",
     }));
-    setLegs(next);
+    setLegs([...legs, ...added]);
   }
 
   function setLegs(next: FlightSegment[]) {
     onChange(summaryFromLegs(next));
   }
 
-  function fillRoute(nextHome = home, nextCamp = camp) {
-    if (move) {
-      setLegs(legsForRoute(chain, travelDate));
-      return;
-    }
-    if (!nextHome || !nextCamp) return;
-    setLegs(legsForRoute(routeAirports(routes, nextCamp, nextHome, direction), travelDate));
+  function addBlankLeg(mode: "flight" | "road") {
+    const last = legs[legs.length - 1];
+    setLegs([
+      ...legs,
+      {
+        ...emptySegment(),
+        mode,
+        fromAirport: last?.toAirport || "",
+        departDate: last?.arriveDate || last?.departDate || travelDate,
+        arriveDate: last?.arriveDate || last?.departDate || travelDate,
+      },
+    ]);
   }
 
   function patchLeg(index: number, patch: Partial<FlightSegment>) {
@@ -186,8 +196,8 @@ export function CrewTripForm({
   return (
     <div className="grid gap-4 text-sm">
       {assumed ? (
-        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-950">
-          Shown as booked so the schedule works, but no ticket is on file. Add the real booking below.
+        <p className="text-sm font-medium text-rose-700">
+          <span aria-hidden>*</span> No ticket on file.
         </p>
       ) : null}
 
@@ -203,84 +213,44 @@ export function CrewTripForm({
             </span>
           </p>
         ) : (
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <label className="grid min-w-0 gap-1">
-            <span className="text-muted-foreground">{direction === "outbound" ? "Flying from" : "Going home to"}</span>
-            <AirportSelect
-              value={home}
-              hubs={hubs}
-              placeholder="Pick the airport"
-              onChange={(code) => {
-                setHome(code);
-                if (!legs.length) fillRoute(code, camp);
-              }}
-            />
-          </label>
-          <label className="grid min-w-0 gap-1">
-            <span className="text-muted-foreground">{direction === "outbound" ? "To site" : "From site"}</span>
-            <select
-              value={camp}
-              onChange={(event) => {
-                setCamp(event.target.value);
-                if (!legs.length) fillRoute(home, event.target.value);
-              }}
-              className={cn("h-9 w-full min-w-0 rounded-lg border border-input bg-card px-2", !camp && "text-muted-foreground")}
-            >
-              <option value="">Pick the site</option>
-              {CAMP_AIRPORTS.map((row) => (
-                <option key={row.code} value={row.code}>
-                  {row.code} · {row.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <label className="grid min-w-0 gap-1">
+              <span className="text-muted-foreground">From</span>
+              <AirportSelect
+                value={home}
+                hubs={hubs}
+                includeCamps
+                placeholder="Any place"
+                onChange={setHome}
+              />
+            </label>
+            <label className="grid min-w-0 gap-1">
+              <span className="text-muted-foreground">To</span>
+              <AirportSelect
+                value={camp}
+                hubs={hubs}
+                includeCamps
+                placeholder="Any place"
+                onChange={setCamp}
+              />
+            </label>
+          </div>
         )}
         {suggestions.length ? (
-          <div className="mt-3 space-y-1.5">
-            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Suggested routes {legs.length ? "(click to replace the itinerary)" : "(click to fill the itinerary)"}
-            </p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
             {suggestions.map((suggestion) => (
               <button
                 key={`${suggestion.airports.join(">")}|${suggestion.modes.join(",")}`}
                 type="button"
-                onClick={() => applySuggestion(suggestion)}
-                className="flex w-full items-center justify-between gap-2 rounded-lg border border-sky-200 bg-card px-3 py-2 text-left hover:border-sky-400 hover:bg-sky-50"
+                title="Add to itinerary"
+                onClick={() => appendSuggestion(suggestion)}
+                className="rounded-md border border-border bg-card px-2 py-1 text-xs font-medium hover:bg-muted"
               >
-                <span className="min-w-0">
-                  <span className="flex flex-wrap items-center gap-1 font-semibold">
-                    {suggestion.airports.map((code, index) => (
-                      <span key={`${code}-${index}`} className="inline-flex items-center gap-1">
-                        {index > 0 ? (
-                          suggestion.modes[index - 1] === "road" ? (
-                            <Car className="size-3.5 text-amber-700" aria-label="by road" />
-                          ) : (
-                            <Plane className="size-3.5 text-sky-700" aria-label="by air" />
-                          )
-                        ) : null}
-                        {code}
-                      </span>
-                    ))}
-                  </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {suggestion.airports.map((code) => placeName(code, hubs)).join(" → ")}
-                    {suggestion.airports.length > 2
-                      ? ` · ${suggestion.airports.length - 2} stop${suggestion.airports.length > 3 ? "s" : ""}`
-                      : " · direct"}
-                  </span>
-                </span>
-                <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-900">
-                  {suggestion.usual ? "Usual" : suggestion.uses ? `Used ${suggestion.uses}×` : "Direct"}
-                </span>
+                {suggestion.airports.join(" → ")}
               </button>
             ))}
           </div>
-        ) : (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Pick both ends to see suggested routes (the usual one, ones used before, and direct).
-          </p>
-        )}
+        ) : null}
       </section>
 
       <section className="grid gap-2">
@@ -291,19 +261,7 @@ export function CrewTripForm({
               <button
                 key={mode}
                 type="button"
-                onClick={() => {
-                  const last = legs[legs.length - 1];
-                  setLegs([
-                    ...legs,
-                    {
-                      ...emptySegment(),
-                      mode,
-                      fromAirport: last?.toAirport || "",
-                      departDate: last?.arriveDate || last?.departDate || travelDate,
-                      arriveDate: last?.arriveDate || last?.departDate || travelDate,
-                    },
-                  ]);
-                }}
+                onClick={() => addBlankLeg(mode)}
                 className="inline-flex h-8 items-center gap-1 rounded-lg border border-input px-2 text-xs font-medium hover:bg-muted"
               >
                 <Plus className="size-3.5" /> {mode === "flight" ? "Flight" : "Drive"}
@@ -311,11 +269,7 @@ export function CrewTripForm({
             ))}
           </div>
         </div>
-        {legs.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-            The itinerary is empty. Pick a suggested route above, or add a flight or a drive.
-          </p>
-        ) : (
+        {legs.length === 0 ? null : (
           legs.map((leg, index) => (
             <div
               key={index}
@@ -326,30 +280,41 @@ export function CrewTripForm({
             >
               <div className="col-span-2 flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Step {index + 1}</span>
-                <div className="inline-flex rounded-lg border border-input bg-card p-0.5" role="group" aria-label={`Step ${index + 1} by`}>
-                  {(["flight", "road"] as const).map((mode) => {
-                    const active = (leg.mode ?? "flight") === mode;
-                    return (
-                      <button
-                        key={mode}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => patchLeg(index, { mode })}
-                        className={cn(
-                          "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold",
-                          active ? (mode === "road" ? "bg-amber-600 text-white" : "bg-sky-700 text-white") : "text-muted-foreground",
-                        )}
-                      >
-                        {mode === "road" ? <Car className="size-3.5" /> : <Plane className="size-3.5" />}
-                        {mode === "road" ? "Road" : "Flight"}
-                      </button>
-                    );
-                  })}
+                <div className="flex items-center gap-1.5">
+                  <div className="inline-flex rounded-lg border border-input bg-card p-0.5" role="group" aria-label={`Step ${index + 1} by`}>
+                    {(["flight", "road"] as const).map((mode) => {
+                      const active = (leg.mode ?? "flight") === mode;
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => patchLeg(index, { mode })}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold",
+                            active ? "bg-stone-900 text-white" : "text-muted-foreground",
+                          )}
+                        >
+                          {mode === "road" ? <Car className="size-3.5" /> : <Plane className="size-3.5" />}
+                          {mode === "road" ? "Road" : "Flight"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Remove step"
+                    onClick={() => setLegs(legs.filter((_, i) => i !== index))}
+                    className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-100"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
                 </div>
               </div>
               <AirportSelect
                 value={leg.fromAirport}
                 hubs={hubs}
+                includeCamps
                 placeholder="From"
                 suggested={placeHints(index, "from")}
                 ariaLabel={`Step ${index + 1} from`}
@@ -358,6 +323,7 @@ export function CrewTripForm({
               <AirportSelect
                 value={leg.toAirport}
                 hubs={hubs}
+                includeCamps
                 placeholder="To"
                 suggested={placeHints(index, "to")}
                 ariaLabel={`Step ${index + 1} to`}
@@ -423,13 +389,6 @@ export function CrewTripForm({
                   className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
                 />
               </label>
-              <button
-                type="button"
-                onClick={() => setLegs(legs.filter((_, i) => i !== index))}
-                className="col-span-2 inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-input text-xs text-rose-700 hover:bg-rose-50"
-              >
-                <Trash2 className="size-3.5" /> Remove from itinerary
-              </button>
             </div>
           ))
         )}
@@ -480,87 +439,136 @@ export function CrewTripForm({
       </section>
 
       <section className="grid gap-2">
-        <div className="flex items-center justify-between">
-          <p className="flex items-center gap-2 font-semibold">
-            <BedDouble className="size-4 text-muted-foreground" /> Hotels
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              // Suggest the first overnight stop: a flight that lands a day before the next one leaves.
-              const stop = legs.find((row, i) => legs[i + 1] && row.arriveDate && legs[i + 1]!.departDate > row.arriveDate);
-              onChange({
-                hotels: [
-                  ...value.hotels,
-                  emptyHotel(stop?.toAirport || legs[0]?.toAirport || "", stop?.arriveDate || travelDate),
-                ],
-              });
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={wantHotel}
+            onChange={(event) => {
+              const on = event.target.checked;
+              setWantHotel(on);
+              if (on) {
+                if (value.hotels.length) return;
+                const stop = legs.find(
+                  (row, i) => legs[i + 1] && row.arriveDate && legs[i + 1]!.departDate > row.arriveDate,
+                );
+                onChange({
+                  hotels: [
+                    emptyHotel(
+                      stop?.toAirport || legs[0]?.toAirport || "",
+                      stop?.arriveDate || travelDate,
+                    ),
+                  ],
+                });
+              } else {
+                onChange({ hotels: [] });
+              }
             }}
-            className="inline-flex h-8 items-center gap-1 rounded-lg border border-input px-2 text-xs font-medium hover:bg-muted"
-          >
-            <Plus className="size-3.5" /> Hotel
-          </button>
-        </div>
-        {value.hotels.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No overnight stop on this trip.</p>
-        ) : (
-          value.hotels.map((hotel, index) => (
-            <div key={index} className="grid grid-cols-2 gap-2 rounded-xl border border-border p-3">
-              <AirportSelect value={hotel.place} hubs={hubs} placeholder="Where" onChange={(code) => patchHotel(index, { place: code })} />
-              <input
-                value={hotel.name}
-                onChange={(event) => patchHotel(index, { name: event.target.value })}
-                placeholder="Hotel name"
-                className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-              />
-              <label className="grid min-w-0 gap-1">
-                <span className="text-xs text-muted-foreground">Check in</span>
+            className="size-4 rounded border-input"
+          />
+          <BedDouble className="size-4 text-muted-foreground" />
+          Hotel
+        </label>
+        {wantHotel ? (
+          <>
+            {value.hotels.map((hotel, index) => (
+              <div key={index} className="grid grid-cols-2 gap-2 rounded-xl border border-border p-3">
+                <AirportSelect
+                  value={hotel.place}
+                  hubs={hubs}
+                  placeholder="Where"
+                  onChange={(code) => patchHotel(index, { place: code })}
+                />
                 <input
-                  type="date"
-                  value={hotel.checkIn}
-                  onChange={(event) => patchHotel(index, { checkIn: event.target.value })}
+                  value={hotel.name}
+                  onChange={(event) => patchHotel(index, { name: event.target.value })}
+                  placeholder="Hotel name"
                   className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
                 />
-              </label>
-              <label className="grid min-w-0 gap-1">
-                <span className="text-xs text-muted-foreground">Check out</span>
+                <label className="grid min-w-0 gap-1">
+                  <span className="text-xs text-muted-foreground">Check in</span>
+                  <input
+                    type="date"
+                    value={hotel.checkIn}
+                    onChange={(event) => patchHotel(index, { checkIn: event.target.value })}
+                    className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
+                  />
+                </label>
+                <label className="grid min-w-0 gap-1">
+                  <span className="text-xs text-muted-foreground">Check out</span>
+                  <input
+                    type="date"
+                    value={hotel.checkOut}
+                    min={hotel.checkIn || undefined}
+                    onChange={(event) => patchHotel(index, { checkOut: event.target.value })}
+                    className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
+                  />
+                </label>
                 <input
-                  type="date"
-                  value={hotel.checkOut}
-                  min={hotel.checkIn || undefined}
-                  onChange={(event) => patchHotel(index, { checkOut: event.target.value })}
+                  value={hotel.confirmation}
+                  onChange={(event) => patchHotel(index, { confirmation: event.target.value })}
+                  placeholder="Confirmation #"
                   className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
                 />
-              </label>
-              <input
-                value={hotel.confirmation}
-                onChange={(event) => patchHotel(index, { confirmation: event.target.value })}
-                placeholder="Confirmation #"
-                className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-              />
-              <button
-                type="button"
-                onClick={() => onChange({ hotels: value.hotels.filter((_, i) => i !== index) })}
-                className="inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-input text-xs text-rose-700 hover:bg-rose-50"
-              >
-                <Trash2 className="size-3.5" /> Remove
-              </button>
-            </div>
-          ))
-        )}
+                {value.hotels.length > 1 ? (
+                  <button
+                    type="button"
+                    aria-label="Remove hotel"
+                    onClick={() => onChange({ hotels: value.hotels.filter((_, i) => i !== index) })}
+                    className="inline-flex h-7 w-fit items-center gap-1 rounded-md px-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-100"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                ) : null}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const stop = legs.find(
+                  (row, i) => legs[i + 1] && row.arriveDate && legs[i + 1]!.departDate > row.arriveDate,
+                );
+                onChange({
+                  hotels: [
+                    ...value.hotels,
+                    emptyHotel(
+                      stop?.toAirport || legs[0]?.toAirport || "",
+                      stop?.arriveDate || travelDate,
+                    ),
+                  ],
+                });
+              }}
+              className="inline-flex h-8 w-fit items-center gap-1 rounded-lg border border-input px-2 text-xs font-medium hover:bg-muted"
+            >
+              <Plus className="size-3.5" /> Add hotel
+            </button>
+          </>
+        ) : null}
       </section>
 
-      <label className="grid min-w-0 gap-1">
-        <span className="flex items-center gap-2 font-semibold">
-          <Car className="size-4 text-muted-foreground" /> Car service
-        </span>
-        <input
-          value={value.carService}
-          onChange={(event) => onChange({ carService: event.target.value })}
-          placeholder="e.g. Pickup at home 5:30 am to YOW (blank if not needed)"
-          className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-        />
-      </label>
+      <section className="grid gap-2">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={wantCar}
+            onChange={(event) => {
+              const on = event.target.checked;
+              setWantCar(on);
+              if (!on) onChange({ carService: "" });
+            }}
+            className="size-4 rounded border-input"
+          />
+          <Car className="size-4 text-muted-foreground" />
+          Car service
+        </label>
+        {wantCar ? (
+          <input
+            value={value.carService}
+            onChange={(event) => onChange({ carService: event.target.value })}
+            placeholder="Pickup details"
+            className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
+          />
+        ) : null}
+      </section>
 
       <label className="grid min-w-0 gap-1">
         <span className="text-muted-foreground">Notes</span>

@@ -77,8 +77,13 @@ export type CrewStint = {
   departure: string | null;
   tentative: boolean;
   /**
+   * Inclusive first day of a tentative arrival window.
+   * Missing → window starts at `from`. May be later than `from` when arrival is mid-stay.
+   */
+  tentativeFrom?: string;
+  /**
    * Inclusive last day of a tentative arrival window (one day or several).
-   * Missing → window is just `from`.
+   * Missing → window ends at `tentativeFrom` or `from`.
    */
   tentativeThrough?: string;
   note?: string;
@@ -96,17 +101,33 @@ export type CrewStint = {
   unsure?: boolean;
 };
 
+/** Inclusive first day of a preliminary arrival window, or null when not tentative. */
+export function tentativeArrivalFrom(stint: {
+  from: string;
+  tentative?: boolean;
+  unsure?: boolean;
+  tentativeFrom?: string;
+  tentativeThrough?: string;
+}): string | null {
+  if (!stint.tentative && !stint.unsure) return null;
+  const start = stint.tentativeFrom?.slice(0, 10);
+  if (start && start >= stint.from) return start;
+  return stint.from.slice(0, 10);
+}
+
 /** Inclusive last day of a preliminary arrival window, or null when not tentative. */
 export function tentativeArrivalThrough(stint: {
   from: string;
   tentative?: boolean;
   unsure?: boolean;
+  tentativeFrom?: string;
   tentativeThrough?: string;
 }): string | null {
   if (!stint.tentative && !stint.unsure) return null;
   const through = stint.tentativeThrough?.slice(0, 10);
-  if (through && through >= stint.from) return through;
-  return stint.from.slice(0, 10);
+  const start = tentativeArrivalFrom(stint) || stint.from;
+  if (through && through >= start) return through;
+  return start;
 }
 
 /** True when this calendar day sits in the tentative arrival window (one day or several). */
@@ -115,13 +136,15 @@ export function isTentativeArrivalDay(
     from: string;
     tentative?: boolean;
     unsure?: boolean;
+    tentativeFrom?: string;
     tentativeThrough?: string;
   },
   iso: string,
 ): boolean {
+  const start = tentativeArrivalFrom(stint);
   const through = tentativeArrivalThrough(stint);
   const day = iso.slice(0, 10);
-  return Boolean(through && day >= stint.from && day <= through);
+  return Boolean(start && through && day >= start && day <= through);
 }
 
 export type CrewStintSegment = {

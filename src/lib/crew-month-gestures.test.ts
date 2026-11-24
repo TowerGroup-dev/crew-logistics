@@ -22,4 +22,14 @@ describe("returnWindowFromStayDay (NAV-03)", () => {
     });
     expect(range).toEqual({ from: "2026-06-01", to: "2026-07-12" });
   });
+
+  it("keeps a return window that runs past New Year", () => {
+    const range = returnWindowFromStayDay({
+      clickIso: "2026-12-20",
+      stayFrom: "2026-11-30",
+      stayOutExclusive: "2027-03-15",
+      seasonEnd: "2026-12-31",
+    });
+    expect(range).toEqual({ from: "2026-12-20", to: "2027-03-14" });
+  });
 });

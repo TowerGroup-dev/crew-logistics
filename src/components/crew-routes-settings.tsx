@@ -78,7 +78,6 @@ export function CrewRoutesSettings({ hubs }: { hubs: TravelHub[] }) {
           );
         })}
       </ul>
-      <p className="text-xs text-muted-foreground">No stops means a direct flight. Missing an airport? Add it under Travel places.</p>
     </section>
   );
 }

@@ -4,7 +4,7 @@ import { actionId, type ActionSeed } from "@/lib/crew-actions";
 import { activeBookingFor, flightIsArranged, type FlightBook, type FlightBooking } from "@/lib/crew-flights";
 import { bookingNeedsAttention, opsFor, type CrewBookingStatus, type CrewOpsBook } from "@/lib/crew-ops";
 import { DEFAULT_ROTATION_DAYS, roleLabel, siteLabel, type CrewSnapshot } from "@/lib/crew-schedule";
-import { addDays, daysBetween, formatMedium } from "@/lib/dates";
+import { addDays, dayCountLabel, daysBetween, formatMedium } from "@/lib/dates";
 
 export type ReminderConfig = {
   planDays: number;
@@ -321,7 +321,7 @@ export function buildDashboard(
         personId: row.person.id,
         personName: name,
         title: "Rotation ending within planning window",
-        detail: `${item.daysLeft ?? "?"} day(s) left · planned out ${row.plannedOut ? formatMedium(row.plannedOut) : "-"}.`,
+        detail: `${item.daysLeft == null ? "?" : dayCountLabel(item.daysLeft)} left · planned out ${row.plannedOut ? formatMedium(row.plannedOut) : "-"}.`,
         priority: item.daysLeft != null && item.daysLeft <= reminders.escalateDays ? "urgent" : "high",
         dueOn: row.plannedOut,
       });

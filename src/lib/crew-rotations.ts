@@ -650,30 +650,16 @@ export function extendRotationOut(book: RotationBook, rotationId: string, newOut
   });
 }
 
-/** Move planned IN later/earlier; OUT stays put (stay shortens/lengthens at the front). */
+/**
+ * Move planned IN later/earlier; OUT stays put (stay shortens/lengthens at the front).
+ * Same booking: travel dates stay put — only Confirm arrival shifts the journey.
+ */
 export function moveRotationIn(book: RotationBook, rotationId: string, newIn: string): RotationBook {
   const rotation = book.rotations.find((row) => row.id === rotationId);
   if (!rotation) return book;
   const nextIn = newIn.slice(0, 10);
   if (!nextIn || nextIn === rotation.plannedIn || nextIn >= rotation.plannedOut) return book;
   const endInclusive = addDays(rotation.plannedOut, -1);
-  const delta = daysBetween(rotation.plannedIn, nextIn);
-  const shift = (iso: string | null) => (iso && iso.length >= 10 ? addDays(iso, delta) : iso);
-  const shiftTravel = (travel: RotationTravel): RotationTravel => ({
-    ...travel,
-    departDate: shift(travel.departDate),
-    arriveDate: shift(travel.arriveDate),
-    segments: (travel.segments || []).map((leg) => ({
-      ...leg,
-      departDate: shift(leg.departDate) || leg.departDate,
-      arriveDate: shift(leg.arriveDate) || leg.arriveDate,
-    })),
-    hotels: (travel.hotels || []).map((hotel) => ({
-      ...hotel,
-      checkIn: shift(hotel.checkIn) || hotel.checkIn,
-      checkOut: shift(hotel.checkOut) || hotel.checkOut,
-    })),
-  });
   return upsertRotation(book, {
     ...rotation,
     plannedIn: nextIn,
@@ -682,7 +668,6 @@ export function moveRotationIn(book: RotationBook, rotationId: string, newIn: st
       ...rotation.stay,
       checkIn: nextIn,
     },
-    outbound: shiftTravel(rotation.outbound),
   });
 }
 
@@ -1018,14 +1003,22 @@ type DayState = { kind: "site" | "travel"; site?: string; label?: string; route?
 export function applyRotationMoves(people: CrewPerson[], book: RotationBook): CrewPerson[] {
   const byStay = new Map<string, RotationMove[]>();
   for (const rotation of book.rotations) {
-    if (rotation.moves?.length) byStay.set(`${rotation.personId}|${rotation.plannedIn}`, rotation.moves);
+    if (!rotation.moves?.length) continue;
+    // Key by current IN and by rotation id suffix so colours stay put after IN edge drag.
+    byStay.set(`${rotation.personId}|${rotation.plannedIn}`, rotation.moves);
+    const idFrom = rotation.id.includes(":") ? rotation.id.split(":").pop() : "";
+    if (idFrom && idFrom !== rotation.plannedIn) {
+      byStay.set(`${rotation.personId}|${idFrom}`, rotation.moves);
+    }
   }
   if (!byStay.size) return people;
   return people.map((person) => {
     let changed = false;
     const stints = (person.stints || []).map((stint) => {
       // The stay's IN may have been dragged: its transfers stay on its first start.
-      const moves = byStay.get(`${person.id}|${stint.from}`) ?? (stint.idFrom ? byStay.get(`${person.id}|${stint.idFrom}`) : undefined);
+      const moves =
+        byStay.get(`${person.id}|${stint.from}`) ??
+        (stint.idFrom ? byStay.get(`${person.id}|${stint.idFrom}`) : undefined);
       if (!moves?.length) return stint;
       const rewritten = rewriteStint(stint, moves);
       if (rewritten !== stint) changed = true;

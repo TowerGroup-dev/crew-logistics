@@ -102,10 +102,12 @@ export type RosterRotationPlan = {
   /** First start date, kept when the IN is dragged, so bookings and notes stay attached. */
   idFrom?: string;
   /**
-   * Preliminary arrival — shows IN? on the calendar and a Confirm / book-by
-   * reminder on Overview (2 weeks before the first possible IN).
+   * Preliminary arrival — shaded window on the calendar until Confirm sets the
+   * one IN; Overview shows a book-by reminder (2 weeks before first possible day).
    */
   tentative?: boolean;
+  /** Inclusive first day of the arrival window. Defaults to `from`. */
+  tentativeFrom?: string;
   /** Inclusive last day of the arrival window (one day or several). Defaults to `from`. */
   tentativeThrough?: string;
 };
@@ -473,6 +475,9 @@ export function readRoster(value: unknown): CrewRosterBook {
           if (typeof row.note === "string" && row.note.trim()) plan.note = row.note.trim();
           if (typeof row.idFrom === "string" && row.idFrom.length >= 10) plan.idFrom = row.idFrom.slice(0, 10);
           if (row.tentative === true) plan.tentative = true;
+          if (typeof row.tentativeFrom === "string" && row.tentativeFrom.length >= 10) {
+            plan.tentativeFrom = row.tentativeFrom.slice(0, 10);
+          }
           if (typeof row.tentativeThrough === "string" && row.tentativeThrough.length >= 10) {
             plan.tentativeThrough = row.tentativeThrough.slice(0, 10);
           }
@@ -749,6 +754,7 @@ type StintLike = {
   departure: string | null;
   tentative: boolean;
   unsure?: boolean;
+  tentativeFrom?: string;
   tentativeThrough?: string;
   note?: string;
   role?: string;
@@ -835,6 +841,8 @@ export function addNextRotation(
       : {}),
   };
   const existing = roster.rotationPlans?.[personId] ?? [];
+  // Same IN (or overlapping span) → replace, do not stack duplicate INs.
+  const kept = existing.filter((row) => !(row.from === from || (row.from < out && from < row.out)));
   const withActive = setEmploymentStatus(roster, personId, "active");
   const stayNotes = { ...(withActive.stayNotes ?? {}) };
   if (note) stayNotes[stayNoteKey(personId, from, out)] = note;
@@ -843,7 +851,7 @@ export function addNextRotation(
     stayNotes,
     rotationPlans: {
       ...(withActive.rotationPlans ?? {}),
-      [personId]: [...existing, plan],
+      [personId]: [...kept, plan],
     },
   };
 }
@@ -1100,29 +1108,62 @@ function applyStintOutOverrides<
   const hasIn = inOverrides && Object.keys(inOverrides).length;
   const hasTentative = tentativeOverrides && Object.keys(tentativeOverrides).length;
   if (!hasOut && !hasIn && !hasTentative) return stints;
-  return stints.map((stint) => {
-    const key = stintOverrideKey(personId, stint.from);
-    let next = stint;
-    const override = overrides?.[key];
-    // Override always wins so extracted sheet stays can be shortened as well as extended.
-    if (override && override > stint.from) next = { ...next, out: override };
-    const movedIn = inOverrides?.[key];
-    if (movedIn && (!next.out || movedIn < next.out)) next = { ...next, from: movedIn, idFrom: stint.idFrom ?? stint.from };
-    const movedKey = stintOverrideKey(personId, next.from);
-    const tentativeFlag =
-      tentativeOverrides?.[movedKey] ??
-      tentativeOverrides?.[key] ??
-      (next.idFrom ? tentativeOverrides?.[stintOverrideKey(personId, next.idFrom)] : undefined);
-    if (tentativeFlag === false) {
-      next = { ...next, tentative: false, unsure: false, tentativeThrough: undefined };
-    } else if (typeof tentativeFlag === "string" && tentativeFlag.length >= 10) {
-      const through = tentativeFlag < next.from ? next.from : tentativeFlag;
-      next = { ...next, tentative: true, unsure: true, tentativeThrough: through };
-    } else if (tentativeFlag === true) {
-      next = { ...next, tentative: true, unsure: true, tentativeThrough: next.from };
-    }
-    return next;
-  });
+  return stints
+    .map((stint) => {
+      const key = stintOverrideKey(personId, stint.from);
+      let next = stint;
+      const override = overrides?.[key];
+      // Override wins: OUT = IN clears the sheet stay; later OUT shortens/extends.
+      if (override && override.length >= 10) {
+        if (override <= (next.from || stint.from)) next = { ...next, out: next.from || stint.from };
+        else next = { ...next, out: override };
+      }
+      const movedIn = inOverrides?.[key];
+      if (movedIn && (!next.out || movedIn < next.out)) {
+        next = { ...next, from: movedIn, idFrom: stint.idFrom ?? stint.from };
+      }
+      const movedKey = stintOverrideKey(personId, next.from);
+      const tentativeFlag =
+        tentativeOverrides?.[movedKey] ??
+        tentativeOverrides?.[key] ??
+        (next.idFrom ? tentativeOverrides?.[stintOverrideKey(personId, next.idFrom)] : undefined);
+      if (tentativeFlag === false) {
+        next = {
+          ...next,
+          tentative: false,
+          unsure: false,
+          tentativeFrom: undefined,
+          tentativeThrough: undefined,
+        };
+      } else if (typeof tentativeFlag === "string" && tentativeFlag.length >= 10) {
+        const pipe = tentativeFlag.indexOf("|");
+        let start = next.from;
+        let through = tentativeFlag;
+        if (pipe > 0) {
+          start = tentativeFlag.slice(0, pipe);
+          through = tentativeFlag.slice(pipe + 1);
+        }
+        if (start < next.from) start = next.from;
+        if (through < start) through = start;
+        next = {
+          ...next,
+          tentative: true,
+          unsure: true,
+          ...(start !== next.from ? { tentativeFrom: start } : { tentativeFrom: undefined }),
+          tentativeThrough: through,
+        };
+      } else if (tentativeFlag === true) {
+        next = {
+          ...next,
+          tentative: true,
+          unsure: true,
+          tentativeFrom: undefined,
+          tentativeThrough: next.from,
+        };
+      }
+      return next;
+    })
+    .filter((stint) => !stint.out || stint.out > stint.from);
 }
 
 /**
@@ -1134,7 +1175,10 @@ export function setStayIn(roster: CrewRosterBook, personId: string, currentFrom:
   const next = newFrom.slice(0, 10);
   if (!current || !next || current === next) return roster;
   const plans = roster.rotationPlans?.[personId] ?? [];
-  const index = plans.findIndex((plan) => plan.from === current);
+  // Same placement even after prior IN moves (idFrom keeps the booking identity).
+  const index = plans.findIndex(
+    (plan) => plan.from === current || plan.idFrom === current || plan.from === next,
+  );
   if (index >= 0) {
     const plan = plans[index]!;
     if (next >= plan.out) return roster;
@@ -1150,6 +1194,64 @@ export function setStayIn(roster: CrewRosterBook, personId: string, currentFrom:
   if (original === stintOverrideKey(personId, next)) delete stintInOverrides[original];
   else stintInOverrides[original] = next;
   return { ...roster, stintInOverrides };
+}
+
+/**
+ * Remove a stay from the calendar: app plan(s) deleted, or sheet stay collapsed (OUT = IN).
+ * Flights/travel are cleared by the caller via clearStayBooking.
+ * Clears every duplicate plan that shares the same IN (retries used to leave extras behind).
+ */
+export function clearStayPlacement(
+  roster: CrewRosterBook,
+  personId: string,
+  stintFrom: string,
+  planId?: string | null,
+): CrewRosterBook {
+  const from = stintFrom.slice(0, 10);
+  if (!from) return roster;
+  const plans = roster.rotationPlans?.[personId] ?? [];
+  const seed =
+    (planId ? plans.find((row) => row.id === planId) : undefined) ||
+    plans.find((row) => row.from === from || row.idFrom === from);
+  const keys = new Set<string>([from]);
+  if (seed) {
+    keys.add(seed.from);
+    if (seed.idFrom) keys.add(seed.idFrom);
+  }
+  const toRemove = plans.filter(
+    (row) =>
+      (planId && row.id === planId) ||
+      keys.has(row.from) ||
+      (row.idFrom ? keys.has(row.idFrom) : false),
+  );
+  if (toRemove.length) {
+    let next = roster;
+    for (const plan of toRemove) {
+      next = removeRotationPlan(next, personId, plan.id);
+    }
+    return next;
+  }
+
+  // Sheet stay: exclusive OUT = original IN → no on-site days left.
+  const originalKey = Object.entries(roster.stintInOverrides ?? {}).find(
+    ([key, moved]) => moved === from && key.startsWith(`${personId}:`),
+  )?.[0];
+  const key = originalKey ?? stintOverrideKey(personId, from);
+  const sheetFrom = originalKey ? originalKey.slice(personId.length + 1) : from;
+  const stintInOverrides = { ...(roster.stintInOverrides ?? {}) };
+  if (originalKey) delete stintInOverrides[originalKey];
+  return {
+    ...roster,
+    stintInOverrides,
+    stintOutOverrides: {
+      ...(roster.stintOutOverrides ?? {}),
+      [key]: sheetFrom,
+    },
+    stintTentativeOverrides: {
+      ...(roster.stintTentativeOverrides ?? {}),
+      [key]: false,
+    },
+  };
 }
 
 /**
@@ -1177,58 +1279,81 @@ export function confirmStayArrival(
 
 /**
  * Mark or clear a preliminary (tentative) arrival window on a stay.
- * `through` is the inclusive last possible arrival day (same as from = one day).
+ * Window is inclusive `start`…`through` within the stay — does not move IN
+ * (Confirm arrival moves IN). Extends earlier/later inside the stay only.
  * App plans store the flag on the plan; sheet stays use an override.
  */
 export function setStayTentative(
   roster: CrewRosterBook,
   personId: string,
   stintFrom: string,
-  tentative: boolean | { through: string },
+  tentative: boolean | { through: string; start?: string },
 ): CrewRosterBook {
   const from = stintFrom.slice(0, 10);
   if (!from) return roster;
   const on = tentative !== false;
   let through = from;
-  if (typeof tentative === "object" && tentative.through) {
-    through = tentative.through.slice(0, 10);
-    if (through < from) through = from;
+  let start = from;
+  if (typeof tentative === "object") {
+    if (tentative.through) through = tentative.through.slice(0, 10);
+    if (tentative.start) start = tentative.start.slice(0, 10);
   }
-  const plans = roster.rotationPlans?.[personId] ?? [];
-  const index = plans.findIndex((plan) => plan.from === from || plan.idFrom === from);
+  // Shade only — never move the placement IN.
+  if (start < from) start = from;
+  if (through < start) through = start;
+  const nextRoster = roster;
+  const plans = nextRoster.rotationPlans?.[personId] ?? [];
+  const index = plans.findIndex(
+    (plan) =>
+      plan.from === from ||
+      plan.idFrom === from ||
+      plan.from === stintFrom.slice(0, 10) ||
+      plan.idFrom === stintFrom.slice(0, 10),
+  );
   if (index >= 0) {
     const current = plans[index]!;
+    const planFrom = current.from;
     const lastInclusive = addDaysLocal(current.out, -1);
     if (through > lastInclusive) through = lastInclusive;
+    if (start > lastInclusive) start = lastInclusive;
+    if (start < planFrom) start = planFrom;
+    if (through < start) through = start;
     const nextPlans = [...plans];
     if (!on) {
-      const { tentative: _t, tentativeThrough: _th, ...rest } = current;
+      const { tentative: _t, tentativeFrom: _tf, tentativeThrough: _th, ...rest } = current;
       nextPlans[index] = rest;
     } else {
       const nextPlan: RosterRotationPlan = { ...current, tentative: true };
-      if (through !== from) nextPlan.tentativeThrough = through;
+      if (start !== planFrom) nextPlan.tentativeFrom = start;
+      else delete nextPlan.tentativeFrom;
+      if (through !== start) nextPlan.tentativeThrough = through;
       else delete nextPlan.tentativeThrough;
       nextPlans[index] = nextPlan;
     }
     return {
-      ...roster,
+      ...nextRoster,
       rotationPlans: {
-        ...(roster.rotationPlans ?? {}),
+        ...(nextRoster.rotationPlans ?? {}),
         [personId]: nextPlans,
       },
     };
   }
-  const original = Object.entries(roster.stintInOverrides ?? {}).find(
+  const original = Object.entries(nextRoster.stintInOverrides ?? {}).find(
     ([key, moved]) => moved === from && key.startsWith(`${personId}:`),
   )?.[0];
   const key = original ?? stintOverrideKey(personId, from);
-  const nextValue: string | boolean = on ? through : false;
-  const previous = roster.stintTentativeOverrides?.[key];
-  if (previous === nextValue) return roster;
+  // Sheet override: encode start|through when the window does not start at IN.
+  const nextValue: string | boolean = on
+    ? start !== from
+      ? `${start}|${through}`
+      : through
+    : false;
+  const previous = nextRoster.stintTentativeOverrides?.[key];
+  if (previous === nextValue) return nextRoster;
   return {
-    ...roster,
+    ...nextRoster,
     stintTentativeOverrides: {
-      ...(roster.stintTentativeOverrides ?? {}),
+      ...(nextRoster.stintTentativeOverrides ?? {}),
       [key]: nextValue,
     },
   };
@@ -1251,7 +1376,7 @@ export function setStayOut(
   const cappedOut = out > maxOut ? maxOut : out;
 
   const plans = roster.rotationPlans?.[personId] ?? [];
-  const index = plans.findIndex((plan) => plan.from === from);
+  const index = plans.findIndex((plan) => plan.from === from || plan.idFrom === from);
   if (index >= 0) {
     const current = plans[index]!;
     if (current.out === cappedOut) return roster;
@@ -1295,8 +1420,12 @@ function plansAsStints(plans: RosterRotationPlan[] | undefined): StintLike[] {
   return plans.map((plan) => {
     const meta = plan.role ? `Added in app · ${plan.role}` : "Added in app";
     const tentative = plan.tentative === true;
+    const start =
+      tentative && plan.tentativeFrom && plan.tentativeFrom >= plan.from
+        ? plan.tentativeFrom
+        : undefined;
     const through =
-      tentative && plan.tentativeThrough && plan.tentativeThrough >= plan.from
+      tentative && plan.tentativeThrough && plan.tentativeThrough >= (start || plan.from)
         ? plan.tentativeThrough
         : undefined;
     return {
@@ -1308,6 +1437,7 @@ function plansAsStints(plans: RosterRotationPlan[] | undefined): StintLike[] {
       departure: "app",
       tentative,
       unsure: tentative,
+      ...(start ? { tentativeFrom: start } : {}),
       ...(through ? { tentativeThrough: through } : {}),
       note: plan.note
         ? `${plan.note} · ${meta}${tentative ? " · tentative" : ""}`

@@ -35,6 +35,12 @@ export function daysBetween(from: string, to: string) {
   return Math.round(ms / 86_400_000);
 }
 
+/** "1 day" / "3 days" — never "1 days". */
+export function dayCountLabel(count: number, word = "day") {
+  const n = Math.abs(Math.trunc(count));
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
 /**
  * Building an Intl date formatter is slow (toLocaleDateString builds a new one on
  * every call), and the calendar formats thousands of dates per screen. Keep one

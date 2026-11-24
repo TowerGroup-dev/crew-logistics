@@ -22,6 +22,7 @@ import {
   type FeedbackKind,
 } from "@/lib/crew-test-log";
 import { TEST_GUIDE, sectionForPath } from "@/lib/crew-test-guide";
+import { CrewConfirmDialog } from "@/components/crew-confirm-dialog";
 import { cn } from "@/lib/cn";
 
 // Where testers record Works / Problem and send ideas (Yimika's Workspace → Crew testing).
@@ -34,6 +35,7 @@ export function CrewTestMode() {
   const pathname = usePathname();
   const [on, setOn] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
     enterTestModeFromUrl();
@@ -65,9 +67,7 @@ export function CrewTestMode() {
           </p>
           <button
             type="button"
-            onClick={() => {
-              if (confirm("Start again from the real schedule? Your test changes will be cleared.")) resetTest();
-            }}
+            onClick={() => setConfirmReset(true)}
             className="inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-white/70 px-2.5 py-1 text-xs font-semibold hover:bg-white"
           >
             <RotateCcw className="size-3.5" /> Reset test
@@ -83,6 +83,18 @@ export function CrewTestMode() {
       </div>
       <TestGuide />
       {leaving ? <LeaveDialog onStay={() => setLeaving(false)} /> : null}
+      {confirmReset ? (
+        <CrewConfirmDialog
+          title="Reset test?"
+          message="Start again from the real schedule. Your test changes will be cleared."
+          confirmLabel="Reset test"
+          onCancel={() => setConfirmReset(false)}
+          onConfirm={() => {
+            setConfirmReset(false);
+            resetTest();
+          }}
+        />
+      ) : null}
     </>
   );
 }

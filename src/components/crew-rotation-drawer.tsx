@@ -38,7 +38,7 @@ import {
   type CrewRosterBook,
 } from "@/lib/crew-roster";
 import { type CrewPersonOps } from "@/lib/crew-ops";
-import { addDays, daysBetween, formatMedium } from "@/lib/dates";
+import { addDays, dayCountLabel, daysBetween, formatMedium } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 export function CrewRotationDrawer({
@@ -185,7 +185,7 @@ export function CrewRotationDrawer({
                 <Fact label="Site" value={draft.site || "-"} />
                 <Fact label="Planned IN" value={formatMedium(draft.plannedIn)} />
                 <Fact label="OUT" value={`${formatMedium(outInclusive)} · end of stay`} />
-                <Fact label="Duration" value={`${draft.rotationDays} days`} />
+                <Fact label="Duration" value={dayCountLabel(draft.rotationDays)} />
                 <Fact
                   label="Progress"
                   value={day > 0 && left >= 0 ? `Day ${day}/${draft.rotationDays} · ${left}d left` : left < 0 ? "Ended" : "Not started"}
@@ -284,15 +284,6 @@ export function CrewRotationDrawer({
                 />
               ) : (
               <>
-              <p className="text-sm text-muted-foreground">
-                {travelDir === "outbound"
-                  ? draft.outbound.bookedOn && travelIsBooked(draft.outbound)
-                    ? `Outbound booked on ${formatMedium(draft.outbound.bookedOn)}.`
-                    : "Book departure to camp before the stay starts."
-                  : draft.returnTravel.bookedOn && travelIsBooked(draft.returnTravel)
-                    ? `Inbound booked on ${formatMedium(draft.returnTravel.bookedOn)}.`
-                    : "Book the return around 4 weeks into the stay."}
-              </p>
               {travelDir === "return" && onPatchOps ? (
                 <ReturnWindowEditor
                   from={personOps?.returnBookFrom || ""}
@@ -767,10 +758,6 @@ function MovesPanel({
 
   return (
     <div className="space-y-3 text-sm">
-      <p className="text-muted-foreground">
-        Travel from one site to another during this stay, like Iqaluit to Pond. Book each one like any trip.
-      </p>
-
       {suggested.map((row) => (
         <div
           key={`${row.fromSite}-${row.toSite}-${row.date}`}
@@ -1081,7 +1068,7 @@ function ReplacementForm({
           <input type="date" value={handoverTo} onChange={(event) => setHandoverTo(event.target.value)} className="h-9 rounded-lg border border-input px-2" />
         </label>
       </div>
-      <p className="text-sm text-muted-foreground">Outgoing planned OUT stays {formatMedium(inclusiveOut(outgoing))}. Overlap is optional.</p>
+      <p className="text-sm text-muted-foreground">OUT {formatMedium(inclusiveOut(outgoing))}</p>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={onCancel} className="h-9 rounded-lg border border-input px-3 text-sm font-medium">
           Cancel
@@ -1173,13 +1160,9 @@ function StayNoteField({
           Save
         </button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        {status === "saved"
-          ? text.trim()
-            ? "Saved. The note appears across this stay on Month."
-            : "Note removed."
-          : "Appears across this stay on Month."}
-      </p>
+      {status === "saved" ? (
+        <p className="text-xs text-muted-foreground">{text.trim() ? "Saved." : "Note removed."}</p>
+      ) : null}
     </div>
   );
 }
