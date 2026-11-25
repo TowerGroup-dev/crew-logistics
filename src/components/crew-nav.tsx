@@ -205,7 +205,7 @@ export function CrewNav({
           </h1>
         ) : null}
         {inCalendar ? (
-          <div className="flex rounded-lg border border-input bg-card p-0.5" role="group" aria-label="Calendar view">
+          <div className="-mb-px flex items-end gap-1" role="group" aria-label="Calendar view">
             {CALENDAR_VIEWS.map((item) => {
               const active =
                 (item.href === "/month" && activeView === "month") ||
@@ -223,10 +223,10 @@ export function CrewNav({
                     )
                   }
                   className={cn(
-                    "rounded-md px-3 py-1 text-sm font-medium",
+                    "border-b-[3px] px-3 py-2 text-sm font-medium transition",
                     active
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground",
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {item.label}
@@ -260,44 +260,32 @@ export function CrewNav({
               ) : null}
             </button>
           ) : null}
-          {/* Year control is for Calendar planning — hide on Overview. */}
-          {activeView !== "overview" ? (
-            <div className="flex items-center rounded-lg border border-input bg-card">
-              <button
-                type="button"
-                onClick={() => prevYear != null && goToYear(prevYear)}
-                disabled={prevYear == null}
-                aria-label="Previous year"
-                className="flex h-8 w-7 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
-              >
-                <ChevronLeft className="size-4" />
-              </button>
-              <label className="sr-only" htmlFor="crew-nav-year">
-                Schedule year
-              </label>
-              <select
-                id="crew-nav-year"
-                value={year}
-                onChange={(event) => goToYear(Number(event.target.value))}
-                className="h-8 appearance-none bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-foreground focus:outline-none"
-              >
-                {years.map((entry) => (
-                  <option key={entry} value={entry}>
-                    {entry}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => nextYear != null && goToYear(nextYear)}
-                disabled={nextYear == null}
-                aria-label="Next year"
-                className="flex h-8 w-7 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
-              >
-                <ChevronRight className="size-4" />
-              </button>
-            </div>
-          ) : null}
+          <div className="flex items-center">
+            <button
+              type="button"
+              onClick={() => prevYear != null && goToYear(prevYear)}
+              disabled={prevYear == null}
+              aria-label="Previous year"
+              className="flex h-8 w-7 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <span
+              aria-live="polite"
+              className="min-w-[3.25rem] border-b-[3px] border-primary px-1 pb-0.5 text-center text-sm font-medium tabular-nums text-foreground"
+            >
+              {year}
+            </span>
+            <button
+              type="button"
+              onClick={() => nextYear != null && goToYear(nextYear)}
+              disabled={nextYear == null}
+              aria-label="Next year"
+              className="flex h-8 w-7 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
 
           <div className="relative hidden sm:block" ref={menuRef}>
             <button
@@ -498,9 +486,9 @@ function NavTab({
         onNavigate();
       }}
       className={cn(
-        "flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium",
+        "flex items-center gap-2 border-b-[3px] px-3 py-2.5 text-sm font-medium",
         active
-          ? "border-primary text-primary"
+          ? "border-primary text-foreground"
           : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900",
       )}
     >

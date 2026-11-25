@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
 import { DEFAULT_TRAVEL_HUBS, loadTravelHubs, type TravelHub } from "@/lib/crew-travel-hubs";
 import { cn } from "@/lib/cn";
 
@@ -139,13 +138,9 @@ export function AirportSelect({
             onChange(next.trim());
           }}
           className={cn(
-            "h-9 w-full min-w-0 rounded-lg border border-input bg-card py-1.5 pr-8 pl-2 uppercase tracking-wide",
+            "h-9 w-full min-w-0 rounded-lg border border-input bg-card px-2 py-1.5 uppercase tracking-wide",
             !value && "normal-case tracking-normal text-muted-foreground",
           )}
-        />
-        <ChevronDown
-          className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground"
-          aria-hidden
         />
       </div>
       {open ? (

@@ -63,12 +63,39 @@ function stintForRotation(row: CrewSnapshot | undefined, rotation: CrewRotation)
   const stints = row?.person.stints || [];
   const exact = stints.find((stint) => stint.from === rotation.plannedIn);
   if (exact) return exact;
+  // IN was dragged — keep the stay that still knows the original start.
+  const byIdFrom = stints.find((stint) => stint.idFrom === rotation.plannedIn);
+  if (byIdFrom) return byIdFrom;
   // Desk IN date landed mid-stay — still use the covering calendar stay.
   return (
     stints.find(
       (stint) => stint.from <= rotation.plannedIn && (!stint.out || rotation.plannedIn < stint.out),
     ) || null
   );
+}
+
+/**
+ * Live Arrival day for Overview: Month calendar wins.
+ * After Wed→Thu planning moves, show Thursday only — never the stale desk IN.
+ */
+function resolveArriveFromCalendar(
+  row: CrewSnapshot | undefined,
+  rotation: CrewRotation,
+): { in: string; site: string; tentative: boolean } | null {
+  const calendarStint = stintForRotation(row, rotation);
+  if (calendarStint) {
+    return {
+      in: calendarStint.from,
+      site: calendarStint.site || rotation.site || "",
+      tentative: Boolean(calendarStint.tentative || calendarStint.unsure),
+    };
+  }
+  if ((row?.person.stints || []).length > 0) return null;
+  return {
+    in: rotation.plannedIn,
+    site: rotation.site || "",
+    tentative: false,
+  };
 }
 
 /** Last camp site on a stay (end of leave), ignoring TRV / hub travel pieces. */
@@ -149,8 +176,8 @@ export function tentativeConfirmItems(
         personName: row.person.name,
         title: `Confirm arrival · ${windowLabel}`,
         detail: stint.site
-          ? `Tentative at ${stint.site} · book by ${formatShort(bookBy)}`
-          : `Tentative window · book by ${formatShort(bookBy)}`,
+          ? `Planned arrival at ${stint.site} · book by ${formatShort(bookBy)}`
+          : `Planned arrival window · book by ${formatShort(bookBy)}`,
         dueOn: bookBy,
         priority: bookBy <= asOf ? "urgent" : "normal",
       });
@@ -159,12 +186,19 @@ export function tentativeConfirmItems(
   return items;
 }
 
+/** Stay / rotation belongs to this schedule year (Arrival in year). */
+function arrivesInYear(iso: string | null | undefined, year: number) {
+  return Boolean(iso && iso.startsWith(`${year}-`));
+}
+
 export function buildWeekStory({
   rows,
   book,
   asOf,
   opsBook = {},
   confirmedTentativeIds = new Set<string>(),
+  /** When set (e.g. 2027 planning), ignore last season — Overview is not “open” yet. */
+  planningYear = null,
 }: {
   rows: CrewSnapshot[];
   book: RotationBook;
@@ -172,8 +206,15 @@ export function buildWeekStory({
   opsBook?: CrewOpsBook;
   /** Checklist ids marked confirmed (tentative:…); those arrivals show in This week. */
   confirmedTentativeIds?: Set<string>;
+  planningYear?: number | null;
 }): { weekStart: string; weekEnd: string; lines: WeekStoryLine[] } {
-  const { start: weekStart, end: weekEnd } = weekBounds(asOf);
+  let { start: weekStart, end: weekEnd } = weekBounds(asOf);
+  if (planningYear) {
+    const seasonOpen = `${planningYear}-01-01`;
+    const seasonClose = `${planningYear}-12-31`;
+    if (weekStart < seasonOpen) weekStart = seasonOpen;
+    if (weekEnd > seasonClose) weekEnd = seasonClose;
+  }
   const names = new Map(rows.map((row) => [row.person.id, row.person.name]));
   const nameOf = (id: string) => names.get(id) || id;
   const lines: WeekStoryLine[] = [];
@@ -186,50 +227,56 @@ export function buildWeekStory({
     lines.push(line);
   }
 
-  // Rotations: arrive / leave this week.
+  // Rotations: arrive / leave this week — live Month dates only (planning moves replace, not stack).
+  const arrivalShown = new Set<string>();
   for (const rotation of book.rotations) {
     if (!names.has(rotation.personId)) continue;
     const name = nameOf(rotation.personId);
     const ops = opsFor(opsBook, rotation.personId);
-    const tentativeId = `${rotation.personId}:tentative:${rotation.plannedIn}`;
     const row = rows.find((r) => r.person.id === rotation.personId);
-    const stintTentative = (row?.person.stints || []).some(
-      (stint) => stint.from === rotation.plannedIn && (stint.tentative || stint.unsure),
-    );
-    // Unconfirmed tentatives stay in To do only; confirmed ones appear here.
-    const showArrival = !stintTentative || confirmedTentativeIds.has(tentativeId);
+    const arrive = resolveArriveFromCalendar(row, rotation);
+    if (!arrive) continue;
+    if (planningYear && !arrivesInYear(arrive.in, planningYear)) continue;
 
-    const calendarStint = stintForRotation(row, rotation);
-    const arriveSite = calendarStint?.site || rotation.site;
+    const tentativeId = `${rotation.personId}:tentative:${arrive.in}`;
+    // Unconfirmed planned-arrival windows stay in To do only; confirmed ones appear here.
+    const showArrival = !arrive.tentative || confirmedTentativeIds.has(tentativeId);
+    const arriveSite = arrive.site;
 
-    if (showArrival && rotation.plannedIn >= weekStart && rotation.plannedIn <= weekEnd) {
+    if (
+      showArrival &&
+      arrive.in >= weekStart &&
+      arrive.in <= weekEnd &&
+      !arrivalShown.has(rotation.personId)
+    ) {
+      arrivalShown.add(rotation.personId);
       movedThisWeek.add(rotation.personId);
-      const when = whenPhrase(rotation.plannedIn, asOf);
+      const when = whenPhrase(arrive.in, asOf);
       push({
-        id: `${rotation.id}:arrive`,
+        id: `${rotation.personId}:arrive:${arrive.in}`,
         kind: "arriving",
-        sortDate: rotation.plannedIn,
+        sortDate: arrive.in,
         text: arriveSite
           ? `${name} arrives ${when} at ${arriveSite}.`
           : `${name} arrives ${when}.`,
         personId: rotation.personId,
         rotationId: rotation.id,
       });
-      if (!isAssumedBookedDone(rotation.plannedIn) && bookingNeedsAttention(ops.outboundFlight)) {
+      if (!isAssumedBookedDone(arrive.in) && bookingNeedsAttention(ops.outboundFlight)) {
         push({
-          id: `${rotation.id}:arrive-flight`,
+          id: `${rotation.personId}:arrive-flight:${arrive.in}`,
           kind: "flight",
-          sortDate: rotation.plannedIn,
+          sortDate: arrive.in,
           text: `Flight to site for ${name} is not booked yet (${when}).`,
           personId: rotation.personId,
           rotationId: rotation.id,
         });
       }
-      if (!isAssumedBookedDone(rotation.plannedIn) && bookingNeedsAttention(ops.accommodation)) {
+      if (!isAssumedBookedDone(arrive.in) && bookingNeedsAttention(ops.accommodation)) {
         push({
-          id: `${rotation.id}:arrive-stay`,
+          id: `${rotation.personId}:arrive-stay:${arrive.in}`,
           kind: "stay",
-          sortDate: rotation.plannedIn,
+          sortDate: arrive.in,
           text: `${name} arrives ${when}, and the accommodation is not confirmed.`,
           personId: rotation.personId,
           rotationId: rotation.id,
@@ -239,7 +286,12 @@ export function buildWeekStory({
 
     // Leave date + site from the Month calendar — never a stale desk POND when the grid says IQA.
     const leave = resolveLeaveFromCalendar(row, rotation);
-    if (leave && leave.out >= weekStart && leave.out <= weekEnd) {
+    if (
+      leave &&
+      leave.out >= weekStart &&
+      leave.out <= weekEnd &&
+      (!planningYear || arrivesInYear(arrive.in, planningYear) || arrivesInYear(leave.out, planningYear))
+    ) {
       movedThisWeek.add(rotation.personId);
       const when = whenPhrase(leave.out, asOf);
       push({
@@ -291,6 +343,14 @@ export function buildWeekStory({
     const site = liveSite(row.person, asOf, row.site);
     if (!site) continue;
     if (movedThisWeek.has(row.person.id)) continue;
+    // Planning year: only people whose stay Arrival is in this year (not last season spillover).
+    if (planningYear) {
+      const covering = (row.person.stints || []).find((stint) => {
+        const out = stint.out || `${planningYear + 1}-01-01`;
+        return stint.from <= asOf && asOf < out;
+      });
+      if (!covering || !arrivesInYear(covering.from, planningYear)) continue;
+    }
     const list = stillHere.get(site) ?? [];
     list.push({
       name: row.person.name,
@@ -470,6 +530,15 @@ export function buildOverview({
   horizonDays,
   thresholds,
   opsBook,
+  /** Planning year: include arrivals on the season-open day (asOf), not only after it. */
+  includeArrivalDay = false,
+  /** When set, strip last-season overdue / on-site spillover — year is not “open” yet. */
+  planningYear = null,
+  /**
+   * Wall-clock “today” for To do due/overdue (defaults to asOf).
+   * Planning years must pass real today — season-open Jan 1 must not make Dec book-bys look late.
+   */
+  clockAsOf = asOf,
 }: {
   rows: CrewSnapshot[];
   book: RotationBook;
@@ -477,6 +546,9 @@ export function buildOverview({
   horizonDays: number;
   thresholds: ReminderThresholds;
   opsBook?: CrewOpsBook;
+  includeArrivalDay?: boolean;
+  planningYear?: number | null;
+  clockAsOf?: string;
 }) {
   const names = new Map(rows.map((row) => [row.person.id, row.person.name]));
   const roles = new Map(rows.map((row) => [row.person.id, roleLabel(row.person)]));
@@ -484,12 +556,20 @@ export function buildOverview({
   const nameOf = (id: string | null | undefined) => (id ? names.get(id) || id : null);
   const rotationById = new Map(book.rotations.map((rotation) => [rotation.id, rotation]));
   const horizonEnd = addDays(asOf, horizonDays);
+  const clock = clockAsOf || asOf;
 
   // On site now: live Month camp colour for the day, bookings from the rotation.
   const onSite: OnSiteRow[] = [];
   for (const row of rows) {
     const site = liveSite(row.person, asOf, row.site);
     if (!site) continue;
+    if (planningYear) {
+      const covering = (row.person.stints || []).find((stint) => {
+        const out = stint.out || `${planningYear + 1}-01-01`;
+        return stint.from <= asOf && asOf < out;
+      });
+      if (!covering || !arrivesInYear(covering.from, planningYear)) continue;
+    }
     const rotation = latestStartedRotation(book, row.person.id, asOf);
     // expectedOut is the place end (inclusive Out). Duration = days on site through that date.
     const totalDays =
@@ -527,27 +607,34 @@ export function buildOverview({
   }
   onSite.sort((a, b) => (a.daysLeft ?? 9999) - (b.daysLeft ?? 9999) || a.name.localeCompare(b.name));
 
-  // Arriving: rotations that start between tomorrow and the horizon (camp from calendar when known).
+  // Arriving: live Month Arrival (not a stale desk IN after planning moves).
+  const arrivingSeen = new Set<string>();
   const arriving: ArrivingRow[] = book.rotations
-    .filter((rotation) => activeIds.has(rotation.personId) && rotation.plannedIn > asOf && rotation.plannedIn <= horizonEnd)
     .map((rotation) => {
-      const replaced = rotation.replacesRotationId ? rotationById.get(rotation.replacesRotationId) : null;
+      if (!activeIds.has(rotation.personId)) return null;
       const row = rows.find((r) => r.person.id === rotation.personId);
-      const calendarStint = stintForRotation(row, rotation);
-      const site = calendarStint?.site || rotation.site;
+      const arrive = resolveArriveFromCalendar(row, rotation);
+      if (!arrive) return null;
+      if (planningYear && !arrivesInYear(arrive.in, planningYear)) return null;
+      if (arrive.in > horizonEnd) return null;
+      if (includeArrivalDay ? arrive.in < asOf : arrive.in <= asOf) return null;
+      if (arrivingSeen.has(rotation.personId)) return null;
+      arrivingSeen.add(rotation.personId);
+      const replaced = rotation.replacesRotationId ? rotationById.get(rotation.replacesRotationId) : null;
       return {
         personId: rotation.personId,
         name: nameOf(rotation.personId) || rotation.personId,
         role: roles.get(rotation.personId) || rotation.role,
-        site,
+        site: arrive.site,
         rotationId: rotation.id,
-        inDate: rotation.plannedIn,
-        daysUntil: daysBetween(asOf, rotation.plannedIn),
-        flightIn: travelState(rotation.outbound, true, rotation.plannedIn),
+        inDate: arrive.in,
+        daysUntil: daysBetween(asOf, arrive.in),
+        flightIn: travelState(rotation.outbound, true, arrive.in),
         stay: stayState(rotation),
         replacing: replaced ? nameOf(replaced.personId) : null,
       };
     })
+    .filter((row): row is ArrivingRow => Boolean(row))
     .sort((a, b) => a.inDate.localeCompare(b.inDate) || a.name.localeCompare(b.name));
 
   // Leaving: calendar stay OUT / site only (never a stale desk POND over the Month grid).
@@ -557,6 +644,9 @@ export function buildOverview({
       const row = rows.find((r) => r.person.id === rotation.personId);
       const leave = resolveLeaveFromCalendar(row, rotation);
       if (!leave || leave.out < asOf || leave.out > horizonEnd) return null;
+      if (planningYear && !arrivesInYear(leave.out, planningYear) && !arrivesInYear(rotation.plannedIn, planningYear)) {
+        return null;
+      }
       return { rotation, out: leave.out, site: leave.site };
     })
     .filter((row): row is { rotation: CrewRotation; out: string; site: string } => Boolean(row))
@@ -578,12 +668,22 @@ export function buildOverview({
     .sort((a, b) => a.outDate.localeCompare(b.outDate));
 
   // Action list, grouped by when it is due. Pre–Oct 15 stays are assumed done — vanish.
+  // Planning year: only this year’s stays — never last season’s overdue pile.
+  // Use wall-clock `clock` so Jan 1 planning asOf does not invent “14 days late”.
   const checklist = [
-    ...bookingWindowItems(opsBook, book, names, asOf),
-    ...buildKatrinaChecklist(book, names, asOf, thresholds),
-    ...tentativeConfirmItems(rows, book, asOf),
-  ].filter((item) => activeIds.has(item.personId) && !isAssumedBookedDone(item.dueOn));
-  const weekEnd = addDays(asOf, 7);
+    ...bookingWindowItems(opsBook, book, names, clock),
+    ...buildKatrinaChecklist(book, names, clock, thresholds),
+    ...tentativeConfirmItems(rows, book, clock),
+  ].filter((item) => {
+    if (!activeIds.has(item.personId) || isAssumedBookedDone(item.dueOn)) return false;
+    if (!planningYear) return true;
+    const rotation = rotationById.get(item.rotationId);
+    if (rotation) return arrivesInYear(rotation.plannedIn, planningYear);
+    const tentative = item.id.match(/:tentative:(\d{4}-\d{2}-\d{2})/);
+    if (tentative) return arrivesInYear(tentative[1], planningYear);
+    return arrivesInYear(item.dueOn, planningYear);
+  });
+  const weekEnd = addDays(clock, 7);
   const groups: ActionGroup[] = [
     { key: "overdue", label: "Overdue", items: [] },
     { key: "week", label: "Due this week", items: [] },
@@ -592,8 +692,8 @@ export function buildOverview({
   ];
   for (const item of checklist) {
     if (item.id.includes(":tentative") || item.priority === "normal") groups[3].items.push(item);
-    else if (item.dueOn && item.dueOn < asOf) groups[0].items.push(item);
-    else if (item.priority === "urgent" && (!item.dueOn || item.dueOn <= asOf)) groups[0].items.push(item);
+    else if (item.dueOn && item.dueOn < clock) groups[0].items.push(item);
+    else if (item.priority === "urgent" && (!item.dueOn || item.dueOn <= clock)) groups[0].items.push(item);
     else if (!item.dueOn || item.dueOn <= weekEnd) groups[1].items.push(item);
     else groups[2].items.push(item);
   }
@@ -617,6 +717,8 @@ export function buildOverview({
     arriving,
     leaving,
     groups,
+    /** Wall clock used for due labels (today when planning a future year). */
+    clockAsOf: clock,
     openActions: checklist.filter((item) => item.priority !== "normal").length,
     flightsToBook,
     overdueCount,

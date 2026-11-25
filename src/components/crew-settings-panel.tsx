@@ -390,7 +390,24 @@ export function CrewSettingsPanel({
       <section className="space-y-3">
         <div>
           <h3 className="text-base font-semibold">Reminder timing</h3>
-          <p className="mt-0.5 text-sm text-muted-foreground">Drives the Needs attention checklist and return window.</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            How far ahead Overview and Monday mail nag you. Change these anytime — they only
+            control when items appear, not the calendar itself.
+          </p>
+        </div>
+        <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5 text-sm leading-relaxed text-muted-foreground">
+          <p>
+            <span className="font-medium text-foreground">Plan ahead</span> — start booking outbound
+            flights and rooms this many days before Arrival.
+          </p>
+          <p className="mt-1.5">
+            <span className="font-medium text-foreground">Check travel / stay</span> — chase tickets
+            and accommodation again this close to the trip.
+          </p>
+          <p className="mt-1.5">
+            <span className="font-medium text-foreground">Escalate</span> — mark items overdue when
+            still open this many days past the due date.
+          </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <NumberField

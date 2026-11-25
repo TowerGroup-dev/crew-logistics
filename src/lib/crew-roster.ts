@@ -102,11 +102,11 @@ export type RosterRotationPlan = {
   /** First start date, kept when the IN is dragged, so bookings and notes stay attached. */
   idFrom?: string;
   /**
-   * Preliminary arrival — shaded window on the calendar until Confirm sets the
-   * one IN; Overview shows a book-by reminder (2 weeks before first possible day).
+   * Planned arrival — shaded window on the calendar until Confirm locks Arrival.
+   * May start before `from` (e.g. Sep 29 when Arrival is Oct 1) without moving IN.
    */
   tentative?: boolean;
-  /** Inclusive first day of the arrival window. Defaults to `from`. */
+  /** Inclusive first day of the arrival window. May be before `from`. Defaults to `from`. */
   tentativeFrom?: string;
   /** Inclusive last day of the arrival window (one day or several). Defaults to `from`. */
   tentativeThrough?: string;
@@ -117,6 +117,8 @@ export const DEFAULT_ROTATION_DAYS = 42;
 export const STANDARD_ROTATION_DAYS = 42;
 /** Absolute ceiling when Katrina extends past 6 weeks. */
 export const MAX_ROTATION_DAYS = 120;
+/** How far before Arrival a planned-arrival window may start (mouse paint / right-click). */
+export const PLANNED_ARRIVAL_LEAD_DAYS = 21;
 /** Excel-style stay note on the bar (e.g. "Linger for snow"). */
 export const MAX_STAY_NOTE_CHARS = 80;
 
@@ -496,7 +498,17 @@ export function readRoster(value: unknown): CrewRosterBook {
   if (raw.stintTentativeOverrides && typeof raw.stintTentativeOverrides === "object") {
     for (const [key, value] of Object.entries(raw.stintTentativeOverrides)) {
       if (typeof value === "boolean") stintTentativeOverrides[key] = value;
-      else if (typeof value === "string" && value.length >= 10) stintTentativeOverrides[key] = value.slice(0, 10);
+      else if (typeof value === "string") {
+        // Keep "start|through" intact — slicing to 10 chars dropped the through day.
+        if (value.includes("|")) {
+          const [start, through] = value.split("|");
+          if (start && start.length >= 10 && through && through.length >= 10) {
+            stintTentativeOverrides[key] = `${start.slice(0, 10)}|${through.slice(0, 10)}`;
+          }
+        } else if (value.length >= 10) {
+          stintTentativeOverrides[key] = value.slice(0, 10);
+        }
+      }
     }
   }
   const stintInOverrides: Record<string, string> = {};
@@ -1143,7 +1155,8 @@ function applyStintOutOverrides<
           start = tentativeFlag.slice(0, pipe);
           through = tentativeFlag.slice(pipe + 1);
         }
-        if (start < next.from) start = next.from;
+        const earliest = addDaysLocal(next.from, -PLANNED_ARRIVAL_LEAD_DAYS);
+        if (start < earliest) start = earliest;
         if (through < start) through = start;
         next = {
           ...next,
@@ -1279,8 +1292,8 @@ export function confirmStayArrival(
 
 /**
  * Mark or clear a preliminary (tentative) arrival window on a stay.
- * Window is inclusive `start`…`through` within the stay — does not move IN
- * (Confirm arrival moves IN). Extends earlier/later inside the stay only.
+ * Window is inclusive `start`…`through` — may begin up to PLANNED_ARRIVAL_LEAD_DAYS
+ * before Arrival, and may run into the stay. Does not move IN (Confirm does).
  * App plans store the flag on the plan; sheet stays use an override.
  */
 export function setStayTentative(
@@ -1298,8 +1311,7 @@ export function setStayTentative(
     if (tentative.through) through = tentative.through.slice(0, 10);
     if (tentative.start) start = tentative.start.slice(0, 10);
   }
-  // Shade only — never move the placement IN.
-  if (start < from) start = from;
+  // Shade only — never move Arrival. Window may start before Arrival (lead days).
   if (through < start) through = start;
   const nextRoster = roster;
   const plans = nextRoster.rotationPlans?.[personId] ?? [];
@@ -1314,9 +1326,10 @@ export function setStayTentative(
     const current = plans[index]!;
     const planFrom = current.from;
     const lastInclusive = addDaysLocal(current.out, -1);
+    const earliest = addDaysLocal(planFrom, -PLANNED_ARRIVAL_LEAD_DAYS);
+    if (start < earliest) start = earliest;
     if (through > lastInclusive) through = lastInclusive;
     if (start > lastInclusive) start = lastInclusive;
-    if (start < planFrom) start = planFrom;
     if (through < start) through = start;
     const nextPlans = [...plans];
     if (!on) {
@@ -1327,7 +1340,8 @@ export function setStayTentative(
       if (start !== planFrom) nextPlan.tentativeFrom = start;
       else delete nextPlan.tentativeFrom;
       if (through !== start) nextPlan.tentativeThrough = through;
-      else delete nextPlan.tentativeThrough;
+      else if (start === planFrom) delete nextPlan.tentativeThrough;
+      else nextPlan.tentativeThrough = through;
       nextPlans[index] = nextPlan;
     }
     return {
@@ -1342,7 +1356,12 @@ export function setStayTentative(
     ([key, moved]) => moved === from && key.startsWith(`${personId}:`),
   )?.[0];
   const key = original ?? stintOverrideKey(personId, from);
-  // Sheet override: encode start|through when the window does not start at IN.
+  // Sheet stay: clamp lead before Arrival, then encode start|through when needed.
+  if (on) {
+    const earliest = addDaysLocal(from, -PLANNED_ARRIVAL_LEAD_DAYS);
+    if (start < earliest) start = earliest;
+    if (through < start) through = start;
+  }
   const nextValue: string | boolean = on
     ? start !== from
       ? `${start}|${through}`
@@ -1420,14 +1439,19 @@ function plansAsStints(plans: RosterRotationPlan[] | undefined): StintLike[] {
   return plans.map((plan) => {
     const meta = plan.role ? `Added in app · ${plan.role}` : "Added in app";
     const tentative = plan.tentative === true;
+    // Lead days before Arrival are allowed (tentativeFrom < plan.from).
     const start =
-      tentative && plan.tentativeFrom && plan.tentativeFrom >= plan.from
-        ? plan.tentativeFrom
+      tentative && plan.tentativeFrom && plan.tentativeFrom.length >= 10
+        ? plan.tentativeFrom.slice(0, 10)
         : undefined;
-    const through =
-      tentative && plan.tentativeThrough && plan.tentativeThrough >= (start || plan.from)
-        ? plan.tentativeThrough
+    let through =
+      tentative && plan.tentativeThrough && plan.tentativeThrough.length >= 10
+        ? plan.tentativeThrough.slice(0, 10)
         : undefined;
+    // Window that starts before Arrival still runs through Arrival when through was omitted.
+    if (tentative && start && start < plan.from && (!through || through < plan.from)) {
+      through = plan.from;
+    }
     return {
       site: plan.site,
       sites: [plan.site],

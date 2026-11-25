@@ -1,24 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { BedDouble, Car, Plane, Plus, Route, Trash2 } from "lucide-react";
-import { CrewTripPlan } from "@/components/crew-trip-plan";
+import { useState } from "react";
+import { Plane, Plus, Trash2 } from "lucide-react";
 import { AirportSelect, CAMP_AIRPORTS, useTravelHubs } from "@/components/crew-airport-select";
 import { emptyHotel, emptySegment, type FlightHotel, type FlightSegment } from "@/lib/crew-flights";
+import { legsForRoute } from "@/lib/crew-routes";
 import {
-  legsForRoute,
-  loadRoutes,
-  placeLinks,
-  routeAirports,
-  routeBetweenSites,
-  suggestRoutes,
-  type RouteSuggestion,
-} from "@/lib/crew-routes";
-import { CREW_SCHEDULE } from "@/lib/crew-schedule";
-import { ASSUMED_PNR, type RotationBook, type RotationTravel } from "@/lib/crew-rotations";
+  ASSUMED_PNR,
+  travelIsBooked,
+  type RotationBook,
+  type RotationTravel,
+} from "@/lib/crew-rotations";
 import { travelHubName } from "@/lib/crew-travel-hubs";
 import { cn } from "@/lib/cn";
-import { todayInZone } from "@/lib/dates";
+import { addDays, todayInZone } from "@/lib/dates";
 
 /** The south end of this person's last trip on file (where they usually fly from). */
 function usualHomeAirport(book: RotationBook, personId: string) {
@@ -32,22 +27,6 @@ function usualHomeAirport(book: RotationBook, personId: string) {
     if (back) return back;
   }
   return "";
-}
-
-/** Journeys the Excel recorded on travel days (e.g. "KUG → YK → IQA"), for route suggestions. */
-const EXCEL_ROUTES: string[] = CREW_SCHEDULE.people.flatMap((person) =>
-  (person.stints || []).flatMap((stint) =>
-    (stint.excelSegments || stint.segments || []).map((piece) => piece.route || "").filter(Boolean),
-  ),
-);
-
-/** Every trip already on file (to site, home, and moves), as legs. */
-function pastTrips(book: RotationBook): FlightSegment[][] {
-  return book.rotations.flatMap((rotation) => [
-    rotation.outbound.segments,
-    rotation.returnTravel.segments,
-    ...(rotation.moves ?? []).map((move) => move.travel.segments),
-  ]);
 }
 
 /** Full place name: sites (Iqaluit, Pond Inlet...) and airports from Settings. */
@@ -93,7 +72,6 @@ export function CrewTripForm({
   onChange: (patch: Partial<RotationTravel>) => void;
 }) {
   const hubs = useTravelHubs();
-  const routes = useMemo(() => loadRoutes(), []);
   const legs = value.segments;
   const assumed = value.pnr === ASSUMED_PNR;
   const siteCode = CAMP_AIRPORTS.some((row) => row.code === site.toUpperCase()) ? site.toUpperCase() : "";
@@ -107,82 +85,50 @@ export function CrewTripForm({
   });
   const [wantHotel, setWantHotel] = useState(() => value.hotels.length > 0);
   const [wantCar, setWantCar] = useState(() => Boolean(value.carService.trim()));
-  const chain = move
-    ? routeBetweenSites(routes, move.fromSite, move.toSite)
-    : home && camp
-      ? routeAirports(routes, camp, home, direction)
-      : [];
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [askStop, setAskStop] = useState(false);
 
-  // Ways to do this trip, best first: usual route, routes people took before, then direct.
   const tripEnds = move
     ? { from: move.fromSite, to: move.toSite }
     : direction === "outbound"
       ? { from: home, to: camp }
       : { from: camp, to: home };
-  const suggestions = useMemo(
-    () =>
-      // Both ends needed (no guessing where someone flies from).
-      !tripEnds.from || !tripEnds.to
-        ? []
-        : suggestRoutes({
-        from: tripEnds.from,
-        to: tripEnds.to,
-        usual: chain.length > 1 ? chain : null,
-        trips: pastTrips(book),
-        routeTexts: EXCEL_ROUTES,
-      }),
-    // chain is derived from the same inputs
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [book, tripEnds.from, tripEnds.to, chain.join(">")],
-  );
-
-  // Likely places for each leg's From / To, from every trip on file.
-  const links = useMemo(() => placeLinks(pastTrips(book), EXCEL_ROUTES), [book]);
-  function placeHints(index: number, end: "from" | "to") {
-    const leg = legs[index]!;
-    const hints: { code: string; uses?: number; why?: string }[] = [];
-    const push = (row: { code: string; uses?: number; why?: string }) => {
-      if (row.code && !hints.some((hint) => hint.code === row.code)) hints.push(row);
-    };
-    if (end === "from") {
-      const before = legs[index - 1]?.toAirport;
-      if (before) push({ code: before, why: "last stop" });
-      else if (tripEnds.from) push({ code: tripEnds.from, why: "start" });
-      if (leg.toAirport) links.before(leg.toAirport).forEach(push);
-    } else {
-      if (tripEnds.to && tripEnds.to !== leg.fromAirport) push({ code: tripEnds.to, why: "destination" });
-      if (leg.fromAirport) links.after(leg.fromAirport).filter((row) => row.code !== leg.fromAirport).forEach(push);
-    }
-    return hints.slice(0, 6);
-  }
-
-  /** Append a suggested path — never wipe what is already on the itinerary. */
-  function appendSuggestion(suggestion: RouteSuggestion) {
-    const anchor = legs[legs.length - 1];
-    const startDate = anchor?.arriveDate || anchor?.departDate || travelDate;
-    const added = legsForRoute(suggestion.airports, startDate).map((leg, index) => ({
-      ...leg,
-      mode: suggestion.modes[index] ?? "flight",
-    }));
-    setLegs([...legs, ...added]);
-  }
 
   function setLegs(next: FlightSegment[]) {
     onChange(summaryFromLegs(next));
   }
 
-  function addBlankLeg(mode: "flight" | "road") {
-    const last = legs[legs.length - 1];
-    setLegs([
-      ...legs,
-      {
-        ...emptySegment(),
-        mode,
-        fromAirport: last?.toAirport || "",
-        departDate: last?.arriveDate || last?.departDate || travelDate,
-        arriveDate: last?.arriveDate || last?.departDate || travelDate,
-      },
-    ]);
+  function connectStop(code: string) {
+    const start = legs[0]?.fromAirport || tripEnds.from;
+    const end = legs[legs.length - 1]?.toAirport || tripEnds.to;
+    if (!start || !end || !code || code === start || code === end) return;
+    if (legs.length <= 1) {
+      setLegs(legsForRoute([start, code, end], travelDate));
+    } else {
+      const last = legs[legs.length - 1]!;
+      const leave = last.departDate || travelDate;
+      const land = last.arriveDate || leave;
+      setLegs([
+        ...legs.slice(0, -1),
+        {
+          ...emptySegment(),
+          mode: "flight",
+          fromAirport: last.fromAirport,
+          toAirport: code,
+          departDate: leave,
+          arriveDate: leave,
+        },
+        {
+          ...emptySegment(),
+          mode: "flight",
+          fromAirport: code,
+          toAirport: last.toAirport,
+          departDate: land,
+          arriveDate: land,
+        },
+      ]);
+    }
+    setAskStop(false);
   }
 
   function patchLeg(index: number, patch: Partial<FlightSegment>) {
@@ -193,392 +139,504 @@ export function CrewTripForm({
     onChange({ hotels: value.hotels.map((row, i) => (i === index ? { ...row, ...patch } : row)) });
   }
 
+  const fromCode = move?.fromSite || legs[0]?.fromAirport || home;
+  const toCode = move?.toSite || legs[legs.length - 1]?.toAirport || camp;
+  const departIso = legs[0]?.departDate || value.departDate || travelDate;
+  const booked = !assumed && (value.confirmed || travelIsBooked(value));
+  const statusLabel = assumed
+    ? "Not booked"
+    : value.confirmed
+      ? "Confirmed"
+      : booked
+        ? "Booked"
+        : "Not booked";
+
+  const places: {
+    code: string;
+    date: string;
+    role: "departure" | "stop" | "arrival";
+    overnight: boolean;
+    legIndex: number;
+  }[] = [];
+  if (legs.length) {
+    places.push({
+      code: legs[0]!.fromAirport || fromCode,
+      date: legs[0]!.departDate || departIso || "",
+      role: "departure",
+      overnight: false,
+      legIndex: 0,
+    });
+    legs.forEach((leg, index) => {
+      const next = legs[index + 1];
+      const land = leg.arriveDate || leg.departDate || "";
+      const leaveNext = next?.departDate || "";
+      const isLast = index === legs.length - 1;
+      places.push({
+        code: leg.toAirport || (isLast ? toCode : ""),
+        date: isLast ? land : leaveNext || land,
+        role: isLast ? "arrival" : "stop",
+        overnight: Boolean(next && land && leaveNext && leaveNext > land),
+        legIndex: index,
+      });
+    });
+  }
+
+  function seedOrPatchFrom(code: string) {
+    if (direction === "outbound") setHome(code);
+    else setCamp(code);
+    if (legs.length) {
+      patchLeg(0, { fromAirport: code });
+      return;
+    }
+    if (code && toCode) setLegs(legsForRoute([code, toCode], travelDate));
+  }
+
+  function seedOrPatchTo(code: string) {
+    if (direction === "outbound") setCamp(code);
+    else setHome(code);
+    if (legs.length) {
+      patchLeg(legs.length - 1, { toAirport: code });
+      return;
+    }
+    if (fromCode && code) setLegs(legsForRoute([fromCode, code], travelDate));
+  }
+
+  function setStopOvernight(stopLegIndex: number, on: boolean) {
+    const leg = legs[stopLegIndex];
+    const next = legs[stopLegIndex + 1];
+    if (!leg || !next) return;
+    const land = leg.arriveDate || leg.departDate || travelDate;
+    if (on) {
+      const leave = next.departDate && next.departDate > land ? next.departDate : addDays(land, 1);
+      patchLeg(stopLegIndex, { arriveDate: land });
+      patchLeg(stopLegIndex + 1, { departDate: leave });
+    } else {
+      patchLeg(stopLegIndex, { arriveDate: land });
+      patchLeg(stopLegIndex + 1, { departDate: land, arriveDate: next.arriveDate || land });
+    }
+  }
+
+  const stopPlaces = places.filter((place) => place.role === "stop");
+  const isDirect = Boolean(fromCode && toCode && stopPlaces.length === 0 && !askStop);
+
+  function makeDirect() {
+    if (fromCode && toCode) setLegs(legsForRoute([fromCode, toCode], travelDate));
+    setAskStop(false);
+  }
+
+  function removeStop(legIndex: number) {
+    const start = legs[0]?.fromAirport || fromCode;
+    const end = legs[legs.length - 1]?.toAirport || toCode;
+    const remaining = stopPlaces
+      .filter((row) => row.legIndex !== legIndex)
+      .map((row) => row.code)
+      .filter(Boolean);
+    if (start && end) setLegs(legsForRoute([start, ...remaining, end], travelDate));
+    setAskStop(false);
+  }
+
+  const headingClass =
+    "text-[13px] font-medium tracking-[0.14em] text-slate-950 uppercase";
+  const fieldClass =
+    "text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase";
+
   return (
-    <div className="grid gap-4 text-sm">
-      {assumed ? (
-        <p className="text-sm font-medium text-rose-700">
-          <span aria-hidden>*</span> No ticket on file.
-        </p>
+    <div className="grid gap-6 text-sm">
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <p className={headingClass}>Journey</p>
+          <span
+            className={cn(
+              "rounded-full px-2.5 py-1 text-xs font-semibold",
+              booked && !assumed
+                ? "bg-emerald-100 text-emerald-900"
+                : "bg-amber-100 text-amber-950",
+            )}
+          >
+            {statusLabel}
+          </span>
+        </div>
+
+        <section className="mt-2 grid gap-3 border-t border-border pt-3">
+        {move ? (
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <div className="min-w-0 text-center">
+              <p className={fieldClass}>Leaving from</p>
+              <p className="mt-1 text-base font-semibold">{placeName(move.fromSite, hubs)}</p>
+              <p className="text-xs text-muted-foreground">{move.fromSite}</p>
+            </div>
+            <Plane className="size-5 shrink-0 text-primary" aria-hidden />
+            <div className="min-w-0 text-center">
+              <p className={fieldClass}>Travelling to</p>
+              <p className="mt-1 text-base font-semibold">{placeName(move.toSite, hubs)}</p>
+              <p className="text-xs text-muted-foreground">{move.toSite}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+            <label className="grid min-w-0 gap-1 text-center">
+              <span className={fieldClass}>Leaving from</span>
+              <AirportSelect
+                value={fromCode}
+                hubs={hubs}
+                includeCamps
+                placeholder="Any place"
+                onChange={seedOrPatchFrom}
+              />
+            </label>
+            <Plane className="mb-2 size-5 shrink-0 text-primary" aria-hidden />
+            <label className="grid min-w-0 gap-1 text-center">
+              <span className={fieldClass}>Travelling to</span>
+              <AirportSelect
+                value={toCode}
+                hubs={hubs}
+                includeCamps
+                placeholder="Any place"
+                onChange={seedOrPatchTo}
+              />
+            </label>
+          </div>
+        )}
+
+        {fromCode && toCode ? (
+          <div className="grid gap-2">
+            <label className="inline-flex w-fit cursor-pointer items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={isDirect}
+                onChange={(event) => {
+                  if (event.target.checked) {
+                    makeDirect();
+                  } else {
+                    if (!legs.length) setLegs(legsForRoute([fromCode, toCode], travelDate));
+                    setAskStop(true);
+                  }
+                }}
+                className="size-3.5 rounded border-input"
+              />
+              Direct
+            </label>
+            {!isDirect ? (
+              <div className="grid gap-1.5">
+                <span className={fieldClass}>Stop along the way</span>
+                {stopPlaces.map((place) => (
+                  <div
+                    key={`${place.code}-${place.legIndex}`}
+                    className="flex h-9 items-center gap-2 rounded-lg border border-input px-2"
+                  >
+                    <span className="min-w-0 flex-1 truncate font-medium">
+                      {placeName(place.code, hubs) || place.code || "Stop"}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Remove stop"
+                      title="Remove stop"
+                      onClick={() => removeStop(place.legIndex)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {askStop || stopPlaces.length === 0 ? (
+                  <AirportSelect
+                    value=""
+                    hubs={hubs}
+                    includeCamps
+                    placeholder="Where do you stop?"
+                    onChange={(code) => {
+                      if (code) {
+                        connectStop(code);
+                        setAskStop(false);
+                      }
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    aria-label="Add another stop"
+                    onClick={() => setAskStop(true)}
+                    className="inline-flex h-8 items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    <Plus className="size-3.5" /> Add another stop
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        </section>
+      </div>
+
+      {places.length ? (
+        <div className="space-y-3">
+          <ol className="relative space-y-0">
+            {places.map((place, index) => (
+              <li key={`${place.code}-${index}`} className="relative flex gap-3 pb-3 last:pb-0">
+                {index < places.length - 1 ? (
+                  <span
+                    className="absolute top-3 left-[7px] h-[calc(100%-6px)] w-px bg-border"
+                    aria-hidden
+                  />
+                ) : null}
+                <span className="relative z-[1] mt-1 size-3 shrink-0 rounded-full border border-primary bg-card" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="font-medium text-foreground">
+                      {placeName(place.code, hubs) || place.code || "Stop"}
+                      {place.code ? (
+                        <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                          {place.code}
+                        </span>
+                      ) : null}
+                    </p>
+                    {place.role === "stop" ? (
+                      <label className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium">
+                        <input
+                          type="checkbox"
+                          checked={place.overnight}
+                          onChange={(event) =>
+                            setStopOvernight(place.legIndex, event.target.checked)
+                          }
+                          className="size-3.5 rounded border-input"
+                        />
+                        Overnight
+                      </label>
+                    ) : null}
+                  </div>
+                  {/* Multi-leg only: date when leaving this place (stops / departure). */}
+                  {legs.length > 1 && place.role !== "arrival" ? (
+                    <label className="mt-1.5 grid max-w-[11rem] gap-0.5">
+                      <span className={fieldClass}>
+                        {place.role === "stop" && place.overnight ? "Leave" : "Date"}
+                      </span>
+                      <input
+                        type="date"
+                        value={legs[place.legIndex]?.departDate || ""}
+                        onChange={(event) => {
+                          const day = event.target.value;
+                          patchLeg(place.legIndex, {
+                            departDate: day,
+                            arriveDate:
+                              place.role === "stop" && place.overnight
+                                ? legs[place.legIndex]?.arriveDate || day
+                                : day,
+                          });
+                        }}
+                        className="h-8 rounded-lg border border-input px-2 text-xs"
+                      />
+                    </label>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ol>
+          {/* One booking, one travel date — ends are already set above. */}
+          {legs.length <= 1 ? (
+            <label className="grid max-w-[14rem] gap-1">
+              <span className={fieldClass}>Travel date</span>
+              <input
+                type="date"
+                value={legs[0]?.departDate || travelDate || ""}
+                onChange={(event) => {
+                  const day = event.target.value;
+                  if (!legs.length && fromCode && toCode) {
+                    setLegs(legsForRoute([fromCode, toCode], day));
+                    return;
+                  }
+                  patchLeg(0, { departDate: day, arriveDate: day });
+                }}
+                className="h-9 rounded-lg border border-input px-2"
+              />
+            </label>
+          ) : null}
+        </div>
       ) : null}
 
-      <section className="rounded-xl border border-sky-200 bg-sky-50/50 p-3">
-        <p className="flex items-center gap-2 font-semibold">
-          <Route className="size-4 text-sky-700" /> Route
-        </p>
-        {move ? (
-          <p className="mt-2 text-base font-semibold">
-            {move.fromSite} → {move.toSite}
-            <span className="ml-2 text-sm font-normal text-muted-foreground">
-              {placeName(move.fromSite, hubs)} to {placeName(move.toSite, hubs)}
-            </span>
-          </p>
-        ) : (
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <label className="grid min-w-0 gap-1">
-              <span className="text-muted-foreground">From</span>
-              <AirportSelect
-                value={home}
-                hubs={hubs}
-                includeCamps
-                placeholder="Any place"
-                onChange={setHome}
-              />
-            </label>
-            <label className="grid min-w-0 gap-1">
-              <span className="text-muted-foreground">To</span>
-              <AirportSelect
-                value={camp}
-                hubs={hubs}
-                includeCamps
-                placeholder="Any place"
-                onChange={setCamp}
-              />
-            </label>
-          </div>
+      <button
+        type="button"
+        onClick={() => {
+          onChange(summaryFromLegs(legs));
+          setSavedFlash(true);
+          window.setTimeout(() => setSavedFlash(false), 1600);
+        }}
+        className={cn(
+          "inline-flex h-9 w-fit items-center rounded-lg px-3 text-sm font-semibold",
+          savedFlash
+            ? "bg-emerald-100 text-emerald-900"
+            : "border border-input text-foreground hover:bg-muted",
         )}
-        {suggestions.length ? (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {suggestions.map((suggestion) => (
-              <button
-                key={`${suggestion.airports.join(">")}|${suggestion.modes.join(",")}`}
-                type="button"
-                title="Add to itinerary"
-                onClick={() => appendSuggestion(suggestion)}
-                className="rounded-md border border-border bg-card px-2 py-1 text-xs font-medium hover:bg-muted"
-              >
-                {suggestion.airports.join(" → ")}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </section>
+      >
+        {savedFlash ? "Saved" : "Save"}
+      </button>
 
-      <section className="grid gap-2">
-        <div className="flex items-center justify-between">
-          <p className="font-semibold">Itinerary</p>
-          <div className="flex gap-1.5">
-            {(["flight", "road"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => addBlankLeg(mode)}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-input px-2 text-xs font-medium hover:bg-muted"
-              >
-                <Plus className="size-3.5" /> {mode === "flight" ? "Flight" : "Drive"}
-              </button>
-            ))}
-          </div>
-        </div>
-        {legs.length === 0 ? null : (
-          legs.map((leg, index) => (
-            <div
-              key={index}
-              className={cn(
-                "grid grid-cols-2 gap-2 rounded-xl border p-3",
-                leg.mode === "road" ? "border-amber-200 bg-amber-50/40" : "border-border",
-              )}
-            >
-              <div className="col-span-2 flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Step {index + 1}</span>
-                <div className="flex items-center gap-1.5">
-                  <div className="inline-flex rounded-lg border border-input bg-card p-0.5" role="group" aria-label={`Step ${index + 1} by`}>
-                    {(["flight", "road"] as const).map((mode) => {
-                      const active = (leg.mode ?? "flight") === mode;
-                      return (
-                        <button
-                          key={mode}
-                          type="button"
-                          aria-pressed={active}
-                          onClick={() => patchLeg(index, { mode })}
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold",
-                            active ? "bg-stone-900 text-white" : "text-muted-foreground",
-                          )}
-                        >
-                          {mode === "road" ? <Car className="size-3.5" /> : <Plane className="size-3.5" />}
-                          {mode === "road" ? "Road" : "Flight"}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button
-                    type="button"
-                    aria-label="Remove step"
-                    onClick={() => setLegs(legs.filter((_, i) => i !== index))}
-                    className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-100"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                </div>
-              </div>
-              <AirportSelect
-                value={leg.fromAirport}
-                hubs={hubs}
-                includeCamps
-                placeholder="From"
-                suggested={placeHints(index, "from")}
-                ariaLabel={`Step ${index + 1} from`}
-                onChange={(code) => patchLeg(index, { fromAirport: code })}
-              />
-              <AirportSelect
-                value={leg.toAirport}
-                hubs={hubs}
-                includeCamps
-                placeholder="To"
-                suggested={placeHints(index, "to")}
-                ariaLabel={`Step ${index + 1} to`}
-                onChange={(code) => {
-                  const next = legs.map((row, i) =>
-                    i === index ? { ...row, toAirport: code } : i === index + 1 && !row.fromAirport ? { ...row, fromAirport: code } : row,
-                  );
-                  setLegs(next);
-                }}
-              />
-              <label className="grid min-w-0 gap-1">
-                <span className="text-xs text-muted-foreground">Leaves on</span>
-                <input
-                  type="date"
-                  value={leg.departDate}
-                  onChange={(event) =>
-                    patchLeg(index, {
-                      departDate: event.target.value,
-                      arriveDate: !leg.arriveDate || leg.arriveDate <= leg.departDate ? event.target.value : leg.arriveDate,
-                    })
-                  }
-                  className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-                />
-              </label>
-              <label className="grid min-w-0 gap-1">
-                <span className="text-xs text-muted-foreground">Arrives on</span>
-                <input
-                  type="date"
-                  value={leg.arriveDate || leg.departDate}
-                  min={leg.departDate || undefined}
-                  onChange={(event) => patchLeg(index, { arriveDate: event.target.value })}
-                  className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-                />
-              </label>
-              <label className="grid min-w-0 gap-1">
-                <span className="text-xs text-muted-foreground">Departs</span>
-                <input
-                  type="time"
-                  value={leg.departTime}
-                  onChange={(event) => patchLeg(index, { departTime: event.target.value })}
-                  className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-                />
-              </label>
-              <label className="grid min-w-0 gap-1">
-                <span className="text-xs text-muted-foreground">Arrives</span>
-                <input
-                  type="time"
-                  value={leg.arriveTime}
-                  onChange={(event) => patchLeg(index, { arriveTime: event.target.value })}
-                  className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-                />
-              </label>
-              <label className="col-span-2 grid min-w-0 gap-1">
-                <span className="text-xs text-muted-foreground">{leg.mode === "road" ? "Vehicle / driver" : "Flight #"}</span>
-                <input
-                  value={leg.flightNumber}
-                  onChange={(event) =>
-                    patchLeg(index, {
-                      flightNumber: leg.mode === "road" ? event.target.value : event.target.value.toUpperCase(),
-                    })
-                  }
-                  placeholder={leg.mode === "road" ? "e.g. Company truck, driver John" : "5T 401"}
-                  className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-                />
-              </label>
-            </div>
-          ))
-        )}
-      </section>
-
-      <CrewTripPlan
-        legs={legs}
-        hotels={value.hotels}
-        onAddHotel={(place, checkIn, checkOut) =>
-          onChange({ hotels: [...value.hotels, { ...emptyHotel(place, checkIn), checkOut }] })
-        }
-      />
-
-      <section className="grid grid-cols-2 gap-2">
-        <label className="grid min-w-0 gap-1">
-          <span className="text-muted-foreground">Booking reference (PNR)</span>
-          <input
-            value={assumed ? "" : value.pnr}
-            onChange={(event) =>
-              onChange(
-                assumed
-                  ? { pnr: event.target.value.toUpperCase(), confirmed: false, bookedOn: todayInZone() }
-                  : { pnr: event.target.value.toUpperCase() },
-              )
-            }
-            className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-            placeholder="ABC123"
-          />
-        </label>
-        <label className="grid min-w-0 gap-1">
-          <span className="text-muted-foreground">Booked on</span>
-          <input
-            type="date"
-            value={assumed ? "" : value.bookedOn || ""}
-            onChange={(event) => onChange({ bookedOn: event.target.value || null })}
-            className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-          />
-        </label>
-        <label className="col-span-2 inline-flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={value.confirmed && !assumed}
-            disabled={assumed && !value.pnr}
-            onChange={(event) => onChange({ confirmed: event.target.checked })}
-          />
-          <span>Flight confirmed</span>
-        </label>
-      </section>
-
-      <section className="grid gap-2">
-        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={wantHotel}
-            onChange={(event) => {
-              const on = event.target.checked;
-              setWantHotel(on);
-              if (on) {
-                if (value.hotels.length) return;
-                const stop = legs.find(
-                  (row, i) => legs[i + 1] && row.arriveDate && legs[i + 1]!.departDate > row.arriveDate,
-                );
-                onChange({
-                  hotels: [
-                    emptyHotel(
-                      stop?.toAirport || legs[0]?.toAirport || "",
-                      stop?.arriveDate || travelDate,
-                    ),
-                  ],
-                });
-              } else {
-                onChange({ hotels: [] });
+      <div>
+        <p className={headingClass}>Booking</p>
+        <section className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-3">
+          <label className="grid min-w-0 gap-1">
+            <span className={fieldClass}>Booking reference (PNR)</span>
+            <input
+              value={assumed ? "" : value.pnr}
+              onChange={(event) =>
+                onChange(
+                  assumed
+                    ? {
+                        pnr: event.target.value.toUpperCase(),
+                        confirmed: false,
+                        bookedOn: todayInZone(),
+                      }
+                    : { pnr: event.target.value.toUpperCase() },
+                )
               }
-            }}
-            className="size-4 rounded border-input"
-          />
-          <BedDouble className="size-4 text-muted-foreground" />
-          Hotel
-        </label>
-        {wantHotel ? (
-          <>
-            {value.hotels.map((hotel, index) => (
-              <div key={index} className="grid grid-cols-2 gap-2 rounded-xl border border-border p-3">
-                <AirportSelect
-                  value={hotel.place}
-                  hubs={hubs}
-                  placeholder="Where"
-                  onChange={(code) => patchHotel(index, { place: code })}
-                />
-                <input
-                  value={hotel.name}
-                  onChange={(event) => patchHotel(index, { name: event.target.value })}
-                  placeholder="Hotel name"
-                  className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-                />
-                <label className="grid min-w-0 gap-1">
-                  <span className="text-xs text-muted-foreground">Check in</span>
-                  <input
-                    type="date"
-                    value={hotel.checkIn}
-                    onChange={(event) => patchHotel(index, { checkIn: event.target.value })}
-                    className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-                  />
-                </label>
-                <label className="grid min-w-0 gap-1">
-                  <span className="text-xs text-muted-foreground">Check out</span>
-                  <input
-                    type="date"
-                    value={hotel.checkOut}
-                    min={hotel.checkIn || undefined}
-                    onChange={(event) => patchHotel(index, { checkOut: event.target.value })}
-                    className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-                  />
-                </label>
-                <input
-                  value={hotel.confirmation}
-                  onChange={(event) => patchHotel(index, { confirmation: event.target.value })}
-                  placeholder="Confirmation #"
-                  className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-                />
-                {value.hotels.length > 1 ? (
-                  <button
-                    type="button"
-                    aria-label="Remove hotel"
-                    onClick={() => onChange({ hotels: value.hotels.filter((_, i) => i !== index) })}
-                    className="inline-flex h-7 w-fit items-center gap-1 rounded-md px-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-100"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                ) : null}
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={() => {
-                const stop = legs.find(
-                  (row, i) => legs[i + 1] && row.arriveDate && legs[i + 1]!.departDate > row.arriveDate,
-                );
-                onChange({
-                  hotels: [
-                    ...value.hotels,
-                    emptyHotel(
-                      stop?.toAirport || legs[0]?.toAirport || "",
-                      stop?.arriveDate || travelDate,
-                    ),
-                  ],
-                });
+              className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
+              placeholder="ABC123"
+            />
+          </label>
+          <label className="grid min-w-0 gap-1">
+            <span className={fieldClass}>Booked on</span>
+            <input
+              type="date"
+              value={assumed ? "" : value.bookedOn || ""}
+              onChange={(event) => onChange({ bookedOn: event.target.value || null })}
+              className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
+            />
+          </label>
+          <label className="col-span-2 inline-flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={value.confirmed && !assumed}
+              disabled={assumed && !value.pnr}
+              onChange={(event) => onChange({ confirmed: event.target.checked })}
+            />
+            <span>Flight confirmed</span>
+          </label>
+        </section>
+      </div>
+
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <p className={headingClass}>Hotel</p>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium">
+            <input
+              type="checkbox"
+              checked={wantHotel}
+              onChange={(event) => {
+                const on = event.target.checked;
+                setWantHotel(on);
+                if (on) {
+                  if (value.hotels.length) return;
+                  const stop = legs.find(
+                    (row, i) =>
+                      legs[i + 1] && row.arriveDate && legs[i + 1]!.departDate > row.arriveDate,
+                  );
+                  onChange({
+                    hotels: [
+                      emptyHotel(
+                        stop?.toAirport || legs[0]?.toAirport || "",
+                        stop?.arriveDate || travelDate,
+                      ),
+                    ],
+                  });
+                } else {
+                  onChange({ hotels: [] });
+                }
               }}
-              className="inline-flex h-8 w-fit items-center gap-1 rounded-lg border border-input px-2 text-xs font-medium hover:bg-muted"
-            >
-              <Plus className="size-3.5" /> Add hotel
-            </button>
-          </>
-        ) : null}
-      </section>
+              className="size-3.5 rounded border-input"
+            />
+            Include
+          </label>
+        </div>
+        <div className="mt-2 space-y-3 border-t border-border pt-3">
+          {wantHotel
+            ? value.hotels.map((hotel, index) => (
+                <div key={index} className="grid grid-cols-2 gap-2">
+                  <AirportSelect
+                    value={hotel.place}
+                    hubs={hubs}
+                    placeholder="Where"
+                    onChange={(code) => patchHotel(index, { place: code })}
+                  />
+                  <input
+                    value={hotel.name}
+                    onChange={(event) => patchHotel(index, { name: event.target.value })}
+                    placeholder="Hotel name"
+                    className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
+                  />
+                  <label className="grid min-w-0 gap-1">
+                    <span className={fieldClass}>Check in</span>
+                    <input
+                      type="date"
+                      value={hotel.checkIn}
+                      onChange={(event) => patchHotel(index, { checkIn: event.target.value })}
+                      className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
+                    />
+                  </label>
+                  <label className="grid min-w-0 gap-1">
+                    <span className={fieldClass}>Check out</span>
+                    <input
+                      type="date"
+                      value={hotel.checkOut}
+                      min={hotel.checkIn || undefined}
+                      onChange={(event) => patchHotel(index, { checkOut: event.target.value })}
+                      className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
+                    />
+                  </label>
+                  <input
+                    value={hotel.confirmation}
+                    onChange={(event) => patchHotel(index, { confirmation: event.target.value })}
+                    placeholder="Confirmation #"
+                    className="col-span-2 h-9 w-full min-w-0 rounded-lg border border-input px-2"
+                  />
+                </div>
+              ))
+            : (
+              <p className="text-muted-foreground">No hotel on this trip.</p>
+            )}
+        </div>
+      </div>
 
-      <section className="grid gap-2">
-        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={wantCar}
-            onChange={(event) => {
-              const on = event.target.checked;
-              setWantCar(on);
-              if (!on) onChange({ carService: "" });
-            }}
-            className="size-4 rounded border-input"
-          />
-          <Car className="size-4 text-muted-foreground" />
-          Car service
-        </label>
-        {wantCar ? (
-          <input
-            value={value.carService}
-            onChange={(event) => onChange({ carService: event.target.value })}
-            placeholder="Pickup details"
-            className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-          />
-        ) : null}
-      </section>
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <p className={headingClass}>Car service</p>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium">
+            <input
+              type="checkbox"
+              checked={wantCar}
+              onChange={(event) => {
+                const on = event.target.checked;
+                setWantCar(on);
+                if (!on) onChange({ carService: "" });
+              }}
+              className="size-3.5 rounded border-input"
+            />
+            Include
+          </label>
+        </div>
+        <div className="mt-2 border-t border-border pt-3">
+          {wantCar ? (
+            <input
+              value={value.carService}
+              onChange={(event) => onChange({ carService: event.target.value })}
+              placeholder="Pickup details"
+              className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
+            />
+          ) : (
+            <p className="text-muted-foreground">No car service.</p>
+          )}
+        </div>
+      </div>
 
-      <label className="grid min-w-0 gap-1">
-        <span className="text-muted-foreground">Notes</span>
-        <textarea
-          value={value.notes.startsWith("Assumed booked") ? "" : value.notes}
-          onChange={(event) => onChange({ notes: event.target.value })}
-          rows={2}
-          className="rounded-lg border border-input px-2 py-1.5"
-        />
-      </label>
+      <div>
+        <p className={headingClass}>Notes</p>
+        <div className="mt-2 border-t border-border pt-3">
+          <textarea
+            value={value.notes.startsWith("Assumed booked") ? "" : value.notes}
+            onChange={(event) => onChange({ notes: event.target.value })}
+            rows={2}
+            className="w-full rounded-lg border border-input px-2 py-1.5"
+          />
+        </div>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 127.0.0.1 -p 47232",
+    "dev": "node scripts/live-data.mjs try-pull && next dev -H 127.0.0.1 -p 47232",
     "build": "next build",
     "start": "next start",
     "dev:local": "next dev -H 127.0.0.1 -p 47232",
@@ -16,6 +16,7 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:report": "playwright show-report tests/report",
     "data:pull": "node scripts/live-data.mjs pull",
+    "data:sync": "node scripts/live-data.mjs sync",
     "data:push": "node scripts/live-data.mjs push",
     "data:status": "node scripts/live-data.mjs status"
   },

@@ -40,6 +40,7 @@ import { BOOK_BEFORE_ARRIVAL_DAYS } from "@/lib/crew-rotations";
 import {
   MAX_ROTATION_DAYS,
   MAX_STAY_NOTE_CHARS,
+  PLANNED_ARRIVAL_LEAD_DAYS,
   STANDARD_ROTATION_DAYS,
   dateNotesFor,
   dateNotesOn,
@@ -68,7 +69,7 @@ import {
   type CrewTravelHubsBook,
   type TravelHub,
 } from "@/lib/crew-travel-hubs";
-import { returnWindowFromStayDay } from "@/lib/crew-month-gestures";
+import { arrivalWindowFromStayDay, returnWindowFromStayDay } from "@/lib/crew-month-gestures";
 import { flightPlaceOnDay } from "@/lib/crew-routes";
 import type { FlightBook } from "@/lib/crew-flights";
 import {
@@ -123,7 +124,8 @@ type StaySelection = {
 type PaintBrush =
   | { kind: "site"; code: string }
   | { kind: "travel" }
-  | { kind: "return" };
+  | { kind: "return" }
+  | { kind: "arrival" };
 
 type CellMenu = {
   personId: string;
@@ -327,15 +329,15 @@ function overlapMessage(person: CrewPerson, from: string, to: string) {
   return null;
 }
 
-/** Last inclusive camp day of a stay (the OUT box) — allowed for leave travel. */
-function isInclusiveOutDay(person: CrewPerson, iso: string) {
-  if (!siteOnDay(person, iso)) return false;
-  const stint = stintCovering(person, iso);
-  if (!stint?.out) return false;
-  return iso === addDays(stint.out, -1);
+/** Last inclusive camp day of a stay (typed OUT, or season end for open stays). */
+function stayLastInclusiveDay(
+  stint: { from?: string; out?: string | null },
+  scheduleYear?: number,
+) {
+  return addDays(exclusiveOutForStint(stint, scheduleYear), -1);
 }
 
-type DragMode = "place" | "clear" | "open" | "extend" | "moveIn" | "return";
+type DragMode = "place" | "clear" | "open" | "extend" | "moveIn" | "return" | "arrival";
 
 function stintCovering(person: CrewPerson, iso: string) {
   for (const stint of person.stints || []) {
@@ -344,6 +346,73 @@ function stintCovering(person: CrewPerson, iso: string) {
     if (stint.from <= iso && iso < out) return stint;
   }
   return null;
+}
+
+/** Last inclusive camp day of a stay (the Departure box) — allowed for leave travel. */
+function isInclusiveOutDay(person: CrewPerson, iso: string) {
+  if (!siteOnDay(person, iso)) return false;
+  const stint = stintCovering(person, iso);
+  if (!stint) return false;
+  // Open (null OUT) stays still have a last day — season end — so leave travel can paint.
+  return iso === stayLastInclusiveDay(stint);
+}
+
+/** Stay whose planned-arrival hatch covers this day (may be before Arrival). */
+function stintWithArrivalWindow(person: CrewPerson, iso: string) {
+  for (const stint of person.stints || []) {
+    if (!(stint.tentative || stint.unsure)) continue;
+    if (isTentativeArrivalDay(stint, iso)) return stint;
+  }
+  return null;
+}
+
+/**
+ * Stay to attach a planned-arrival gesture to: covering stay, existing hatch,
+ * or the next Arrival within the lead window (so you can paint Sep 29 for an Oct 1 stay).
+ */
+function stayForArrivalGesture(person: CrewPerson, iso: string) {
+  const covering = stintCovering(person, iso);
+  if (covering) return covering;
+  const hatched = stintWithArrivalWindow(person, iso);
+  if (hatched) return hatched;
+  const leadEnd = addDays(iso, PLANNED_ARRIVAL_LEAD_DAYS);
+  return (
+    (person.stints || [])
+      .filter((stint) => stint.from > iso && stint.from <= leadEnd)
+      .sort((a, b) => a.from.localeCompare(b.from))[0] || null
+  );
+}
+
+/**
+ * Stay for the cell menu: covering / arrival hatch, else the stay that just ended
+ * (leave-travel days after Departure), else the next Arrival within the lead window.
+ */
+function stayForCellMenu(person: CrewPerson, iso: string) {
+  const covering = stintCovering(person, iso);
+  if (covering) return covering;
+  const hatched = stintWithArrivalWindow(person, iso);
+  if (hatched) return hatched;
+  // Empty days right after Departure → attach leave actions to that stay
+  // (prefer over a later Arrival so "go home" still works in the gap).
+  for (let back = 0; back <= 14; back++) {
+    const d = addDays(iso, -back);
+    const stint = stintCovering(person, d);
+    if (!stint) continue;
+    const last = stayLastInclusiveDay(stint);
+    if (iso > last) return stint;
+  }
+  return stayForArrivalGesture(person, iso);
+}
+
+function clampArrivalWindow(stint: { from: string; out?: string | null }, from: string, to: string) {
+  const range = orderedRange(from, to);
+  const last = addDays(exclusiveOutForStint(stint), -1);
+  const earliest = addDays(stint.from, -PLANNED_ARRIVAL_LEAD_DAYS);
+  let start = range.from < earliest ? earliest : range.from;
+  let end = range.to > last ? last : range.to;
+  if (start > last) start = last;
+  if (end < start) end = start;
+  return { start, through: end };
 }
 
 function placementHasBookedFlights(ops: CrewPersonOps) {
@@ -452,7 +521,7 @@ const MonthRow = memo(function MonthRow({
   });
   return (
     <div
-      className="crew-day-row relative grid h-11 border-b border-border"
+      className="crew-day-row relative grid h-11"
       style={{
         gridTemplateColumns: gridColumns,
         width: daysTrackWidth,
@@ -464,6 +533,7 @@ const MonthRow = memo(function MonthRow({
         const site = siteAt[dayIndex];
         const hubMark = hubAt[dayIndex];
         const coveringStay = stintCovering(person, iso);
+        const arrivalStay = stintWithArrivalWindow(person, iso) || coveringStay;
         const daySegments = segmentsForPersonDay(
           flightBook?.bookings || [],
           person.id,
@@ -523,9 +593,17 @@ const MonthRow = memo(function MonthRow({
           : null;
         // IN on the first day of a stay, and on a camp arrival partway through one
         // (e.g. KUG → YK → IQA: IN on the first IQA day, then again on reaching Pond).
-        const stayIsPrelim = Boolean(covering && (covering.tentative || covering.unsure));
-        const isPrelimDay = Boolean(covering && isTentativeArrivalDay(covering, iso));
-        // No IN labels while arrival is preliminary — shade only; Confirm paints the one IN.
+        const stayIsPrelim = Boolean(
+          arrivalStay && (arrivalStay.tentative || arrivalStay.unsure),
+        );
+        const isPrelimDay = Boolean(
+          arrivalStay && isTentativeArrivalDay(arrivalStay, iso),
+        );
+        const prelimSite =
+          isPrelimDay && arrivalStay
+            ? worksiteFromMark(arrivalStay.site) || arrivalStay.site || null
+            : null;
+        // No Arrival label while planned-arrival hatch is on — Confirm paints the one Arrival.
         const stintStart = Boolean(
           covering &&
             !stayIsPrelim &&
@@ -544,6 +622,49 @@ const MonthRow = memo(function MonthRow({
         const returnWindow = Boolean(displaySite) && showReturnWindow(ops, iso);
         const placePreview = inDraft && draftMode === "place";
         const returnPreview = inDraft && draftMode === "return";
+        const arrivalPreview = inDraft && draftMode === "arrival";
+        // Same fill as yesterday → hide the day rule so stays / windows read as one block.
+        const prevDisplaySite =
+          dayIndex > 0
+            ? siteAt[dayIndex - 1] ||
+              (() => {
+                const prevCover = stintCovering(person, prevIso);
+                const prevLast =
+                  prevCover?.out && prevCover.out.length >= 10 ? addDays(prevCover.out, -1) : null;
+                return prevLast === prevIso && prevCover
+                  ? worksiteFromMark(prevCover.site) ||
+                      prevCover.sites?.map(worksiteFromMark).find(Boolean) ||
+                      null
+                  : null;
+              })()
+            : null;
+        const prevReturnWindow =
+          Boolean(prevDisplaySite) && showReturnWindow(ops, prevIso);
+        const prevArrivalStay = stintWithArrivalWindow(person, prevIso) || stintCovering(person, prevIso);
+        const prevPrelimDay = Boolean(
+          prevArrivalStay && isTentativeArrivalDay(prevArrivalStay, prevIso),
+        );
+        const prevInDraft =
+          Boolean(draftRange && prevIso >= draftRange.from && prevIso <= draftRange.to);
+        const continuousShade =
+          (returnWindow && prevReturnWindow) ||
+          (isPrelimDay && prevPrelimDay && !displaySite && !prevDisplaySite) ||
+          (Boolean(displaySite) &&
+            displaySite === prevDisplaySite &&
+            !returnWindow &&
+            !prevReturnWindow) ||
+          (inDraft &&
+            prevInDraft &&
+            (draftMode === "return" || draftMode === "arrival" || draftMode === "place"));
+        const arrivalPreviewStay =
+          arrivalPreview && draft
+            ? (draft.stayFrom
+                ? (person.stints || []).find((row) => row.from === draft.stayFrom) || null
+                : null) || stayForArrivalGesture(person, draftRange?.from || iso)
+            : null;
+        const arrivalPreviewSite = arrivalPreviewStay
+          ? worksiteFromMark(arrivalPreviewStay.site) || arrivalPreviewStay.site || null
+          : null;
         const stayDrag = draftMode === "extend" || draftMode === "moveIn";
         const extendPreview = inDraft && stayDrag;
         // Days this drag takes off the stay: faded until you let go.
@@ -636,8 +757,8 @@ const MonthRow = memo(function MonthRow({
                 plan: [
                   siteLabel(displaySite),
                   formatMedium(iso),
-                  isPrelimDay ? "Preliminary" : stintStart ? "IN" : "",
-                  stintEnd ? "OUT" : "",
+                  isPrelimDay ? "Planned arrival" : stintStart ? "Arrival" : "",
+                  stintEnd ? "Departure" : "",
                   arriveCaption ? `Arrive ${arriveCaption}` : "",
                   leaveCaption ? `Leave ${leaveCaption}` : "",
                   stayNote,
@@ -685,24 +806,42 @@ const MonthRow = memo(function MonthRow({
             onPointerLeave={() => actions.pointerLeave(person.id, iso)}
             className={cn(
               "relative flex h-11 min-w-0 items-center justify-center overflow-hidden border-l border-border text-[0.625rem] font-bold outline-none focus:outline-none focus-visible:outline-none",
-              // The blue month rule is drawn over this edge; no second thin line under it.
+              // Continuous stay / window: no white gutter — keep a hairline so columns still read.
+              // Month starts stay clear so the thick blue month rule is the only edge there.
               monthStartDay && "border-l-transparent",
+              !monthStartDay && continuousShade && "border-l-black/15",
               canEdit ? "cursor-cell select-none touch-none" : "cursor-pointer touch-pan-x touch-pan-y",
               !displaySite &&
                 !isTravelBox &&
                 !returnWindow &&
+                !isPrelimDay &&
                 !paintPreview &&
+                !arrivalPreview &&
                 weekend &&
                 "bg-muted/40",
               !displaySite &&
                 !isTravelBox &&
                 !returnWindow &&
+                !isPrelimDay &&
                 !paintPreview &&
+                !arrivalPreview &&
                 !weekend &&
                 monthIndex % 2 === 1 &&
                 "bg-sky-50/40",
               // Camp stays always use the legend IQA/POND/ALRT/KUG colours.
-              displaySite && !returnWindow && !paintPreview && siteTone(displaySite, siteList),
+              displaySite &&
+                !returnWindow &&
+                !paintPreview &&
+                !arrivalPreview &&
+                siteTone(displaySite, siteList),
+              // Planned arrival before Arrival: soft camp tint so the hatch reads on empty days.
+              !displaySite &&
+                isPrelimDay &&
+                prelimSite &&
+                !returnWindow &&
+                !paintPreview &&
+                !arrivalPreview &&
+                cn(siteTone(prelimSite, siteList), "opacity-70"),
               // Travel: destination camp colour when flying to a site; grey for hub/home.
               isTravelBox &&
                 !returnWindow &&
@@ -711,8 +850,8 @@ const MonthRow = memo(function MonthRow({
                   ? siteTone(travelCampColour, siteList)
                   : "bg-stone-500 text-white"),
               returnWindow && "bg-[#FFD600] text-stone-900",
-              // Preliminary arrival: shaded hatch, no IN / IN? text — Confirm sets the one IN.
-              isPrelimDay &&
+              // Planned arrival: dashed hatch — Confirm locks Arrival.
+              (isPrelimDay || arrivalPreview) &&
                 !paintPreview &&
                 "bg-[repeating-linear-gradient(-45deg,transparent,transparent_2px,rgba(0,0,0,0.14)_2px,rgba(0,0,0,0.14)_4px)] outline outline-2 outline-dashed outline-offset-[-2px] outline-stone-900/55",
               placePreview &&
@@ -722,6 +861,9 @@ const MonthRow = memo(function MonthRow({
                 paintBrush.kind === "travel" &&
                 "bg-stone-500/55 text-white ring-1 ring-inset ring-stone-700/50",
               returnPreview && "bg-[#FFD600]/80 text-stone-900 ring-1 ring-inset ring-amber-700/40",
+              arrivalPreview &&
+                (arrivalPreviewSite || prelimSite) &&
+                cn(siteTone(arrivalPreviewSite || prelimSite!, siteList), "opacity-75"),
               extendPreview && "bg-primary/25 text-foreground ring-1 ring-inset ring-primary/50",
               trimPreview && "opacity-25",
             )}
@@ -775,7 +917,7 @@ const MonthRow = memo(function MonthRow({
           {/* Full-stay banner so the note reads across the coloured boxes, not one day. */}
           <span
             title={row.note}
-            className="mx-0.5 flex h-[1.15rem] w-[calc(100%-0.25rem)] items-center overflow-hidden rounded bg-white/90 px-1.5 text-[10px] font-semibold leading-tight text-stone-900 shadow-sm"
+            className="flex h-[1.15rem] w-full items-center overflow-hidden bg-white/90 px-1.5 text-[10px] font-semibold leading-tight text-stone-900"
           >
             <span className="block w-full truncate">{row.note}</span>
           </span>
@@ -1679,18 +1821,22 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
 
   /** Stay under the open cell menu (so Add note can default to whole-stay). */
   function stayUnderCellMenu() {
-    if (!cellMenu?.hasSite) return null;
+    if (!cellMenu) return null;
     const person = peopleById.get(cellMenu.personId);
-    const stint = person ? stintCovering(person, cellMenu.iso) : null;
+    const stint = person ? stayForCellMenu(person, cellMenu.iso) : null;
     if (!stint) return null;
-    const out = stint.out || scheduleYearOutExclusive(year);
+    const out = exclusiveOutForStint(stint, year);
+    const onStay =
+      cellMenu.hasSite ||
+      (cellMenu.iso >= stint.from && cellMenu.iso <= stayLastInclusiveDay(stint, year));
+    if (!onStay) return null;
     const plan = roster ? findRotationPlanAt(roster, cellMenu.personId, stint.from) : null;
     const note = getStayNote(roster, cellMenu.personId, stint.from, out) || plan?.note || "";
     return {
       personId: cellMenu.personId,
       from: stint.from,
       out,
-      last: addDays(out, -1),
+      last: stayLastInclusiveDay(stint, year),
       planId: plan?.id || "",
       note,
     };
@@ -1812,6 +1958,50 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       showFlash(
         `Expected departure · ${formatMedium(range.from)} – ${formatMedium(range.to)}`,
       );
+      return;
+    }
+
+    if (active.mode === "arrival") {
+      setDraft(null);
+      if (!onSetStayTentative) return;
+      const person = peopleByIdRef.current.get(active.personId);
+      if (!person) return;
+      const stint =
+        (active.stayFrom
+          ? (person.stints || []).find((row) => row.from === active.stayFrom) || null
+          : null) || stayForArrivalGesture(person, active.anchor);
+      if (!stint) {
+        showFlash("* Paint near a stay Arrival (up to 3 weeks before).");
+        setStaySelection(null);
+        return;
+      }
+      // Click (no drag): window from that day through Arrival (or Arrival → click if later).
+      // Drag: paint exactly the days you cover — including days before Arrival.
+      const range = active.moved
+        ? orderedRange(active.start, active.end)
+        : arrivalWindowFromStayDay({
+            clickIso: active.anchor,
+            stayFrom: stint.from,
+            stayOutExclusive: stint.out || null,
+            seasonEnd: scheduleYearLastDay(year),
+            leadDays: PLANNED_ARRIVAL_LEAD_DAYS,
+          });
+      if (!range) {
+        showFlash("* Paint near a stay Arrival (up to 3 weeks before).");
+        setStaySelection(null);
+        return;
+      }
+      const window = clampArrivalWindow(stint, range.from, range.to);
+      onSetStayTentative(active.personId, stint.from, {
+        start: window.start,
+        through: window.through,
+      });
+      showFlash(
+        window.start !== window.through
+          ? `Planned arrival · ${formatMedium(window.start)} – ${formatMedium(window.through)}`
+          : `Planned arrival · ${formatMedium(window.start)}`,
+      );
+      setStaySelection(null);
       return;
     }
 
@@ -1994,7 +2184,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
     const person = peopleById.get(personId);
     if (!person) return;
     const hasSite = Boolean(siteOnDay(person, iso));
-    const stint = stintCovering(person, iso);
+    const stint = stayForCellMenu(person, iso);
     const plan = hasSite || stint ? planOnDay(personId, iso) : null;
     if (plan) selectPlan(plan, personId);
     else if (stint) selectStay(personId, stint.from, stint.out || scheduleYearOutExclusive(year));
@@ -2156,11 +2346,18 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       openTravelEditor(personId, iso);
       return;
     }
-    const camp = siteOnDay(person, iso) || campAhead(person, iso);
-    const stint = stintCovering(person, iso);
-    const last =
-      stint?.out && stint.out.length >= 10 ? addDays(stint.out, -1) : null;
-    const leaving = Boolean(last && iso === last);
+    const stint = stintCovering(person, iso) || stayForCellMenu(person, iso);
+    const last = stint ? stayLastInclusiveDay(stint, year) : null;
+    const leaving = Boolean(last && iso >= last);
+    const leaveCamp =
+      leaving && last
+        ? siteOnDay(person, last) ||
+          worksiteFromMark(stint?.site) ||
+          stint?.site ||
+          null
+        : null;
+    const camp =
+      siteOnDay(person, iso) || leaveCamp || campAhead(person, iso);
     if (leaving) {
       setJourneyPlanner({
         personId,
@@ -2230,6 +2427,43 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       setPickStayOut(null);
     }
 
+    // Planned arrival brush, or drag on an existing hatch — paint before/after Arrival.
+    if (paintBrushRef.current.kind === "arrival" || stintWithArrivalWindow(person, iso)) {
+      const stint = stayForArrivalGesture(person, iso);
+      if (!stint || !onSetStayTentative) {
+        if (paintBrushRef.current.kind === "arrival") {
+          showFlash("* Paint near a stay Arrival (up to 3 weeks before).");
+        }
+        return;
+      }
+      const curStart = tentativeArrivalFrom(stint) || iso;
+      const curEnd = tentativeArrivalThrough(stint) || iso;
+      const seed =
+        stint.tentative || stint.unsure
+          ? orderedRange(
+              iso < curStart ? iso : curStart,
+              iso > curEnd ? iso : curEnd,
+            )
+          : { from: iso, to: iso };
+      dragRef.current = {
+        personId,
+        anchor: iso,
+        start: seed.from,
+        end: seed.to,
+        mode: "arrival",
+        moved: false,
+        stayFrom: stint.from,
+      };
+      setDraft({
+        personId,
+        start: seed.from,
+        end: seed.to,
+        mode: "arrival",
+        stayFrom: stint.from,
+      });
+      return;
+    }
+
     if (siteOnDay(person, iso)) {
       if (paintBrushRef.current.kind === "travel") {
         // OUT day = leave day — paint Site → Home travel from here.
@@ -2238,7 +2472,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
           setDraft({ personId, start: iso, end: iso, mode: "place" });
           return;
         }
-        showFlash("* Choose empty days or the OUT day.");
+        showFlash("* Choose empty days or the Departure day.");
         return;
       }
       // OUT day that already has leave travel → edit the journey.
@@ -2295,6 +2529,38 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       if (to < from) to = from;
       dragRef.current = { ...active, start: from, end: to, moved: true };
       setDraft({ personId, start: from, end: to, mode: "return" });
+      autoScrollToward(iso);
+      return;
+    }
+
+    // Planned arrival: drag either edge — grow the current window (before Arrival and into stay).
+    if (active.mode === "arrival") {
+      const person = peopleById.get(personId);
+      const stint =
+        person && active.stayFrom
+          ? (person.stints || []).find((row) => row.from === active.stayFrom) || null
+          : person
+            ? stayForArrivalGesture(person, active.anchor)
+            : null;
+      if (!stint) return;
+      const lo = active.start <= active.end ? active.start : active.end;
+      const hi = active.start <= active.end ? active.end : active.start;
+      const expanded = orderedRange(iso < lo ? iso : lo, iso > hi ? iso : hi);
+      const window = clampArrivalWindow(stint, expanded.from, expanded.to);
+      dragRef.current = {
+        ...active,
+        start: window.start,
+        end: window.through,
+        moved: true,
+        stayFrom: stint.from,
+      };
+      setDraft({
+        personId,
+        start: window.start,
+        end: window.through,
+        mode: "arrival",
+        stayFrom: stint.from,
+      });
       autoScrollToward(iso);
       return;
     }
@@ -2464,7 +2730,25 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
             <button
               type="button"
               disabled={!canEdit}
-              title="Return"
+              title="Planned arrival — paint a window before and/or after Arrival (drag either way); Confirm locks the day"
+              onClick={() => setPaintBrush({ kind: "arrival" })}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 font-semibold transition-colors sm:px-2.5",
+                paintBrush.kind === "arrival"
+                  ? "border-stone-500 bg-stone-100 text-stone-900 ring-2 ring-inset ring-stone-500/40"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted",
+              )}
+            >
+              <span
+                className="size-2.5 rounded-sm border border-dashed border-stone-700 bg-[repeating-linear-gradient(-45deg,transparent,transparent_1px,rgba(0,0,0,0.25)_1px,rgba(0,0,0,0.25)_2px)]"
+                aria-hidden
+              />
+              Arrival
+            </button>
+            <button
+              type="button"
+              disabled={!canEdit}
+              title="Return — paint yellow booking window on stay days"
               onClick={() => setPaintBrush({ kind: "return" })}
               className={cn(
                 "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 font-semibold transition-colors sm:px-2.5",
@@ -2745,7 +3029,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                       return (
                         <div
                           key={`${person.id}::${group.role}`}
-                          className="flex h-11 items-stretch border-b border-border bg-card"
+                          className="flex h-11 items-stretch bg-card"
                         >
                           <div
                             className={cn("flex items-center overflow-hidden border-r border-border px-1.5", phone && "hidden")}
@@ -3081,39 +3365,31 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               const fly =
                 "absolute top-0 left-full z-10 ml-0.5 min-w-[11rem] rounded-lg border border-border bg-card py-1 shadow-xl";
               const person = peopleById.get(cellMenu.personId);
-              let stint = person ? stintCovering(person, cellMenu.iso) : null;
-              if (!stint && person) {
-                stint =
-                  (person.stints || [])
-                    .filter((s) => s.from > cellMenu.iso && s.from <= addDays(cellMenu.iso, 21))
-                    .sort((a, b) => a.from.localeCompare(b.from))[0] || null;
-              }
-              const stayLast = stint ? addDays(exclusiveOutForStint(stint, year), -1) : null;
+              const stint = person ? stayForCellMenu(person, cellMenu.iso) : null;
+              const stayLast = stint ? stayLastInclusiveDay(stint, year) : null;
               const onStayDay = Boolean(
                 stint && stayLast && cellMenu.iso >= stint.from && cellMenu.iso <= stayLast,
               );
               const isTentative = Boolean(stint && (stint.tentative || stint.unsure));
-              const click =
-                stint && stayLast
-                  ? cellMenu.iso > stayLast
-                    ? stayLast
-                    : cellMenu.iso
-                  : cellMenu.iso;
+              const click = cellMenu.iso;
               const curStart =
                 (stint && isTentative && tentativeArrivalFrom(stint)) || stint?.from || click;
               const curEnd =
                 (stint && isTentative && tentativeArrivalThrough(stint)) || stint?.from || click;
+              // Expand existing window, or seed from click ↔ Arrival — may start before Arrival.
               let applyStart = click < curStart ? click : curStart;
               let applyEnd = click > curEnd ? click : curEnd;
               if (stint && !isTentative) {
                 applyStart = click < stint.from ? click : stint.from;
                 applyEnd = click > stint.from ? click : stint.from;
               }
-              if (stayLast && applyEnd > stayLast) applyEnd = stayLast;
-              if (applyStart > applyEnd) applyStart = applyEnd;
+              if (stint) {
+                const clamped = clampArrivalWindow(stint, applyStart, applyEnd);
+                applyStart = clamped.start;
+                applyEnd = clamped.through;
+              }
 
-              const lastInclusive =
-                stint?.out && stint.out.length >= 10 ? addDays(stint.out, -1) : null;
+              const lastInclusive = stayLast;
               const isIn = Boolean(stint && cellMenu.iso === stint.from);
               const isOut = Boolean(lastInclusive && cellMenu.iso === lastInclusive);
               const hasTravel =
@@ -3298,13 +3574,20 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                     <div className="relative">
                       <Parent id="arrival" label="Planned arrival window" />
                       <Flyout id="arrival">
-                        {isTentative && onStayDay && (onConfirmStayArrival || onSetStayTentative) ? (
+                        {isTentative && (onConfirmStayArrival || onSetStayTentative) ? (
                           <Sub
-                            label={`Confirm date · ${formatMedium(click < stint.from ? stint.from : click)}`}
-                            onPick={() => {
-                              const confirmedIn =
-                                click < stint.from
+                            label={`Confirm arrival · ${formatMedium(
+                              stayLast && click > stayLast
+                                ? stayLast
+                                : click < addDays(stint.from, -PLANNED_ARRIVAL_LEAD_DAYS)
                                   ? stint.from
+                                  : click,
+                            )}`}
+                            onPick={() => {
+                              const earliest = addDays(stint.from, -PLANNED_ARRIVAL_LEAD_DAYS);
+                              const confirmedIn =
+                                click < earliest
+                                  ? earliest
                                   : stayLast && click > stayLast
                                     ? stayLast
                                     : click;
@@ -3313,24 +3596,26 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                               } else if (onSetStayTentative) {
                                 onSetStayTentative(cellMenu.personId, stint.from, false);
                               }
-                              showFlash(`Confirmed · IN ${formatMedium(confirmedIn)}`);
+                              showFlash(`Confirmed · Arrival ${formatMedium(confirmedIn)}`);
                             }}
                           />
                         ) : null}
                         {onSetStayTentative ? (
                           <Sub
-                            label="Add to window"
+                            label={
+                              isTentative
+                                ? "Add day to window"
+                                : "Set planned arrival"
+                            }
                             onPick={() => {
-                              const windowStart =
-                                applyStart < stint.from ? stint.from : applyStart;
                               onSetStayTentative(cellMenu.personId, stint.from, {
                                 through: applyEnd,
-                                start: windowStart,
+                                start: applyStart,
                               });
                               showFlash(
-                                windowStart !== applyEnd
-                                  ? `Arrival · ${formatMedium(windowStart)} – ${formatMedium(applyEnd)}`
-                                  : `Arrival · ${formatMedium(windowStart)}`,
+                                applyStart !== applyEnd
+                                  ? `Planned arrival · ${formatMedium(applyStart)} – ${formatMedium(applyEnd)}`
+                                  : `Planned arrival · ${formatMedium(applyStart)}`,
                               );
                             }}
                           />

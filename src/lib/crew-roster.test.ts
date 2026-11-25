@@ -120,30 +120,31 @@ describe("crew-roster rotation plans", () => {
     expect(confirmed.rotationPlans.p1?.[0]?.tentative).toBeUndefined();
   });
 
-  it("setStayTentative window grows earlier and later without moving IN", () => {
+  it("setStayTentative window grows earlier and later without moving Arrival", () => {
     const placed = addNextRotation(emptyRoster(), "p1", {
       site: "IQA",
-      from: "2027-01-05",
-      out: "2027-01-20",
+      from: "2027-10-01",
+      out: "2027-10-11",
     });
-    const back = setStayTentative(placed, "p1", "2027-01-05", { through: "2027-01-08" });
-    expect(back.rotationPlans.p1?.[0]?.from).toBe("2027-01-05");
-    expect(back.rotationPlans.p1?.[0]?.tentativeThrough).toBe("2027-01-08");
-    // Earlier day before IN is clamped — IN stays put; window grows later.
-    const both = setStayTentative(back, "p1", "2027-01-05", {
-      start: "2027-01-02",
-      through: "2027-01-10",
+    const back = setStayTentative(placed, "p1", "2027-10-01", { through: "2027-10-03" });
+    expect(back.rotationPlans.p1?.[0]?.from).toBe("2027-10-01");
+    expect(back.rotationPlans.p1?.[0]?.tentativeThrough).toBe("2027-10-03");
+    // Before Arrival (Sep 29) through after Arrival (Oct 3) — Arrival stays put.
+    const both = setStayTentative(back, "p1", "2027-10-01", {
+      start: "2027-09-29",
+      through: "2027-10-03",
     });
-    expect(both.rotationPlans.p1?.[0]?.from).toBe("2027-01-05");
-    expect(both.rotationPlans.p1?.[0]?.tentativeThrough).toBe("2027-01-10");
-    // Inside the stay: window start can sit after IN.
-    const mid = setStayTentative(both, "p1", "2027-01-05", {
-      start: "2027-01-06",
-      through: "2027-01-10",
+    expect(both.rotationPlans.p1?.[0]?.from).toBe("2027-10-01");
+    expect(both.rotationPlans.p1?.[0]?.tentativeFrom).toBe("2027-09-29");
+    expect(both.rotationPlans.p1?.[0]?.tentativeThrough).toBe("2027-10-03");
+    // Window start can also sit after Arrival.
+    const mid = setStayTentative(both, "p1", "2027-10-01", {
+      start: "2027-10-02",
+      through: "2027-10-05",
     });
-    expect(mid.rotationPlans.p1?.[0]?.from).toBe("2027-01-05");
-    expect(mid.rotationPlans.p1?.[0]?.tentativeFrom).toBe("2027-01-06");
-    expect(mid.rotationPlans.p1?.[0]?.tentativeThrough).toBe("2027-01-10");
+    expect(mid.rotationPlans.p1?.[0]?.from).toBe("2027-10-01");
+    expect(mid.rotationPlans.p1?.[0]?.tentativeFrom).toBe("2027-10-02");
+    expect(mid.rotationPlans.p1?.[0]?.tentativeThrough).toBe("2027-10-05");
   });
 
   it("confirmStayArrival locks IN and clears tentative window", () => {

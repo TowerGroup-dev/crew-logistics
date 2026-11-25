@@ -752,7 +752,10 @@ export function latestRotationForPerson(book: RotationBook, personId: string) {
 
 export type RotationReadiness = {
   travelOutbound: boolean;
+  /** True only when return travel is actually booked/confirmed — never faked. */
   travelReturn: boolean;
+  /** Return booking is expected now (≈4 weeks in or leave soon). */
+  returnDue: boolean;
   stay: boolean;
   replacement: "assigned" | "missing" | "n/a";
   handover: "planned" | "not_planned" | "n/a";
@@ -767,8 +770,8 @@ export function rotationDayNumber(rotation: CrewRotation, asOf: string) {
 }
 
 export function daysLeftOnRotation(rotation: CrewRotation, asOf: string) {
-  const endInclusive = addDays(rotation.plannedOut, -1);
-  return daysBetween(asOf, endInclusive);
+  // Same end date the UI shows as Departure (season-clamped), not raw plannedOut − 1.
+  return daysBetween(asOf, inclusiveOut(rotation));
 }
 
 export function evaluateReadiness(
@@ -783,8 +786,9 @@ export function evaluateReadiness(
   const returnDue = day >= thresholds.returnBookDay || left <= thresholds.planDays;
 
   // Booked = confirmed, or real booking details on file (same rule as the Travel tab).
+  // Never mark return "Booked" just because it is not due yet — that lied on Overview.
   const travelOutbound = rotation.outbound.confirmed || travelIsBooked(rotation.outbound);
-  const travelReturn = !returnDue ? true : rotation.returnTravel.confirmed || travelIsBooked(rotation.returnTravel);
+  const travelReturn = rotation.returnTravel.confirmed || travelIsBooked(rotation.returnTravel);
   const stay = rotation.stay.confirmed;
   const replacement: RotationReadiness["replacement"] = endingSoon
     ? rotation.replacedByRotationId
@@ -818,7 +822,7 @@ export function evaluateReadiness(
   // A stay that has already ended can't be "at risk"; at most it has gaps on record.
   if (!onOrUpcoming && overall === "at_risk") overall = "incomplete";
 
-  return { travelOutbound, travelReturn, stay, replacement, handover, overall };
+  return { travelOutbound, travelReturn, returnDue, stay, replacement, handover, overall };
 }
 
 export type ChecklistItem = {

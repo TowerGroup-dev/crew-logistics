@@ -101,7 +101,7 @@ export type CrewStint = {
   unsure?: boolean;
 };
 
-/** Inclusive first day of a preliminary arrival window, or null when not tentative. */
+/** Inclusive first day of a planned-arrival window, or null when not tentative. May be before Arrival. */
 export function tentativeArrivalFrom(stint: {
   from: string;
   tentative?: boolean;
@@ -111,7 +111,7 @@ export function tentativeArrivalFrom(stint: {
 }): string | null {
   if (!stint.tentative && !stint.unsure) return null;
   const start = stint.tentativeFrom?.slice(0, 10);
-  if (start && start >= stint.from) return start;
+  if (start && start.length >= 10) return start;
   return stint.from.slice(0, 10);
 }
 

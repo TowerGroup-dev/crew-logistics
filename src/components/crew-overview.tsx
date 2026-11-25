@@ -41,7 +41,7 @@ import {
   unmarkChecklistDone,
   type ChecklistDoneBook,
 } from "@/lib/crew-checklist-done";
-import { daysBetween, formatShort, parseISODate } from "@/lib/dates";
+import { daysBetween, formatShort, parseISODate, todayInZone } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 function emptyDoneSafe() {
@@ -195,13 +195,20 @@ export function CrewOverview({
   onOpenPerson: (personId: string) => void;
   onOpenRotation: (rotationId: string) => void;
 }) {
-  const [horizon, setHorizon] = useState<14 | 30>(14);
+  const today = todayInZone();
+  // Future year (e.g. 2027 while still in 2026): planning desk, not a live ops day.
+  const planning = asOf > today;
+  const [horizon, setHorizon] = useState<14 | 30>(planning ? 30 : 14);
   const [onSiteOpen, setOnSiteOpen] = useState(false);
   const [doneBook, setDoneBook] = useState<ChecklistDoneBook>(() => emptyDoneSafe());
 
   useEffect(() => {
     setDoneBook(loadChecklistDone());
   }, []);
+
+  useEffect(() => {
+    setHorizon(planning ? 30 : 14);
+  }, [planning]);
 
   const thresholds = useMemo(
     () => ({
@@ -212,9 +219,22 @@ export function CrewOverview({
     [reminders?.escalateDays, reminders?.planDays],
   );
 
+  const planningYear = planning ? Number(asOf.slice(0, 4)) : null;
+
   const data = useMemo(
-    () => buildOverview({ rows, book: rotationBook, asOf, horizonDays: horizon, thresholds, opsBook }),
-    [asOf, horizon, opsBook, rotationBook, rows, thresholds],
+    () =>
+      buildOverview({
+        rows,
+        book: rotationBook,
+        asOf,
+        horizonDays: horizon,
+        thresholds,
+        opsBook,
+        includeArrivalDay: planning,
+        planningYear,
+        clockAsOf: planning ? today : asOf,
+      }),
+    [asOf, horizon, opsBook, planning, planningYear, rotationBook, rows, thresholds, today],
   );
 
   const confirmedTentativeIds = useMemo(() => {
@@ -226,8 +246,16 @@ export function CrewOverview({
   }, [doneBook]);
 
   const weekStory = useMemo(
-    () => buildWeekStory({ rows, book: rotationBook, asOf, opsBook, confirmedTentativeIds }),
-    [asOf, confirmedTentativeIds, opsBook, rotationBook, rows],
+    () =>
+      buildWeekStory({
+        rows,
+        book: rotationBook,
+        asOf,
+        opsBook,
+        confirmedTentativeIds,
+        planningYear,
+      }),
+    [asOf, confirmedTentativeIds, opsBook, planningYear, rotationBook, rows],
   );
 
   const openCount = useMemo(() => {
@@ -258,76 +286,143 @@ export function CrewOverview({
     });
   }
 
+  const year = Number(asOf.slice(0, 4));
+  const asOfLabel = (() => {
+    try {
+      return new Date(`${asOf}T12:00:00`).toLocaleDateString("en-CA", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+    } catch {
+      return asOf;
+    }
+  })();
+
+  const hasMovement = data.arriving.length + data.leaving.length > 0;
+  const hasStory = weekStory.lines.length > 0;
+  const hasOnSite = data.onSite.length > 0;
+  const planningEmpty = planning && !hasStory && !hasMovement && !hasOnSite && openCount === 0;
+
   const onSitePanel = (
     <Panel
-      title="On site now"
+      title={planning ? "On site" : "On site now"}
       accent="sky"
       expanded={onSiteOpen}
       onExpandedChange={setOnSiteOpen}
-      aside={`${data.onSite.length} people · soonest departures first`}
+      aside={
+        hasOnSite
+          ? `${data.onSite.length} people · soonest departures first`
+          : planning
+            ? "Season not started"
+            : "Nobody on site"
+      }
     >
-      <OnSiteTable rows={data.onSite} onOpen={open} />
+      <OnSiteTable
+        rows={data.onSite}
+        onOpen={open}
+        emptyLabel={
+          planning
+            ? "Nobody on site yet — the season has not started."
+            : "Nobody on site right now."
+        }
+      />
     </Panel>
   );
 
   return (
-    <div className="space-y-10">
-      <div className="grid items-start gap-8 xl:grid-cols-2">
-        <div className="space-y-8">
+    <div className="space-y-8">
+      <header className="min-w-0">
+        <p className="text-base font-semibold tracking-tight text-foreground">{asOfLabel}</p>
+        {openCount ? (
+          <p className="mt-0.5 text-sm text-muted-foreground">{openCount} open</p>
+        ) : null}
+      </header>
+
+      {planningEmpty ? (
+        <section className="rounded-xl border border-border/60 bg-card px-6 py-10 sm:px-8">
+          <p className="font-heading text-xl tracking-tight text-foreground">No stays placed yet</p>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            {year} is a planning year. Place arrivals and departures on Month, then Overview
+            will show the first wave of flights, confirmations, and who is due on site.
+          </p>
+          <p className="mt-4 text-sm text-muted-foreground">
+            Use Arrival / Return paint and Departure location the same way as {today.slice(0, 4)}.
+          </p>
+        </section>
+      ) : (
+        <div className="grid items-start gap-6 xl:grid-cols-2">
+          <div className="space-y-6">
+            <Panel
+              title={planning ? "Season start" : "This week"}
+              accent="sky"
+              defaultOpen
+              aside={`${formatShort(weekStory.weekStart)} – ${formatShort(weekStory.weekEnd)}`}
+            >
+              <WeekStoryList
+                lines={weekStory.lines}
+                planning={planning}
+                onOpen={(line) => {
+                  if (line.personId) open(line.rotationId, line.personId);
+                }}
+              />
+            </Panel>
+
+            <Panel
+              title="Flights"
+              accent="indigo"
+              defaultOpen={planning || hasMovement}
+              aside={
+                <span className="inline-flex rounded-md bg-muted p-0.5">
+                  {([14, 30] as const).map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => setHorizon(days)}
+                      className={cn(
+                        "rounded px-2.5 py-1 text-xs font-medium transition",
+                        horizon === days
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {days}d
+                    </button>
+                  ))}
+                </span>
+              }
+            >
+              <Movement
+                arriving={data.arriving}
+                leaving={data.leaving}
+                onOpen={onOpenRotation}
+                planning={planning}
+              />
+            </Panel>
+
+            {!onSiteOpen ? onSitePanel : null}
+          </div>
+
           <Panel
-            title="This week"
-            accent="sky"
+            title="To do"
+            accent="amber"
             defaultOpen
-            aside={`${formatShort(weekStory.weekStart)} – ${formatShort(weekStory.weekEnd)}`}
+            aside={openCount ? `${openCount} open` : "None open"}
           >
-            <WeekStoryList
-              lines={weekStory.lines}
-              onOpen={(line) => {
-                if (line.personId) open(line.rotationId, line.personId);
-              }}
+            <ActionList
+              groups={data.groups}
+              asOf={data.clockAsOf}
+              doneBook={doneBook}
+              onToggleDone={toggleDone}
+              onOpen={onOpenRotation}
+              planning={planning}
             />
           </Panel>
-
-          <Panel
-            title="Flights"
-            accent="indigo"
-            defaultOpen={false}
-            aside={
-              <span className="inline-flex rounded-md bg-muted p-0.5">
-                {([14, 30] as const).map((days) => (
-                  <button
-                    key={days}
-                    type="button"
-                    onClick={() => setHorizon(days)}
-                    className={cn(
-                      "rounded px-2.5 py-1 text-xs font-medium transition",
-                      horizon === days ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {days}d
-                  </button>
-                ))}
-              </span>
-            }
-          >
-            <Movement arriving={data.arriving} leaving={data.leaving} onOpen={onOpenRotation} />
-          </Panel>
-
-          {!onSiteOpen ? onSitePanel : null}
         </div>
+      )}
 
-        <Panel title="To do" accent="amber" defaultOpen aside={openCount ? `${openCount} open` : "None open"}>
-          <ActionList
-            groups={data.groups}
-            asOf={asOf}
-            doneBook={doneBook}
-            onToggleDone={toggleDone}
-            onOpen={onOpenRotation}
-          />
-        </Panel>
-      </div>
-
-      {onSiteOpen ? onSitePanel : null}
+      {!planningEmpty && onSiteOpen ? onSitePanel : null}
     </div>
   );
 }
@@ -366,7 +461,7 @@ function Panel({
         grow && expanded && "border-amber-300 shadow-sm ring-1 ring-amber-200/70",
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 px-5 py-4">
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
@@ -589,38 +684,44 @@ function ReminderWindow({
 function weekKindLabel(kind: WeekStoryLine["kind"]) {
   switch (kind) {
     case "arriving":
-      return "Arrive";
+      return "Arrival";
     case "leaving":
-      return "Leave";
+      return "Departure";
     case "travelling":
       return "Travel";
     case "move":
       return "Move";
     case "here":
-      return "Here";
+      return "On site";
     case "flight":
       return "Flight";
     case "stay":
       return "Stay";
+    case "confirm":
+      return "Confirm";
   }
 }
 
 function WeekStoryList({
   lines,
   onOpen,
+  planning = false,
 }: {
   lines: WeekStoryLine[];
   onOpen: (line: WeekStoryLine) => void;
+  planning?: boolean;
 }) {
   if (!lines.length) {
     return (
       <p className="px-4 py-7 text-sm text-muted-foreground">
-        No arrivals, departures, or people on site in this window.
+        {planning
+          ? "No arrivals or departures in the opening week yet."
+          : "No arrivals, departures, or people on site in this window."}
       </p>
     );
   }
   return (
-    <ul className="divide-y divide-border">
+    <ul>
       {lines.map((line) => (
         <li key={line.id}>
           <button
@@ -634,7 +735,7 @@ function WeekStoryList({
           >
             <span
               className={cn(
-                "mt-0.5 w-14 shrink-0 text-xs font-semibold tracking-wide uppercase",
+                "mt-0.5 w-[4.75rem] shrink-0 text-xs font-semibold tracking-wide uppercase",
                 line.kind === "here" && "text-emerald-700",
                 line.kind === "arriving" && "text-teal-700",
                 line.kind === "leaving" && "text-indigo-700",
@@ -642,6 +743,7 @@ function WeekStoryList({
                 line.kind === "move" && "text-sky-700",
                 line.kind === "flight" && "text-rose-700",
                 line.kind === "stay" && "text-orange-700",
+                line.kind === "confirm" && "text-amber-800",
               )}
             >
               {weekKindLabel(line.kind)}
@@ -662,12 +764,14 @@ function ActionList({
   doneBook,
   onToggleDone,
   onOpen,
+  planning = false,
 }: {
   groups: ActionGroup[];
   asOf: string;
   doneBook: ChecklistDoneBook;
   onToggleDone: (id: string) => void;
   onOpen: (rotationId: string) => void;
+  planning?: boolean;
 }) {
   const visible = groups
     .map((group) => {
@@ -683,12 +787,15 @@ function ActionList({
   if (!visible.length) {
     return (
       <p className="flex items-center gap-2 px-4 py-7 text-sm text-muted-foreground">
-        <CircleCheck className="size-4" /> All caught up. Flights and rooms are covered.
+        <CircleCheck className="size-4" />{" "}
+        {planning
+          ? "Nothing to book yet — place stays first."
+          : "All caught up. Flights and rooms are covered."}
       </p>
     );
   }
   return (
-    <div className="divide-y divide-border">
+    <div>
       {visible.map((group) => (
         <ActionGroupBlock
           key={group.key}
@@ -746,7 +853,7 @@ function ActionGroupBlock({
         <ChevronDown className={cn("size-4 text-muted-foreground transition", !expanded && "-rotate-90")} />
       </button>
       {expanded ? (
-        <ul className="divide-y divide-border border-t border-border/70">
+        <ul className="border-t border-border/50">
           {items.map((item) => (
             <ActionRow
               key={item.id}
@@ -832,8 +939,16 @@ function ActionRow({
 
 /* ---------- On site ---------- */
 
-function OnSiteTable({ rows, onOpen }: { rows: OnSiteRow[]; onOpen: (rotationId: string | null, personId: string) => void }) {
-  if (!rows.length) return <p className="px-4 py-7 text-sm text-muted-foreground">Nobody on site right now.</p>;
+function OnSiteTable({
+  rows,
+  onOpen,
+  emptyLabel = "Nobody on site right now.",
+}: {
+  rows: OnSiteRow[];
+  onOpen: (rotationId: string | null, personId: string) => void;
+  emptyLabel?: string;
+}) {
+  if (!rows.length) return <p className="px-4 py-7 text-sm text-muted-foreground">{emptyLabel}</p>;
   const cols =
     "lg:grid-cols-[minmax(11rem,1.3fr)_minmax(4.5rem,0.65fr)_minmax(7.5rem,1fr)_minmax(7.5rem,1fr)_minmax(6.5rem,0.8fr)_minmax(6.5rem,0.8fr)_minmax(6.5rem,0.8fr)]";
   return (
@@ -848,11 +963,11 @@ function OnSiteTable({ rows, onOpen }: { rows: OnSiteRow[]; onOpen: (rotationId:
         <span>Location</span>
         <span>Time in</span>
         <span>To go</span>
-        <span>Flight in</span>
-        <span>Flight home</span>
-        <span>Room</span>
+        <span>Outbound</span>
+        <span>Return</span>
+        <span>Stay</span>
       </div>
-      <ul className="divide-y divide-border">
+      <ul>
         {rows.map((row) => (
           <li key={row.personId}>
             <button
@@ -878,13 +993,13 @@ function OnSiteTable({ rows, onOpen }: { rows: OnSiteRow[]; onOpen: (rotationId:
               </Labelled>
               <TimeIn row={row} />
               <ToGo row={row} />
-              <Labelled label="Flight in">
+              <Labelled label="Outbound">
                 <Mark state={row.flightToSite} />
               </Labelled>
-              <Labelled label="Flight home">
+              <Labelled label="Return">
                 <Mark state={row.flightHome} />
               </Labelled>
-              <Labelled label="Room">
+              <Labelled label="Stay">
                 <Mark state={row.stay} />
               </Labelled>
             </button>
@@ -916,21 +1031,29 @@ function TimeIn({ row }: { row: OnSiteRow }) {
       <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-muted">
         <span className="block h-full rounded-full bg-emerald-600" style={{ width: `${pct}%` }} />
       </span>
-      {row.inSince ? <span className="mt-1 block text-xs text-muted-foreground">In {shortDate(row.inSince)}</span> : null}
+      {row.inSince ? (
+        <span className="mt-1 block text-xs text-muted-foreground">Arrival {shortDate(row.inSince)}</span>
+      ) : null}
     </span>
   );
 }
 
 function ToGo({ row }: { row: OnSiteRow }) {
-  if (row.daysLeft == null) return <span className="text-sm text-muted-foreground">No out date</span>;
+  if (row.daysLeft == null) {
+    return <span className="text-sm text-muted-foreground">No departure date</span>;
+  }
   const left = row.daysLeft;
   return (
     <span className="min-w-0">
       <span className={cn("text-sm tabular-nums", left <= 7 ? "font-semibold" : "")}>
-        {left < 0 ? `${plural(-left, "day")} over` : left === 0 ? "Leaves today" : `${plural(left, "day")} left`}
+        {left < 0
+          ? `${plural(-left, "day")} over`
+          : left === 0
+            ? "Departs today"
+            : `${plural(left, "day")} left`}
       </span>
       <span className="mt-1 block text-xs text-muted-foreground">
-        {row.outDate ? `Out ${shortDate(row.outDate)}` : ""}
+        {row.outDate ? `Departure ${shortDate(row.outDate)}` : ""}
         {row.replacement
           ? ` · ${row.replacement}`
           : row.needsReplacement
@@ -973,25 +1096,33 @@ function Movement({
   arriving,
   leaving,
   onOpen,
+  planning = false,
 }: {
   arriving: ArrivingRow[];
   leaving: LeavingRow[];
   onOpen: (rotationId: string) => void;
+  planning?: boolean;
 }) {
   if (!arriving.length && !leaving.length) {
-    return <p className="px-4 py-7 text-sm text-muted-foreground">Nobody arriving or leaving in this window.</p>;
+    return (
+      <p className="px-4 py-7 text-sm text-muted-foreground">
+        {planning
+          ? "No arrivals or departures in this planning window yet."
+          : "Nobody arriving or leaving in this window."}
+      </p>
+    );
   }
   const whenText = (days: number) => (days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`);
   return (
     <div className="grid md:grid-cols-2">
       <div className="border-b border-border md:border-r md:border-b-0">
-        <p className="flex items-center gap-2 border-b border-border bg-teal-50/60 px-4 py-2.5 text-xs font-semibold tracking-wide text-teal-950 uppercase">
+        <p className="flex items-center gap-2 border-b border-border/60 bg-teal-50/60 px-4 py-2.5 text-xs font-semibold tracking-wide text-teal-950 uppercase">
           <PlaneLanding className="size-3.5 text-teal-700" />
-          Arriving
+          Arrivals
           <span className="ml-auto tabular-nums text-teal-800/80">{arriving.length}</span>
         </p>
         {arriving.length ? (
-          <ul className="divide-y divide-border">
+          <ul>
             {arriving.map((row) => (
               <li key={row.rotationId}>
                 <button
@@ -1013,17 +1144,17 @@ function Movement({
             ))}
           </ul>
         ) : (
-          <p className="px-4 py-4 text-sm text-muted-foreground">None arriving</p>
+          <p className="px-4 py-4 text-sm text-muted-foreground">No arrivals</p>
         )}
       </div>
       <div>
-        <p className="flex items-center gap-2 border-b border-border bg-indigo-50/60 px-4 py-2.5 text-xs font-semibold tracking-wide text-indigo-950 uppercase">
+        <p className="flex items-center gap-2 border-b border-border/60 bg-indigo-50/60 px-4 py-2.5 text-xs font-semibold tracking-wide text-indigo-950 uppercase">
           <PlaneTakeoff className="size-3.5 text-indigo-700" />
-          Leaving
+          Departures
           <span className="ml-auto tabular-nums text-indigo-800/80">{leaving.length}</span>
         </p>
         {leaving.length ? (
-          <ul className="divide-y divide-border">
+          <ul>
             {leaving.map((row) => (
               <li key={row.rotationId}>
                 <button
@@ -1043,7 +1174,7 @@ function Movement({
                           : " · No replacement needed"}
                     </span>
                   </span>
-                  <Labelled label="Home">
+                  <Labelled label="Return">
                     <Mark state={row.flightHome} />
                   </Labelled>
                 </button>
@@ -1051,7 +1182,7 @@ function Movement({
             ))}
           </ul>
         ) : (
-          <p className="px-4 py-4 text-sm text-muted-foreground">None leaving</p>
+          <p className="px-4 py-4 text-sm text-muted-foreground">No departures</p>
         )}
       </div>
     </div>

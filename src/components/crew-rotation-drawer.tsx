@@ -2,11 +2,10 @@
 
 import { movesOnCalendar } from "@/lib/crew-site-days";
 import { CrewTripForm } from "@/components/crew-trip-form";
-import { useEffect, useMemo, useState } from "react";
-import { BedDouble, PlaneLanding, PlaneTakeoff, Plus, Repeat, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { BedDouble, PlaneLanding, PlaneTakeoff, Plus, Trash2, X } from "lucide-react";
 import { roleLabel, scheduleYearOutExclusive, type CrewPerson } from "@/lib/crew-schedule";
 import {
-  daysLeftOnRotation,
   emptyStay,
   emptyTravel,
   evaluateReadiness,
@@ -38,7 +37,7 @@ import {
   type CrewRosterBook,
 } from "@/lib/crew-roster";
 import { type CrewPersonOps } from "@/lib/crew-ops";
-import { addDays, dayCountLabel, daysBetween, formatMedium } from "@/lib/dates";
+import { addDays, dayCountLabel, daysBetween, formatMedium, todayInZone } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 export function CrewRotationDrawer({
@@ -95,9 +94,12 @@ export function CrewRotationDrawer({
   const [extendOut, setExtendOut] = useState(() => inclusiveOut(rotation));
 
   const readiness = useMemo(() => evaluateReadiness(draft, asOf), [asOf, draft]);
-  const day = rotationDayNumber(draft, asOf);
-  const left = daysLeftOnRotation(draft, asOf);
+  // Days left / progress follow the real calendar day, not board asOf (which can be
+  // Jan 1 / Dec 31 when browsing another year — that made Dec 18 look “ago” early).
+  const clockToday = todayInZone();
   const outInclusive = inclusiveOut(draft);
+  const day = rotationDayNumber(draft, clockToday);
+  const left = daysBetween(clockToday, outInclusive);
   const stayDays = Math.max(1, daysBetween(draft.plannedIn, outInclusive) + 1);
   const replacement = draft.replacedByRotationId
     ? book.rotations.find((row) => row.id === draft.replacedByRotationId) ?? null
@@ -154,7 +156,7 @@ export function CrewRotationDrawer({
                 ["overview", "Overview", null],
                 ["travel", "Travel", "plane"],
                 ["stay", "Stay", "bed"],
-                ["replacement", "Schedule changes", null],
+                ["replacement", "Schedule Changes", null],
               ] as const
             ).map(([id, label, icon]) => (
               <button
@@ -188,9 +190,20 @@ export function CrewRotationDrawer({
                 <Fact label="Duration" value={dayCountLabel(draft.rotationDays)} />
                 <Fact
                   label="Progress"
-                  value={day > 0 && left >= 0 ? `Day ${day}/${draft.rotationDays} · ${left}d left` : left < 0 ? "Ended" : "Not started"}
+                  value={
+                    day > 0 && left >= 0
+                      ? `Day ${day}/${draft.rotationDays} · ${left}d left`
+                      : left < 0
+                        ? "Ended"
+                        : "Not started"
+                  }
                 />
               </dl>
+              <StayHappenings
+                rotation={draft}
+                outInclusive={outInclusive}
+                readiness={readiness}
+              />
               <StayNoteField
                 person={person}
                 rotation={draft}
@@ -205,72 +218,42 @@ export function CrewRotationDrawer({
                 done={draft.todoDone ?? []}
                 onToggle={(id) => {
                   const current = draft.todoDone ?? [];
-                  commit({ ...draft, todoDone: current.includes(id) ? current.filter((row) => row !== id) : [...current, id] });
+                  commit({
+                    ...draft,
+                    todoDone: current.includes(id)
+                      ? current.filter((row) => row !== id)
+                      : [...current, id],
+                  });
                 }}
               />
             </div>
           ) : null}
 
           {section === "travel" ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTravelDir("outbound")}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition",
-                    travelDir === "outbound"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border hover:bg-muted",
-                  )}
-                >
-                  <PlaneTakeoff className="size-4 shrink-0" />
-                  <span className="min-w-0">
-                    <span className="block">Outbound</span>
-                    <span className={cn("block text-xs font-normal", travelDir === "outbound" ? "text-primary-foreground/80" : "text-muted-foreground")}>
-                      {tripLabel(draft.outbound)}
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTravelDir("moves")}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition",
-                    travelDir === "moves"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border hover:bg-muted",
-                  )}
-                >
-                  <Repeat className="size-4 shrink-0" />
-                  <span className="min-w-0">
-                    <span className="block">Site transfers</span>
-                    <span className={cn("block text-xs font-normal", travelDir === "moves" ? "text-primary-foreground/80" : "text-muted-foreground")}>
-                      {(draft.moves?.length ?? 0) + suggestedMoves.length
-                        ? `${(draft.moves?.length ?? 0) + suggestedMoves.length} planned`
-                        : "None"}
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTravelDir("return")}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition",
-                    travelDir === "return"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border hover:bg-muted",
-                  )}
-                >
-                  <PlaneLanding className="size-4 shrink-0" />
-                  <span className="min-w-0">
-                    <span className="block">Inbound</span>
-                    <span className={cn("block text-xs font-normal", travelDir === "return" ? "text-primary-foreground/80" : "text-muted-foreground")}>
-                      {tripLabel(draft.returnTravel)}
-                    </span>
-                  </span>
-                </button>
-              </div>
+            <div className="space-y-6">
+              <nav className="flex gap-5 overflow-x-auto border-b border-border text-sm">
+                {(
+                  [
+                    ["outbound", "Coming to Site"],
+                    ["return", "Going Home"],
+                    ["moves", "Site Transfers"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setTravelDir(id)}
+                    className={cn(
+                      "-mb-px border-b-2 pb-2 font-medium whitespace-nowrap transition",
+                      travelDir === id
+                        ? "border-primary text-foreground"
+                        : "border-transparent text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </nav>
               {travelDir === "moves" ? (
                 <MovesPanel
                   moves={draft.moves ?? []}
@@ -324,63 +307,71 @@ export function CrewRotationDrawer({
           ) : null}
 
           {section === "stay" ? (
-            <div className="space-y-4">
-              <div className="flex items-start gap-3 rounded-lg border border-border px-3 py-3">
-                <BedDouble className="mt-0.5 size-5 shrink-0 text-primary" />
-                <div>
-                  <p className="font-medium">Stay · {draft.stay.confirmed ? "Booked" : "Not booked"}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Accommodation covers the whole stay and is confirmed once for these dates.
-                  </p>
-                </div>
-              </div>
-              <StayForm
-                value={{
-                  ...draft.stay,
-                  checkIn: draft.plannedIn,
-                  checkOut: outInclusive,
-                }}
-                sites={siteOptions}
-                onChange={patchStay}
-              />
+            <div className="space-y-6">
+              <SectionBlock
+                title="Stay"
+                trailing={
+                  <span
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-xs font-semibold",
+                      draft.stay.confirmed
+                        ? "bg-emerald-100 text-emerald-900"
+                        : "bg-amber-100 text-amber-950",
+                    )}
+                  >
+                    {draft.stay.confirmed ? "Booked" : "Not booked"}
+                  </span>
+                }
+              >
+                <StayForm
+                  value={{
+                    ...draft.stay,
+                    checkIn: draft.plannedIn,
+                    checkOut: outInclusive,
+                  }}
+                  legs={staySiteLegs(draft, outInclusive)}
+                  sites={siteOptions}
+                  onChange={patchStay}
+                />
+              </SectionBlock>
             </div>
           ) : null}
 
           {section === "replacement" ? (
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-semibold text-foreground">What happens next?</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Update {person.name.split(" ")[0]}&apos;s stay or arrange coverage for their departure.
-                </p>
-              </div>
+            <div className="space-y-6">
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
+                <Fact label="Site" value={draft.site || "-"} />
+                <Fact label="Departure" value={formatMedium(outInclusive)} />
+                <Fact
+                  label="Days left"
+                  value={
+                    left > 0
+                      ? dayCountLabel(left)
+                      : left === 0
+                        ? "Today"
+                        : `Ended ${dayCountLabel(Math.abs(left))} ago`
+                  }
+                />
+                <Fact
+                  label="Stay"
+                  value={
+                    stayDays > 0
+                      ? `${dayCountLabel(stayDays)} · standard ${STANDARD_ROTATION_DAYS}`
+                      : "-"
+                  }
+                />
+              </dl>
 
-              <div className="rounded-xl border border-border bg-muted/20 p-4">
-                <p className="font-medium">Extend stay</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {person.name.split(" ")[0]} will remain at {draft.site || "site"} beyond their scheduled
-                  departure date.
-                  {stayDays > 0
-                    ? ` Current stay ${dayCountLabel(stayDays)}${
-                        stayDays > STANDARD_ROTATION_DAYS
-                          ? " · past 6 weeks"
-                          : ` · standard is ${STANDARD_ROTATION_DAYS}`
-                      }.`
-                    : ""}
-                </p>
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Current departure:{" "}
-                  <span className="font-medium text-foreground">{formatMedium(outInclusive)}</span>
-                </p>
-                <div className="mt-3 flex flex-wrap items-end gap-2">
-                  <label className="grid gap-1 text-sm">
-                    <span className="text-muted-foreground">New departure date</span>
+              <SectionBlock title="Extend stay">
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="grid gap-1">
+                    <span className={fieldLabelClass}>New departure</span>
                     <input
                       type="date"
                       value={extendOut}
                       min={outInclusive}
                       onChange={(event) => setExtendOut(event.target.value)}
-                      className="h-9 rounded-lg border border-input px-2"
+                      className="h-9 rounded-lg border border-input px-2 text-sm"
                     />
                   </label>
                   <button
@@ -404,81 +395,56 @@ export function CrewRotationDrawer({
                     }}
                     className="h-9 rounded-lg border border-input px-3 text-sm font-medium disabled:opacity-50"
                   >
-                    Update departure date
+                    Extend
                   </button>
                 </div>
-              </div>
+              </SectionBlock>
 
               {replacement ? (
-                <div className="rounded-xl border border-border bg-muted/30 p-4">
-                  <p className="font-medium">Replacement linked</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                <SectionBlock title="Replace">
+                  <p className="text-sm font-medium text-foreground">
                     {people.find((row) => row.id === replacement.personId)?.name || replacement.personId}
                     {" · "}
-                    {replacement.role} · {replacement.site}
-                    {" · arrives "}
+                    {replacement.site}
+                    {" · "}
                     {formatMedium(replacement.plannedIn)}
                   </p>
-                  <p className="mt-2 text-sm">
-                    Travel {replacement.outbound.confirmed ? "✓" : "✗"} · Stay{" "}
-                    {replacement.stay.confirmed ? "✓" : "✗"}
-                  </p>
                   {draft.handoverFrom && draft.handoverTo ? (
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       Handover {formatMedium(draft.handoverFrom)} – {formatMedium(draft.handoverTo)}
                     </p>
-                  ) : (
-                    <p className="mt-1 text-sm text-amber-800">Handover dates not set</p>
-                  )}
-                </div>
-              ) : draft.replacementNeeded === false ? (
-                <div className="rounded-xl border border-border bg-muted/30 p-4">
-                  <p className="font-medium">No change</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Keep {person.name.split(" ")[0]}&apos;s current schedule.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => commit({ ...draft, replacementNeeded: true })}
-                    className="mt-3 h-9 rounded-lg border border-input px-3 text-sm font-medium"
-                  >
-                    Change options
-                  </button>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-border bg-muted/20 p-4">
-                  <p className="font-medium">Arrange replacement</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Schedule another employee to take over when {person.name.split(" ")[0]} leaves.
-                  </p>
-                </div>
-              )}
-
-              {!replacement && draft.replacementNeeded !== false && !replaceOpen ? (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setReplaceOpen(true)}
-                    className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
-                  >
-                    Select replacement
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      commit({
-                        ...draft,
-                        replacementNeeded: false,
-                        replacedByRotationId: null,
-                        handoverFrom: null,
-                        handoverTo: null,
-                      })
-                    }
-                    className="h-9 rounded-lg border border-input px-3 text-sm font-medium"
-                  >
-                    Keep current schedule
-                  </button>
-                </div>
+                  ) : null}
+                </SectionBlock>
+              ) : !replaceOpen ? (
+                <SectionBlock title="Keep or replace">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        commit({
+                          ...draft,
+                          replacementNeeded: false,
+                          replacedByRotationId: null,
+                          handoverFrom: null,
+                          handoverTo: null,
+                        })
+                      }
+                      className="h-9 rounded-lg border border-input px-3 text-sm font-medium"
+                    >
+                      Keep
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        commit({ ...draft, replacementNeeded: true });
+                        setReplaceOpen(true);
+                      }}
+                      className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
+                    >
+                      Replace
+                    </button>
+                  </div>
+                </SectionBlock>
               ) : null}
 
               {replaceOpen ? (
@@ -548,11 +514,38 @@ export function CrewRotationDrawer({
   );
 }
 
+/** Section focus (Journey, Stay, Happening) — darker so they read as headings. */
+const sectionTitleClass =
+  "text-[13px] font-medium tracking-[0.14em] text-slate-950 uppercase";
+/** Field labels under a section — quieter so values carry the focus. */
+const fieldLabelClass =
+  "text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase";
+
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">{label}</dt>
+      <dt className={fieldLabelClass}>{label}</dt>
       <dd className="mt-1 text-sm font-medium text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function SectionBlock({
+  title,
+  trailing,
+  children,
+}: {
+  title: string;
+  trailing?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className={sectionTitleClass}>{title}</p>
+        {trailing}
+      </div>
+      <div className="mt-2 space-y-3 border-t border-border pt-3">{children}</div>
     </div>
   );
 }
@@ -567,12 +560,12 @@ function ReadinessStrip({
   return (
     <div className="space-y-3 border-b border-border pb-5">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Status</p>
+        <p className={sectionTitleClass}>Status</p>
         <p className="text-sm font-semibold text-foreground">{status}</p>
       </div>
       <ul className="space-y-2">
-        <StatusLine label="Outbound" booked={readiness.travelOutbound} icon="out" />
-        <StatusLine label="Inbound" booked={readiness.travelReturn} icon="in" />
+        <StatusLine label="Coming to Site" booked={readiness.travelOutbound} icon="out" />
+        <StatusLine label="Going Home" booked={readiness.travelReturn} icon="in" />
         <StatusLine label="Stay" booked={readiness.stay} icon="bed" />
       </ul>
     </div>
@@ -596,10 +589,107 @@ function StatusLine({
         {icon === "bed" ? <BedDouble className="size-3.5" /> : null}
         {label}
       </span>
-      <span className={cn("font-medium", booked ? "text-foreground" : "text-rose-700")}>
+      <span
+        className={cn(
+          "rounded-full px-2 py-0.5 text-xs font-semibold",
+          booked ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950",
+        )}
+      >
         {booked ? "Booked" : "Not booked"}
       </span>
     </li>
+  );
+}
+
+/** Airport / site chain for a trip, e.g. YUL → YOW → POND. */
+function travelPath(travel: RotationTravel, fallbackFrom = "", fallbackTo = "") {
+  const airports: string[] = [];
+  for (const leg of travel.segments) {
+    if (leg.fromAirport) airports.push(leg.fromAirport);
+    if (leg.toAirport) airports.push(leg.toAirport);
+  }
+  const path = airports.filter((code, index) => code && code !== airports[index - 1]);
+  if (path.length >= 2) return path.join(" → ");
+  const from = travel.fromAirport || fallbackFrom;
+  const to = travel.toAirport || fallbackTo;
+  if (from && to) return `${from} → ${to}`;
+  return from || to || "";
+}
+
+function StayHappenings({
+  rotation,
+  outInclusive,
+  readiness,
+}: {
+  rotation: CrewRotation;
+  outInclusive: string;
+  readiness: ReturnType<typeof evaluateReadiness>;
+}) {
+  const legs = staySiteLegs(rotation, outInclusive);
+  const moves = [...(rotation.moves ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  const outPath = travelPath(rotation.outbound, "", rotation.site);
+  const homePath = travelPath(rotation.returnTravel, rotation.site, "");
+  const rows: { key: string; label: string; detail: string; state: string }[] = [
+    {
+      key: "out",
+      label: "Coming to Site",
+      detail: [formatMedium(rotation.plannedIn), outPath || rotation.site || ""]
+        .filter(Boolean)
+        .join(" · "),
+      state: readiness.travelOutbound ? "Booked" : "Not booked",
+    },
+    ...legs.map((leg, index) => ({
+      key: `stay-${index}`,
+      label: "Stay",
+      detail: [leg.site, `${formatMedium(leg.from)} – ${formatMedium(leg.to)}`]
+        .filter(Boolean)
+        .join(" · "),
+      state: readiness.stay ? "Booked" : "Not booked",
+    })),
+    ...moves.map((move) => {
+      const path =
+        travelPath(move.travel, move.fromSite, move.toSite) ||
+        `${move.fromSite} → ${move.toSite}`;
+      return {
+        key: `move-${move.id}`,
+        label: "Site Transfers",
+        detail: [formatMedium(move.date), path].filter(Boolean).join(" · "),
+        state: travelIsBooked(move.travel) || move.travel.confirmed ? "Booked" : "Not booked",
+      };
+    }),
+    {
+      key: "home",
+      label: "Going Home",
+      detail: [formatMedium(outInclusive), homePath || rotation.site || ""]
+        .filter(Boolean)
+        .join(" · "),
+      state: readiness.travelReturn ? "Booked" : "Not booked",
+    },
+  ];
+  return (
+    <div>
+      <p className={sectionTitleClass}>Happening</p>
+      <ul className="mt-2 space-y-2 border-t border-border pt-2">
+        {rows.map((row) => (
+          <li key={row.key} className="flex items-start justify-between gap-3 text-sm">
+            <span className="min-w-0">
+              <span className="font-medium text-foreground">{row.label}</span>
+              <span className="mt-0.5 block text-muted-foreground">{row.detail}</span>
+            </span>
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold",
+                row.state === "Booked"
+                  ? "bg-emerald-100 text-emerald-900"
+                  : "bg-amber-100 text-amber-950",
+              )}
+            >
+              {row.state}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -619,18 +709,6 @@ function ChecklistHints({
   const hints: { id: string; text: string }[] = [];
   const add = (id: string, text: string) => hints.push({ id, text });
   if (
-    personOps?.returnWindowPainted &&
-    personOps.returnBookFrom &&
-    personOps.returnBookTo &&
-    personOps.returnFlight !== "booked" &&
-    personOps.returnFlight !== "confirmed"
-  ) {
-    add(
-      "return-window",
-      `Expected departure set (${formatMedium(personOps.returnBookFrom)} to ${formatMedium(personOps.returnBookTo)}): book return flight`,
-    );
-  }
-  if (
     personOps?.outboundWindowPainted &&
     personOps.outboundBookFrom &&
     personOps.outboundBookTo &&
@@ -639,42 +717,54 @@ function ChecklistHints({
   ) {
     add(
       "outbound-window",
-      `Booking window set (${formatMedium(personOps.outboundBookFrom)} to ${formatMedium(personOps.outboundBookTo)}): book flight to site`,
+      `Coming to Site · ${formatMedium(personOps.outboundBookFrom)} – ${formatMedium(personOps.outboundBookTo)}`,
     );
   }
-  if (!readiness.travelOutbound) add("outbound", "Book outbound flight to site");
-  if (!readiness.stay) add("stay", "Book accommodation for the whole stay");
-  if (day >= 28 && !readiness.travelReturn) add("return", "4 weeks in: book return flight");
-  if (readiness.replacement === "missing")
-    add("replacement", "Extend stay or arrange replacement");
-  if (readiness.handover === "not_planned") add("handover", "Set handover / overlap dates");
-  if (!hints.length) {
-    return <p className="text-sm text-muted-foreground">No open tasks for this stay.</p>;
+  if (
+    personOps?.returnWindowPainted &&
+    personOps.returnBookFrom &&
+    personOps.returnBookTo &&
+    personOps.returnFlight !== "booked" &&
+    personOps.returnFlight !== "confirmed"
+  ) {
+    add(
+      "return-window",
+      `Going Home · ${formatMedium(personOps.returnBookFrom)} – ${formatMedium(personOps.returnBookTo)}`,
+    );
   }
-  // Open items first, ticked ones underneath (kept so they can be unticked).
+  if (!readiness.travelOutbound) add("outbound", "Coming to Site");
+  if (!readiness.stay) add("stay", "Stay");
+  if ((day >= 28 || readiness.returnDue) && !readiness.travelReturn) add("return", "Going Home");
+  if (readiness.replacement === "missing") add("replacement", "Schedule Changes");
+  if (readiness.handover === "not_planned") add("handover", "Handover");
+  if (!hints.length) return null;
   const sorted = [...hints].sort((a, b) => Number(done.includes(a.id)) - Number(done.includes(b.id)));
   const openCount = hints.filter((hint) => !done.includes(hint.id)).length;
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">To do</p>
-        <p className="text-xs text-muted-foreground">
-          {openCount ? `${openCount} open` : "All done"}
-        </p>
+        <p className={sectionTitleClass}>To do</p>
+        <p className="text-xs text-muted-foreground">{openCount ? `${openCount} open` : "Done"}</p>
       </div>
       <ul className="mt-2 space-y-1 border-t border-border pt-2">
         {sorted.map((hint) => {
           const checked = done.includes(hint.id);
           return (
             <li key={hint.id}>
-              <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1.5 text-sm hover:bg-muted/50">
+              <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-1 py-1.5 text-sm hover:bg-muted/50">
                 <input
                   type="checkbox"
                   checked={checked}
                   onChange={() => onToggle(hint.id)}
-                  className="mt-0.5 size-4 shrink-0 accent-primary"
+                  className="size-4 shrink-0 accent-primary"
                 />
-                <span className={cn(checked ? "text-muted-foreground line-through" : "text-foreground")}>{hint.text}</span>
+                <span
+                  className={cn(
+                    checked ? "text-muted-foreground line-through" : "text-foreground",
+                  )}
+                >
+                  {hint.text}
+                </span>
               </label>
             </li>
           );
@@ -698,32 +788,35 @@ function ReturnWindowEditor({
   onChange: (from: string, to: string) => void;
 }) {
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3">
-      <p className="text-sm font-medium text-amber-950">Expected departure</p>
-      <p className="mt-1 text-xs text-amber-900/80">
-        Days for the return flight. Paint yellow on the Month calendar with right-click or drag.
+    <div className="rounded-xl border border-amber-300/70 bg-gradient-to-br from-amber-50 via-[#fff8e8] to-amber-100/50 px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+      <p className="text-xs font-medium tracking-[0.12em] text-amber-950 uppercase">
+        Window to book return flight
       </p>
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <label className="grid gap-1 text-sm">
-          <span className="text-muted-foreground">Window start</span>
+      <div className="mt-3 grid grid-cols-2 gap-3 border-t border-amber-200/80 pt-3">
+        <label className="grid gap-1">
+          <span className="text-xs font-medium tracking-[0.12em] text-amber-950/80 uppercase">
+            Window start
+          </span>
           <input
             type="date"
             value={from}
             min={stayFrom}
             max={to || stayTo}
             onChange={(event) => onChange(event.target.value, to || event.target.value)}
-            className="h-9 rounded-lg border border-input bg-card px-2"
+            className="h-9 rounded-lg border border-amber-200/90 bg-white/90 px-2 text-sm text-foreground"
           />
         </label>
-        <label className="grid gap-1 text-sm">
-          <span className="text-muted-foreground">Window end</span>
+        <label className="grid gap-1">
+          <span className="text-xs font-medium tracking-[0.12em] text-amber-950/80 uppercase">
+            Window end
+          </span>
           <input
             type="date"
             value={to}
             min={from || stayFrom}
             max={stayTo}
             onChange={(event) => onChange(from || event.target.value, event.target.value)}
-            className="h-9 rounded-lg border border-input bg-card px-2"
+            className="h-9 rounded-lg border border-amber-200/90 bg-white/90 px-2 text-sm text-foreground"
           />
         </label>
       </div>
@@ -731,7 +824,7 @@ function ReturnWindowEditor({
         <button
           type="button"
           onClick={() => onChange("", "")}
-          className="mt-2 text-xs font-medium text-amber-950 underline-offset-2 hover:underline"
+          className="mt-2 text-xs font-medium tracking-[0.12em] text-amber-950/70 uppercase underline-offset-2 hover:underline"
         >
           Clear window
         </button>
@@ -774,144 +867,178 @@ function MovesPanel({
   }
 
   return (
-    <div className="space-y-3 text-sm">
-      {suggested.map((row) => (
-        <div
-          key={`${row.fromSite}-${row.toSite}-${row.date}`}
-          className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-violet-300 bg-violet-50/60 px-3 py-2.5"
-        >
-          <div>
-            <p className="font-semibold">
-              {row.fromSite} → {row.toSite}
-              <span className="ml-2 font-normal text-muted-foreground">{formatMedium(row.date)}</span>
-            </p>
-            <p className="text-xs text-muted-foreground">On the calendar, not booked yet</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => add(row)}
-            className="h-8 shrink-0 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:opacity-90"
-          >
-            Book
-          </button>
-        </div>
-      ))}
-
-      {sorted.map((move) => {
-        const open = openId === move.id;
-        return (
-          <div key={move.id} className="rounded-xl border border-border">
-            <button
-              type="button"
-              onClick={() => setOpenId(open ? null : move.id)}
-              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-muted/40"
+    <div className="space-y-6 text-sm">
+      {suggested.length ? (
+        <SectionBlock title="Suggested">
+          {suggested.map((row) => (
+            <div
+              key={`${row.fromSite}-${row.toSite}-${row.date}`}
+              className="flex items-center justify-between gap-2"
             >
-              <span>
-                <span className="font-semibold">
-                  {move.fromSite} → {move.toSite}
-                </span>
-                <span className="ml-2 text-muted-foreground">{formatMedium(move.date)}</span>
-              </span>
-              <span className="text-xs font-medium text-muted-foreground">{tripLabel(move.travel)}</span>
-            </button>
-            {open ? (
-              <div className="space-y-3 border-t border-border p-3">
-                <CrewTripForm
-                  key={move.id}
-                  value={move.travel}
-                  direction="outbound"
-                  site={move.toSite}
-                  travelDate={move.date}
-                  personId={personId}
-                  book={book}
-                  move={{ fromSite: move.fromSite, toSite: move.toSite }}
-                  onChange={(patch) =>
-                    onChange(
-                      moves.map((row) =>
-                        row.id === move.id
-                          ? {
-                              ...row,
-                              // The move happens on the day the first flight leaves.
-                              date: patch.departDate || row.date,
-                              travel: { ...row.travel, ...patch },
-                            }
-                          : row,
-                      ),
-                    )
-                  }
-                />
+              <div className="min-w-0">
+                <p className="font-medium text-foreground">
+                  {row.fromSite} → {row.toSite}
+                </p>
+                <p className="mt-0.5 text-muted-foreground">
+                  {formatMedium(row.date)} · On the calendar, not booked yet
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => add(row)}
+                className="h-8 shrink-0 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:opacity-90"
+              >
+                Book
+              </button>
+            </div>
+          ))}
+        </SectionBlock>
+      ) : null}
+
+      <SectionBlock title="Transfers">
+        {sorted.length ? (
+          sorted.map((move) => {
+            const open = openId === move.id;
+            return (
+              <div key={move.id}>
                 <button
                   type="button"
-                  onClick={() => onChange(moves.filter((row) => row.id !== move.id))}
-                  className="inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-input text-xs text-rose-700 hover:bg-rose-50"
+                  onClick={() => setOpenId(open ? null : move.id)}
+                  className="flex w-full items-start justify-between gap-3 py-1 text-left"
                 >
-                  <Trash2 className="size-3.5" /> Remove this transfer
+                  <span className="min-w-0">
+                    <span className="font-medium text-foreground">
+                      {move.fromSite} → {move.toSite}
+                    </span>
+                    <span className="mt-0.5 block text-muted-foreground">
+                      {formatMedium(move.date)}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold",
+                      travelIsBooked(move.travel) || move.travel.confirmed
+                        ? "bg-emerald-100 text-emerald-900"
+                        : "bg-amber-100 text-amber-950",
+                    )}
+                  >
+                    {tripLabel(move.travel)}
+                  </span>
                 </button>
+                {open ? (
+                  <div className="mt-3 space-y-3 border-t border-border pt-3">
+                    <CrewTripForm
+                      key={move.id}
+                      value={move.travel}
+                      direction="outbound"
+                      site={move.toSite}
+                      travelDate={move.date}
+                      personId={personId}
+                      book={book}
+                      move={{ fromSite: move.fromSite, toSite: move.toSite }}
+                      onChange={(patch) =>
+                        onChange(
+                          moves.map((row) =>
+                            row.id === move.id
+                              ? {
+                                  ...row,
+                                  // The move happens on the day the first flight leaves.
+                                  date: patch.departDate || row.date,
+                                  travel: { ...row.travel, ...patch },
+                                }
+                              : row,
+                          ),
+                        )
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onChange(moves.filter((row) => row.id !== move.id))}
+                      className="inline-flex h-8 items-center gap-1 text-xs font-semibold tracking-[0.12em] text-rose-700 uppercase hover:underline"
+                    >
+                      <Trash2 className="size-3.5" /> Remove
+                    </button>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
-        );
-      })}
+            );
+          })
+        ) : (
+          <p className="text-muted-foreground">No site transfers yet.</p>
+        )}
 
-      {adding ? (
-        <div className="grid grid-cols-3 gap-2 rounded-xl border border-border p-3">
-          <label className="grid min-w-0 gap-1">
-            <span className="text-xs text-muted-foreground">From site</span>
-            <select value={fromSite} onChange={(event) => setFromSite(event.target.value)} className="h-9 rounded-lg border border-input bg-card px-2">
-              {sites.map((code) => (
-                <option key={code} value={code}>
-                  {code}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid min-w-0 gap-1">
-            <span className="text-xs text-muted-foreground">To site</span>
-            <select value={toSite} onChange={(event) => setToSite(event.target.value)} className="h-9 rounded-lg border border-input bg-card px-2">
-              {sites.map((code) => (
-                <option key={code} value={code}>
-                  {code}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid min-w-0 gap-1">
-            <span className="text-xs text-muted-foreground">Date</span>
-            <input
-              type="date"
-              value={date}
-              min={stayFrom}
-              max={stayTo}
-              onChange={(event) => setDate(event.target.value)}
-              className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
-            />
-          </label>
-          <div className="col-span-3 flex gap-2">
-            <button
-              type="button"
-              disabled={!date || fromSite === toSite}
-              onClick={() => {
-                add({ fromSite, toSite, date });
-                setAdding(false);
-              }}
-              className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-40"
-            >
-              Add transfer
-            </button>
-            <button type="button" onClick={() => setAdding(false)} className="h-9 rounded-lg border border-input px-3 text-sm">
-              Cancel
-            </button>
+        {adding ? (
+          <div className="grid grid-cols-3 gap-2 border-t border-border pt-3">
+            <label className="grid min-w-0 gap-1">
+              <span className={fieldLabelClass}>From site</span>
+              <select
+                value={fromSite}
+                onChange={(event) => setFromSite(event.target.value)}
+                className="h-9 rounded-lg border border-input bg-card px-2"
+              >
+                {sites.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid min-w-0 gap-1">
+              <span className={fieldLabelClass}>To site</span>
+              <select
+                value={toSite}
+                onChange={(event) => setToSite(event.target.value)}
+                className="h-9 rounded-lg border border-input bg-card px-2"
+              >
+                {sites.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid min-w-0 gap-1">
+              <span className={fieldLabelClass}>Date</span>
+              <input
+                type="date"
+                value={date}
+                min={stayFrom}
+                max={stayTo}
+                onChange={(event) => setDate(event.target.value)}
+                className="h-9 w-full min-w-0 rounded-lg border border-input px-2"
+              />
+            </label>
+            <div className="col-span-3 flex gap-2">
+              <button
+                type="button"
+                disabled={!date || fromSite === toSite}
+                onClick={() => {
+                  add({ fromSite, toSite, date });
+                  setAdding(false);
+                }}
+                className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-40"
+              >
+                Add transfer
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdding(false)}
+                className="h-9 rounded-lg border border-input px-3 text-sm"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="inline-flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-input text-sm font-medium hover:bg-muted"
-        >
-          <Plus className="size-4" /> Add a site transfer
-        </button>
-      )}
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="inline-flex h-9 items-center gap-1.5 text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase hover:text-foreground"
+          >
+            <Plus className="size-3.5" /> Add a site transfer
+          </button>
+        )}
+      </SectionBlock>
     </div>
   );
 }
@@ -923,54 +1050,108 @@ function tripLabel(travel: RotationTravel) {
   return travelIsBooked(travel) ? "Booked" : "Not booked";
 }
 
+/** Site periods on this stay (split by Site Transfers). */
+function staySiteLegs(rotation: CrewRotation, outInclusive: string) {
+  const moves = [...(rotation.moves ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  const rows: { site: string; from: string; to: string }[] = [];
+  let site = rotation.site || rotation.stay.site || "";
+  let from = rotation.plannedIn;
+  for (const move of moves) {
+    const travelLegs = move.travel.segments.filter((row) => row.departDate);
+    const depart = travelLegs[0]?.departDate || move.date;
+    const last = travelLegs[travelLegs.length - 1];
+    const arrive = last ? last.arriveDate || last.departDate : move.date;
+    const to = depart > from ? addDays(depart, -1) : from;
+    if (site && to >= from) rows.push({ site, from, to });
+    site = move.toSite;
+    from = arrive || depart;
+  }
+  if (site && from <= outInclusive) rows.push({ site, from, to: outInclusive });
+  if (!rows.length) {
+    rows.push({
+      site: rotation.site || rotation.stay.site || "",
+      from: rotation.plannedIn,
+      to: outInclusive,
+    });
+  }
+  return rows;
+}
+
 function StayForm({
   value,
+  legs,
   sites,
   onChange,
 }: {
   value: RotationStay;
+  legs: { site: string; from: string; to: string }[];
   sites: string[];
   onChange: (patch: Partial<RotationStay>) => void;
 }) {
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-5">
+      {legs.map((leg, index) => (
+        <div key={`${leg.site}-${leg.from}-${index}`} className="grid gap-3">
+          {legs.length > 1 ? (
+            <p className={sectionTitleClass}>
+              Leg {index + 1}
+              {leg.site ? ` · ${leg.site}` : ""}
+            </p>
+          ) : null}
+          <label className="grid gap-1">
+            <span className={fieldLabelClass}>Site</span>
+            {index === 0 ? (
+              <select
+                value={value.site || leg.site}
+                onChange={(event) => onChange({ site: event.target.value })}
+                className="h-9 rounded-lg border border-input px-2 text-sm"
+              >
+                {sites.map((site) => (
+                  <option key={site} value={site}>
+                    {site}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={leg.site}
+                readOnly
+                className="h-9 rounded-lg border border-input bg-muted/40 px-2 text-sm"
+              />
+            )}
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid gap-1">
+              <span className={fieldLabelClass}>Arrival</span>
+              <input
+                type="date"
+                value={leg.from}
+                readOnly
+                className="h-9 rounded-lg border border-input bg-muted/40 px-2 text-sm"
+              />
+            </label>
+            <label className="grid gap-1">
+              <span className={fieldLabelClass}>Departure</span>
+              <input
+                type="date"
+                value={leg.to}
+                readOnly
+                className="h-9 rounded-lg border border-input bg-muted/40 px-2 text-sm"
+              />
+            </label>
+          </div>
+        </div>
+      ))}
       <label className="grid gap-1">
-        <span className="text-muted-foreground">Site</span>
-        <select
-          value={value.site}
-          onChange={(event) => onChange({ site: event.target.value })}
-          className="h-9 rounded-lg border border-input px-2"
-        >
-          {sites.map((site) => (
-            <option key={site} value={site}>
-              {site}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="grid gap-1">
-        <span className="text-muted-foreground">Room</span>
+        <span className={fieldLabelClass}>Room</span>
         <input
           value={value.room}
           onChange={(event) => onChange({ room: event.target.value })}
-          className="h-9 rounded-lg border border-input px-2"
+          className="h-9 rounded-lg border border-input px-2 text-sm"
           placeholder="Optional"
         />
       </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="grid gap-1">
-          <span className="text-muted-foreground">Arrival · stay start</span>
-          <input type="date" value={value.checkIn || ""} readOnly className="h-9 rounded-lg border border-input bg-muted/40 px-2" />
-        </label>
-        <label className="grid gap-1">
-          <span className="text-muted-foreground">Departure · end of stay</span>
-          <input type="date" value={value.checkOut || ""} readOnly className="h-9 rounded-lg border border-input bg-muted/40 px-2" />
-        </label>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Departure is always the last day of the stay. Use Schedule changes to update it.
-      </p>
-      <label className="inline-flex items-center gap-2">
+      <label className="inline-flex items-center gap-2 text-sm">
         <input
           type="checkbox"
           checked={value.confirmed}
@@ -1030,15 +1211,14 @@ function ReplacementForm({
   }, [freePeople, personId]);
 
   return (
-    <div className="space-y-3 rounded-xl border border-border p-4">
-      <p className="font-medium">Arrange replacement</p>
+    <SectionBlock title="Arrange replacement">
       <p className="text-sm text-muted-foreground">Only people free for the incoming dates are listed.</p>
       <label className="grid gap-1">
-        <span className="text-muted-foreground">Employee</span>
+        <span className={fieldLabelClass}>Employee</span>
         <select
           value={personId}
           onChange={(event) => setPersonId(event.target.value)}
-          className="h-9 rounded-lg border border-input px-2"
+          className="h-9 rounded-lg border border-input px-2 text-sm"
           disabled={!freePeople.length}
         >
           <option value="">{freePeople.length ? "Select..." : "No one free for these dates"}</option>
@@ -1051,14 +1231,18 @@ function ReplacementForm({
       </label>
       <div className="grid grid-cols-2 gap-3">
         <div className="grid gap-1">
-          <span className="text-muted-foreground">Role</span>
+          <span className={fieldLabelClass}>Role</span>
           <p className="flex h-9 items-center rounded-lg border border-border bg-muted/40 px-2 text-sm font-medium">
             {role || "-"}
           </p>
         </div>
         <label className="grid gap-1">
-          <span className="text-muted-foreground">Site</span>
-          <select value={site} onChange={(event) => setSite(event.target.value)} className="h-9 rounded-lg border border-input px-2">
+          <span className={fieldLabelClass}>Site</span>
+          <select
+            value={site}
+            onChange={(event) => setSite(event.target.value)}
+            className="h-9 rounded-lg border border-input px-2 text-sm"
+          >
             {sites.map((code) => (
               <option key={code} value={code}>
                 {code}
@@ -1069,22 +1253,44 @@ function ReplacementForm({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <label className="grid gap-1">
-          <span className="text-muted-foreground">Arrival</span>
-          <input type="date" value={plannedIn} onChange={(event) => setPlannedIn(event.target.value)} className="h-9 rounded-lg border border-input px-2" />
+          <span className={fieldLabelClass}>Arrival</span>
+          <input
+            type="date"
+            value={plannedIn}
+            onChange={(event) => setPlannedIn(event.target.value)}
+            className="h-9 rounded-lg border border-input px-2 text-sm"
+          />
         </label>
         <label className="grid gap-1">
-          <span className="text-muted-foreground">Days (max {MAX_ROTATION_DAYS})</span>
-          <input type="number" min={1} max={MAX_ROTATION_DAYS} value={days} onChange={(event) => setDays(event.target.value)} className="h-9 rounded-lg border border-input px-2" />
+          <span className={fieldLabelClass}>Days (max {MAX_ROTATION_DAYS})</span>
+          <input
+            type="number"
+            min={1}
+            max={MAX_ROTATION_DAYS}
+            value={days}
+            onChange={(event) => setDays(event.target.value)}
+            className="h-9 rounded-lg border border-input px-2 text-sm"
+          />
         </label>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <label className="grid gap-1">
-          <span className="text-muted-foreground">Handover from</span>
-          <input type="date" value={handoverFrom} onChange={(event) => setHandoverFrom(event.target.value)} className="h-9 rounded-lg border border-input px-2" />
+          <span className={fieldLabelClass}>Handover from</span>
+          <input
+            type="date"
+            value={handoverFrom}
+            onChange={(event) => setHandoverFrom(event.target.value)}
+            className="h-9 rounded-lg border border-input px-2 text-sm"
+          />
         </label>
         <label className="grid gap-1">
-          <span className="text-muted-foreground">Handover to</span>
-          <input type="date" value={handoverTo} onChange={(event) => setHandoverTo(event.target.value)} className="h-9 rounded-lg border border-input px-2" />
+          <span className={fieldLabelClass}>Handover to</span>
+          <input
+            type="date"
+            value={handoverTo}
+            onChange={(event) => setHandoverTo(event.target.value)}
+            className="h-9 rounded-lg border border-input px-2 text-sm"
+          />
         </label>
       </div>
       <p className="text-sm text-muted-foreground">
@@ -1113,7 +1319,7 @@ function ReplacementForm({
           Save replacement
         </button>
       </div>
-    </div>
+    </SectionBlock>
   );
 }
 
@@ -1150,40 +1356,42 @@ function StayNoteField({
   }
 
   return (
-    <div className="space-y-2">
-      <label htmlFor={`stay-note-${rotation.id}`} className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+    <div>
+      <label htmlFor={`stay-note-${rotation.id}`} className={sectionTitleClass}>
         Note on this stay
       </label>
-      <div className="flex gap-2">
-        <input
-          id={`stay-note-${rotation.id}`}
-          value={text}
-          maxLength={MAX_STAY_NOTE_CHARS}
-          onChange={(event) => {
-            setText(event.target.value);
-            setStatus("");
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && dirty) {
-              event.preventDefault();
-              save();
-            }
-          }}
-          placeholder="e.g. Held for weather"
-          className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-card px-2 text-sm"
-        />
-        <button
-          type="button"
-          onClick={save}
-          disabled={!dirty}
-          className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-40"
-        >
-          Save
-        </button>
+      <div className="mt-2 space-y-2 border-t border-border pt-3">
+        <div className="flex gap-2">
+          <input
+            id={`stay-note-${rotation.id}`}
+            value={text}
+            maxLength={MAX_STAY_NOTE_CHARS}
+            onChange={(event) => {
+              setText(event.target.value);
+              setStatus("");
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && dirty) {
+                event.preventDefault();
+                save();
+              }
+            }}
+            placeholder="e.g. Held for weather"
+            className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-card px-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={save}
+            disabled={!dirty}
+            className="h-9 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-40"
+          >
+            Save
+          </button>
+        </div>
+        {status === "saved" ? (
+          <p className="text-xs text-muted-foreground">{text.trim() ? "Saved." : "Note removed."}</p>
+        ) : null}
       </div>
-      {status === "saved" ? (
-        <p className="text-xs text-muted-foreground">{text.trim() ? "Saved." : "Note removed."}</p>
-      ) : null}
     </div>
   );
 }

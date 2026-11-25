@@ -111,6 +111,18 @@
   * {
     @apply border-border;
   }
+  /* Hide native number/date spin buttons (up/down arrows). */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="date"]::-webkit-inner-spin-button,
+  input[type="date"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
   /* Phones: 16px inputs so iPhone doesn't zoom in when you tap a field. */
   @media (max-width: 639px), (max-height: 511px) {
     input,

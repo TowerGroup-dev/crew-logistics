@@ -162,9 +162,6 @@ export function CrewYearTape({
     <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="border-b border-border bg-[#356dbd] px-3 py-2.5 text-white sm:px-5 sm:py-4">
         <h2 className="text-lg font-semibold tracking-tight sm:text-xl">{year}</h2>
-        <p className="mt-1 hidden text-sm text-white/85 sm:block">
-          Click a month on a person to place them (standard 6 weeks; can extend). Header months open Month view.
-        </p>
       </div>
 
       <div className="overflow-x-auto">
@@ -254,6 +251,22 @@ export function CrewYearTape({
                             ) : null}
                           </div>
                           <div className="relative h-14 border-l border-border bg-[linear-gradient(to_right,transparent_0,transparent_calc(100%/12-1px),rgba(0,0,0,0.06)_calc(100%/12-1px),rgba(0,0,0,0.06)_calc(100%/12))] bg-size-[calc(100%/12)_100%]">
+                            {/* Month rules under the bars — always visible, never punch white holes in stays. */}
+                            <div
+                              aria-hidden
+                              className="pointer-events-none absolute inset-0 z-[5] grid grid-cols-12"
+                            >
+                              {MONTHS.map((month, index) => (
+                                <div
+                                  key={`rule-${month.key}`}
+                                  className={cn(
+                                    index > 0 && "border-l border-primary/50",
+                                    todayMonth === index + 1 && "bg-rose-50/30",
+                                  )}
+                                />
+                              ))}
+                            </div>
+                            {/* Hit targets above — no borders (rules live underneath). */}
                             <div className="absolute inset-0 z-20 grid grid-cols-12">
                               {MONTHS.map((month, index) => (
                                 <button
@@ -261,16 +274,13 @@ export function CrewYearTape({
                                   type="button"
                                   title={`Place ${person.name} from ${month.long} ${year}`}
                                   onClick={() => startPlace(person, index + 1, group.role)}
-                                  className={cn(
-                                    "border-r border-border/50 last:border-r-0 hover:bg-primary/15",
-                                    todayMonth === index + 1 && "bg-rose-50/40",
-                                  )}
+                                  className="hover:bg-primary/15"
                                 />
                               ))}
                             </div>
                             {todayPct != null ? (
                               <div
-                                className="pointer-events-none absolute inset-y-0 z-10 w-0.5 bg-rose-500"
+                                className="pointer-events-none absolute inset-y-0 z-[18] w-0.5 bg-rose-500"
                                 style={{ left: `${todayPct}%` }}
                                 title={`Today · ${formatMedium(today)}`}
                               >
@@ -286,7 +296,7 @@ export function CrewYearTape({
                                   key={`${person.id}-${bar.from}-${bar.site}`}
                                   title={`${label} · ${formatMedium(bar.from)} – ${formatMedium(bar.to)}`}
                                   className={cn(
-                                    "pointer-events-none absolute top-3 z-[1] flex h-8 items-center overflow-hidden rounded-md px-0.5 text-[10px] font-semibold text-white sm:px-1.5 sm:text-xs",
+                                    "pointer-events-none absolute top-3 z-[15] flex h-8 items-center overflow-hidden rounded-md px-0.5 text-[10px] font-semibold text-white sm:px-1.5 sm:text-xs",
                                     siteBarTone(bar.site, siteList),
                                   )}
                                   style={{ left: `${bar.leftPct}%`, width: `${bar.widthPct}%` }}

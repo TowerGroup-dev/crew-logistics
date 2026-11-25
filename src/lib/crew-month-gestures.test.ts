@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { returnWindowFromStayDay } from "@/lib/crew-month-gestures";
+import { arrivalWindowFromStayDay, returnWindowFromStayDay } from "@/lib/crew-month-gestures";
 
 describe("returnWindowFromStayDay (NAV-03)", () => {
   it("paints from clicked day through end of stay (day 6 of 10 → 6–10)", () => {
@@ -31,5 +31,40 @@ describe("returnWindowFromStayDay (NAV-03)", () => {
       seasonEnd: "2026-12-31",
     });
     expect(range).toEqual({ from: "2026-12-20", to: "2027-03-14" });
+  });
+});
+
+describe("arrivalWindowFromStayDay", () => {
+  it("paints from a day before Arrival through Arrival", () => {
+    const range = arrivalWindowFromStayDay({
+      clickIso: "2026-05-28",
+      stayFrom: "2026-06-01",
+      stayOutExclusive: "2026-06-11",
+      seasonEnd: "2026-12-31",
+      leadDays: 21,
+    });
+    expect(range).toEqual({ from: "2026-05-28", to: "2026-06-01" });
+  });
+
+  it("paints Arrival through a day inside the stay", () => {
+    const range = arrivalWindowFromStayDay({
+      clickIso: "2026-06-04",
+      stayFrom: "2026-06-01",
+      stayOutExclusive: "2026-06-11",
+      seasonEnd: "2026-12-31",
+      leadDays: 21,
+    });
+    expect(range).toEqual({ from: "2026-06-01", to: "2026-06-04" });
+  });
+
+  it("rejects clicks outside the lead window", () => {
+    const range = arrivalWindowFromStayDay({
+      clickIso: "2026-05-01",
+      stayFrom: "2026-06-01",
+      stayOutExclusive: "2026-06-11",
+      seasonEnd: "2026-12-31",
+      leadDays: 21,
+    });
+    expect(range).toBeNull();
   });
 });

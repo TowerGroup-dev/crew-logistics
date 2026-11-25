@@ -287,7 +287,7 @@ export function CrewJourneyPlanner({
             {!directFlight ? (
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
-                  <p className="text-sm font-medium">Connecting stops</p>
+                  <p className="text-sm font-medium">Stops along the way</p>
                   <button
                     type="button"
                     onClick={() => setStops((current) => [...current, ""])}

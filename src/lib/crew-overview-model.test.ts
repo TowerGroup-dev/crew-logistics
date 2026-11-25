@@ -126,6 +126,116 @@ describe("week story", () => {
     expect(story.lines.some((line) => line.text.includes("moves"))).toBe(false);
   });
 
+  it("planning year strips last-season overdue and on-site spillover", () => {
+    const eric = person({
+      id: "eric",
+      name: "Eric Jacobsen",
+      stints: [
+        {
+          site: "IQA",
+          sites: ["IQA"],
+          from: "2026-11-23",
+          out: null,
+          arrival: "marked",
+          departure: "shading-ended",
+          tentative: false,
+        },
+      ],
+    });
+    const data = buildOverview({
+      rows: [snap(eric, { site: "IQA", duty: "on_site", mark: "IQA" })],
+      book: {
+        version: 1,
+        rotations: [
+          rotation({
+            id: "eric-2026",
+            personId: "eric",
+            plannedIn: "2026-11-23",
+            plannedOut: "2027-01-01",
+            site: "IQA",
+          }),
+        ],
+      },
+      asOf: "2027-01-01",
+      horizonDays: 30,
+      thresholds: { planDays: 14, returnBookDay: 28, escalateDays: 3 },
+      includeArrivalDay: true,
+      planningYear: 2027,
+      clockAsOf: "2026-11-25",
+    });
+    expect(data.onSite).toHaveLength(0);
+    expect(data.groups.every((g) => g.items.length === 0)).toBe(true);
+  });
+
+  it("planning year does not mark Jan arrivals overdue against season-open asOf", () => {
+    const data = buildOverview({
+      rows: [snap(person({ id: "eric", name: "Eric Jacobsen" }))],
+      book: {
+        version: 1,
+        rotations: [
+          rotation({
+            id: "app:eric:2027-01-01",
+            personId: "eric",
+            plannedIn: "2027-01-01",
+            plannedOut: "2027-01-02",
+            site: "IQA",
+          }),
+        ],
+      },
+      asOf: "2027-01-01",
+      horizonDays: 30,
+      thresholds: { planDays: 14, returnBookDay: 28, escalateDays: 3 },
+      includeArrivalDay: true,
+      planningYear: 2027,
+      clockAsOf: "2026-11-25",
+    });
+    const overdue = data.groups.find((g) => g.key === "overdue");
+    expect(overdue?.items.length ?? 0).toBe(0);
+  });
+
+  it("shows only the live Arrival after Wed→Thu planning move (not both)", () => {
+    const story = buildWeekStory({
+      rows: [
+        snap(
+          person({
+            id: "p1",
+            name: "Pat Planner",
+            stints: [
+              {
+                site: "IQA",
+                sites: ["IQA"],
+                from: "2026-11-27",
+                out: "2026-12-20",
+                idFrom: "2026-11-26",
+                arrival: "app",
+                departure: "app",
+                tentative: false,
+              },
+            ],
+          }),
+        ),
+      ],
+      book: {
+        version: 1,
+        rotations: [
+          rotation({
+            id: "stale-wed",
+            personId: "p1",
+            // Desk still thinks Wednesday; Month already moved to Thursday.
+            plannedIn: "2026-11-26",
+            plannedOut: "2026-12-20",
+            site: "IQA",
+          }),
+        ],
+      },
+      asOf: "2026-11-24",
+    });
+    const arrivals = story.lines.filter((line) => line.kind === "arriving" && line.personId === "p1");
+    expect(arrivals).toHaveLength(1);
+    expect(arrivals[0]?.text).toMatch(/Thursday|Nov 27|27/);
+    expect(arrivals[0]?.text).not.toMatch(/Wednesday|Nov 26|26/);
+  });
+
   it("uses the calendar stay for leave site/date, not a stale travel-desk POND", () => {
     const story = buildWeekStory({
       rows: [
