@@ -286,7 +286,6 @@ export function CrewOverview({
     });
   }
 
-  const year = Number(asOf.slice(0, 4));
   const asOfLabel = (() => {
     try {
       return new Date(`${asOf}T12:00:00`).toLocaleDateString("en-CA", {
@@ -301,35 +300,37 @@ export function CrewOverview({
   })();
 
   const hasMovement = data.arriving.length + data.leaving.length > 0;
-  const hasStory = weekStory.lines.length > 0;
   const hasOnSite = data.onSite.length > 0;
-  const planningEmpty = planning && !hasStory && !hasMovement && !hasOnSite && openCount === 0;
 
   const onSitePanel = (
     <Panel
-      title={planning ? "On site" : "On site now"}
+      title="On site now"
       accent="sky"
       expanded={onSiteOpen}
       onExpandedChange={setOnSiteOpen}
       aside={
         hasOnSite
           ? `${data.onSite.length} people · soonest departures first`
-          : planning
-            ? "Season not started"
-            : "Nobody on site"
+          : "Nobody on site"
       }
     >
-      <OnSiteTable
-        rows={data.onSite}
-        onOpen={open}
-        emptyLabel={
-          planning
-            ? "Nobody on site yet — the season has not started."
-            : "Nobody on site right now."
-        }
-      />
+      <OnSiteTable rows={data.onSite} onOpen={open} emptyLabel="Nobody on site right now." />
     </Panel>
   );
+
+  // Future year: keep Overview quiet — place stays on Calendar first.
+  if (planning) {
+    return (
+      <div className="space-y-6">
+        <header className="min-w-0">
+          <p className="text-base font-semibold tracking-tight text-foreground">{asOfLabel}</p>
+        </header>
+        <p className="text-sm text-muted-foreground">
+          Place arrivals and departures on Calendar.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -340,89 +341,69 @@ export function CrewOverview({
         ) : null}
       </header>
 
-      {planningEmpty ? (
-        <section className="rounded-xl border border-border/60 bg-card px-6 py-10 sm:px-8">
-          <p className="font-heading text-xl tracking-tight text-foreground">No stays placed yet</p>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            {year} is a planning year. Place arrivals and departures on Month, then Overview
-            will show the first wave of flights, confirmations, and who is due on site.
-          </p>
-          <p className="mt-4 text-sm text-muted-foreground">
-            Use Arrival / Return paint and Departure location the same way as {today.slice(0, 4)}.
-          </p>
-        </section>
-      ) : (
-        <div className="grid items-start gap-6 xl:grid-cols-2">
-          <div className="space-y-6">
-            <Panel
-              title={planning ? "Season start" : "This week"}
-              accent="sky"
-              defaultOpen
-              aside={`${formatShort(weekStory.weekStart)} – ${formatShort(weekStory.weekEnd)}`}
-            >
-              <WeekStoryList
-                lines={weekStory.lines}
-                planning={planning}
-                onOpen={(line) => {
-                  if (line.personId) open(line.rotationId, line.personId);
-                }}
-              />
-            </Panel>
-
-            <Panel
-              title="Flights"
-              accent="indigo"
-              defaultOpen={planning || hasMovement}
-              aside={
-                <span className="inline-flex rounded-md bg-muted p-0.5">
-                  {([14, 30] as const).map((days) => (
-                    <button
-                      key={days}
-                      type="button"
-                      onClick={() => setHorizon(days)}
-                      className={cn(
-                        "rounded px-2.5 py-1 text-xs font-medium transition",
-                        horizon === days
-                          ? "bg-card text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {days}d
-                    </button>
-                  ))}
-                </span>
-              }
-            >
-              <Movement
-                arriving={data.arriving}
-                leaving={data.leaving}
-                onOpen={onOpenRotation}
-                planning={planning}
-              />
-            </Panel>
-
-            {!onSiteOpen ? onSitePanel : null}
-          </div>
-
+      <div className="grid items-start gap-6 xl:grid-cols-2">
+        <div className="space-y-6">
           <Panel
-            title="To do"
-            accent="amber"
+            title="This week"
+            accent="sky"
             defaultOpen
-            aside={openCount ? `${openCount} open` : "None open"}
+            aside={`${formatShort(weekStory.weekStart)} – ${formatShort(weekStory.weekEnd)}`}
           >
-            <ActionList
-              groups={data.groups}
-              asOf={data.clockAsOf}
-              doneBook={doneBook}
-              onToggleDone={toggleDone}
-              onOpen={onOpenRotation}
-              planning={planning}
+            <WeekStoryList
+              lines={weekStory.lines}
+              onOpen={(line) => {
+                if (line.personId) open(line.rotationId, line.personId);
+              }}
             />
           </Panel>
-        </div>
-      )}
 
-      {!planningEmpty && onSiteOpen ? onSitePanel : null}
+          <Panel
+            title="Flights"
+            accent="indigo"
+            defaultOpen={hasMovement}
+            aside={
+              <span className="inline-flex rounded-md bg-muted p-0.5">
+                {([14, 30] as const).map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => setHorizon(days)}
+                    className={cn(
+                      "rounded px-2.5 py-1 text-xs font-medium transition",
+                      horizon === days
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {days}d
+                  </button>
+                ))}
+              </span>
+            }
+          >
+            <Movement arriving={data.arriving} leaving={data.leaving} onOpen={onOpenRotation} />
+          </Panel>
+
+          {!onSiteOpen ? onSitePanel : null}
+        </div>
+
+        <Panel
+          title="To do"
+          accent="amber"
+          defaultOpen
+          aside={openCount ? `${openCount} open` : "None open"}
+        >
+          <ActionList
+            groups={data.groups}
+            asOf={data.clockAsOf}
+            doneBook={doneBook}
+            onToggleDone={toggleDone}
+            onOpen={onOpenRotation}
+          />
+        </Panel>
+      </div>
+
+      {onSiteOpen ? onSitePanel : null}
     </div>
   );
 }

@@ -622,9 +622,11 @@ export function CrewBoard({
 
   // Opening the Calendar always starts in View (Edit is a deliberate click each time).
   useEffect(() => {
-    if (boardView === "month" || boardView === "year" || boardView === "list") {
-      setScheduleView((current) => setCalendarMode(current, "view"));
-    }
+    if (boardView !== "month" && boardView !== "year" && boardView !== "list") return;
+    setScheduleView((current) => {
+      if (current.calendarMode === "view") return current;
+      return setCalendarMode(current, "view");
+    });
   }, [boardView]);
 
   // Someone on another computer saved: reload just the books that changed.
@@ -647,27 +649,34 @@ export function CrewBoard({
     return () => window.removeEventListener(SYNC_CHANGE_EVENT, onShared);
   }, []);
 
-  // Keep rotation book in sync when roster people/stints change
+  // Keep rotation book in sync when roster people/stints change.
+  // Bail out without saveRotations when nothing meaningful changed — avoids a
+  // sync announce → reload → merge → save loop that keeps re-rendering locally.
   useEffect(() => {
     if (!hydrated) return;
     setRotationBook((prev) => {
       const merged = dropAssumedFlights(mergeRotationBook(basePeople, prev));
-      const same =
-        merged.rotations.length === prev.rotations.length &&
-        merged.rotations.every((row, index) => {
-          const prior = prev.rotations[index];
-          return (
-            prior &&
-            prior.id === row.id &&
-            prior.plannedIn === row.plannedIn &&
-            prior.plannedOut === row.plannedOut &&
-            prior.outbound.confirmed === row.outbound.confirmed &&
-            prior.returnTravel.confirmed === row.returnTravel.confirmed
-          );
-        });
-      if (same) return prev;
-      saveRotations(merged);
-      return merged;
+      if (merged.rotations.length !== prev.rotations.length) {
+        saveRotations(merged);
+        return merged;
+      }
+      const prevById = new Map(prev.rotations.map((row) => [row.id, row]));
+      for (const row of merged.rotations) {
+        const prior = prevById.get(row.id);
+        if (
+          !prior ||
+          prior.plannedIn !== row.plannedIn ||
+          prior.plannedOut !== row.plannedOut ||
+          prior.outbound.confirmed !== row.outbound.confirmed ||
+          prior.returnTravel.confirmed !== row.returnTravel.confirmed ||
+          prior.site !== row.site ||
+          prior.personId !== row.personId
+        ) {
+          saveRotations(merged);
+          return merged;
+        }
+      }
+      return prev;
     });
   }, [hydrated, basePeople]);
 
@@ -685,19 +694,22 @@ export function CrewBoard({
     () => overview.rows.filter((row) => row.person.active !== false),
     [overview.rows],
   );
-  const reminderCount = useMemo(
-    () => {
-      const board = buildSituationReminders({
-        rows: activeOverviewRows,
-        opsBook,
-        book: rotationBook,
-        asOf,
-        planDays: notify.reminderPlanDays,
-      });
-      return board.week.length + board.lookahead.length;
-    },
-    [activeOverviewRows, asOf, opsBook, rotationBook, notify.reminderPlanDays],
+  // Reminders always follow wall-clock today — not the year in the nav (browsing 2027
+  // must not invent a Dec 28–Jan 3 week of last-season accommodation nags).
+  const reminderRows = useMemo(
+    () => crewOverview(today, opsBook, people).rows.filter((row) => row.person.active !== false),
+    [opsBook, people, today],
   );
+  const reminderCount = useMemo(() => {
+    const board = buildSituationReminders({
+      rows: reminderRows,
+      opsBook,
+      book: rotationBook,
+      asOf: today,
+      planDays: notify.reminderPlanDays,
+    });
+    return board.week.length + board.lookahead.length;
+  }, [reminderRows, opsBook, rotationBook, today, notify.reminderPlanDays]);
 
   useEffect(() => {
     onReminderCountChange?.(reminderCount);
@@ -2244,10 +2256,10 @@ export function CrewBoard({
 
       {remindersOpen && onCloseReminders ? (
         <CrewReminders
-          rows={activeOverviewRows}
+          rows={reminderRows}
           rotationBook={rotationBook}
           opsBook={opsBook}
-          asOf={asOf}
+          asOf={today}
           planDays={notify.reminderPlanDays}
           onClose={onCloseReminders}
           onOpenPerson={(personId) => {
