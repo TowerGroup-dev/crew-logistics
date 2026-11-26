@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Database, Download, Printer } from "lucide-react";
+import { ArrowRight, Database, Download, Printer } from "lucide-react";
 import type { CrewActivityLog } from "@/lib/crew-activity-log";
-import { buildZip, csvBytes, downloadFile, toCsv } from "@/lib/crew-export";
+import { buildZip, csvBytes, downloadFile } from "@/lib/crew-export";
+import {
+  exportPowerBiTables,
+  powerBiZipReadme,
+} from "@/lib/crew-powerbi-export";
 import {
   buildReportTables,
   summarisePeriod,
+  type ActivityRow,
   type BookingStatus,
   type PeriodSummary,
   type ReportTables,
@@ -19,7 +24,14 @@ import { opsFor, type CrewOpsBook } from "@/lib/crew-ops";
 import { siteLabel, type CrewPerson, type CrewSnapshot } from "@/lib/crew-schedule";
 import type { CrewStopoverBook } from "@/lib/crew-stopovers";
 import type { TravelHub } from "@/lib/crew-travel-hubs";
-import { formatDate, formatMedium, formatShort, parseISODate, toISODate } from "@/lib/dates";
+import {
+  addDays,
+  formatDate,
+  formatMedium,
+  formatShort,
+  parseISODate,
+  todayInZone,
+} from "@/lib/dates";
 
 const MONTH_OPTIONS = [
   { value: 1, label: "January" },
@@ -233,18 +245,34 @@ export function CrewMonthlyReportPanel({
     [rotationBook, selectedMonth, siteOrder, tables, year],
   );
 
+  const priorSummary = useMemo(() => {
+    if (!selectedMonth || selectedMonth < 2) return null;
+    return summarisePeriod(tables, { year, month: selectedMonth - 1 }, rotationBook, siteOrder);
+  }, [rotationBook, selectedMonth, siteOrder, tables, year]);
+
+  const outlook = useMemo(() => buildStaffingOutlook(tables, year, summary.averageHeadcount), [summary.averageHeadcount, tables, year]);
+
   const colourFor = (site: string, index: number) =>
     siteColours[site] || FALLBACK_HEX[index % FALLBACK_HEX.length]!;
 
+  const flightOpen = summary.openItems.filter((row) => /flight/i.test(row.item));
+  const roomOpen = summary.openItems.filter((row) => /room/i.test(row.item));
+  const bookingReady =
+    summary.arrivals.length + summary.departures.length === 0
+      ? 1
+      : 1 -
+        summary.openItems.length /
+          Math.max(1, summary.arrivals.length * 2 + summary.departures.length);
+
   return (
-    <div className="crew-report space-y-5 p-4 sm:p-5" data-print-root>
+    <div className="crew-report space-y-8 p-4 sm:p-6" data-print-root>
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Tower Arctic Ltd. · Crew report</p>
-          <h2 className="mt-1 font-heading text-2xl tracking-tight">{summary.label}</h2>
+          <h2 className="mt-1 font-heading text-2xl tracking-tight">{summary.label} operations</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {formatMedium(summary.from)} to {formatMedium(summary.last)} · active crew only · produced{" "}
-            {formatMedium(toISODate(new Date()))}
+            Report updated · {formatMedium(todayInZone())} · {formatMedium(summary.from)} to{" "}
+            {formatMedium(summary.last)} · active crew only
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2 print:hidden">
@@ -279,39 +307,38 @@ export function CrewMonthlyReportPanel({
         </div>
       </header>
 
-      <ReportNarrative summary={summary} />
+      <OpsHero
+        summary={summary}
+        flightOpen={flightOpen.length}
+        roomOpen={roomOpen.length}
+        bookingReady={bookingReady}
+      />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi label="People on site" value={summary.peopleOnSite.toLocaleString("en-CA")} hint="at least one day" />
-        <Kpi label="Person-days" value={summary.personDays.toLocaleString("en-CA")} hint="days on site, all crew" />
-        <Kpi label="Average per day" value={summary.averageHeadcount.toFixed(1)} hint="people on site" />
-        <Kpi
-          label="Busiest day"
-          value={String(summary.peak.count)}
-          hint={summary.personDays ? shortDay(summary.peak.date) : "no one on site"}
-        />
-        <Kpi
-          label="Arrivals / departures"
-          value={`${summary.arrivals.length} / ${summary.departures.length}`}
-          hint="stays starting / ending"
-        />
-        <Kpi
-          label="Open items"
-          value={String(summary.openItems.length)}
-          hint="flights or rooms to book"
-          tone={summary.openItems.length ? "alert" : "ok"}
-        />
-      </div>
+      {priorSummary ? <MonthComparison current={summary} prior={priorSummary} /> : null}
+
+      <ReportSection
+        title="Staffing outlook"
+        note="Daily headcount for the next 30 days. Dashed line is this period’s average — a simple planning target."
+      >
+        <StaffingOutlookChart outlook={outlook} />
+      </ReportSection>
+
+      <ActionItemsPanel
+        openItems={summary.openItems}
+        flightOpen={flightOpen}
+        roomOpen={roomOpen}
+        onOpen={onOpen}
+      />
 
       <ReportSection
         title="Daily headcount"
-        note="People on site each day, split by site. This is the same count shown under each day on the Month calendar."
+        note="People on site each day in this period, split by site. Same counts as under each day on the Month calendar."
       >
         <HeadcountChart summary={summary} colourFor={colourFor} />
       </ReportSection>
 
       {summary.byMonth.length ? (
-        <ReportSection title="Month by month" note="How the year breaks down. Click a month in the Period list for its full report.">
+        <ReportSection title="Month by month" note="How the year breaks down. Pick a month in Period for its full report.">
           <SimpleTable
             headers={["Month", "People", "Person-days", "Avg per day", "Busiest day", "Arrivals", "Departures"]}
             align={["left", "right", "right", "right", "right", "right", "right"]}
@@ -329,7 +356,7 @@ export function CrewMonthlyReportPanel({
         </ReportSection>
       ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-8 lg:grid-cols-2">
         <ReportSection title="By site" note="Share of all time on site in this period.">
           <SimpleTable
             headers={["Site", "People", "Person-days", "Busiest day", "Share"]}
@@ -355,7 +382,7 @@ export function CrewMonthlyReportPanel({
               <span key="r" className="font-medium">{row.role}</span>,
               row.people,
               row.personDays.toLocaleString("en-CA"),
-              (row.personDays / summary.days.length).toFixed(1),
+              (row.personDays / Math.max(1, summary.days.length)).toFixed(1),
             ])}
             empty="No one on site in this period."
           />
@@ -393,59 +420,22 @@ export function CrewMonthlyReportPanel({
         />
       </ReportSection>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <ReportSection title={`Arrivals (${summary.arrivals.length})`} note="Stays that start in this period.">
-          <SimpleTable
-            scroll
-            headers={["Date", "Name", "Site", "Flight in", "Room"]}
-            align={["left", "left", "left", "left", "left"]}
-            rows={summary.arrivals.map((row) => [
-              shortDay(row.date),
-              <NameCell key="n" name={row.name} personId={row.personId} onOpen={onOpen} />,
-              row.site,
-              <StatusBadge key="f" status={row.flight} />,
-              <StatusBadge key="r" status={row.room} />,
-            ])}
-            empty="No arrivals."
-          />
-        </ReportSection>
-        <ReportSection title={`Departures (${summary.departures.length})`} note="Last day on site falls in this period.">
-          <SimpleTable
-            scroll
-            headers={["Last day", "Name", "Site", "Flight home", "Replaced by"]}
-            align={["left", "left", "left", "left", "left"]}
-            rows={summary.departures.map((row) => [
-              shortDay(row.date),
-              <NameCell key="n" name={row.name} personId={row.personId} onOpen={onOpen} />,
-              row.site,
-              <StatusBadge key="f" status={row.flight} />,
-              row.replacement || <span key="x" className="text-muted-foreground">None set</span>,
-            ])}
-            empty="No departures."
-          />
-        </ReportSection>
+      <div className="grid gap-8 lg:grid-cols-2">
+        <MovementList
+          title={`Arrivals (${summary.arrivals.length})`}
+          note="Stays that start in this period."
+          kind="arrival"
+          rows={summary.arrivals}
+          onOpen={onOpen}
+        />
+        <MovementList
+          title={`Departures (${summary.departures.length})`}
+          note="Last day on site falls in this period."
+          kind="departure"
+          rows={summary.departures}
+          onOpen={onOpen}
+        />
       </div>
-
-      <ReportSection
-        title={`Open items (${summary.openItems.length})`}
-        note="Movements in this period that still need a flight or a room."
-      >
-        {summary.openItems.length ? (
-          <ul className="divide-y divide-border">
-            {summary.openItems.map((row, index) => (
-              <li key={`${row.personId}-${row.item}-${index}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                <span className="w-16 shrink-0 tabular-nums text-muted-foreground">{shortDay(row.date)}</span>
-                <span className="min-w-0 flex-1">
-                  <NameCell name={row.name} personId={row.personId} onOpen={onOpen} />
-                  <span className="text-muted-foreground"> · {row.item}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="px-4 py-5 text-sm text-emerald-800">Everything moving in this period has its flights and rooms.</p>
-        )}
-      </ReportSection>
 
       <ReportSection
         title={`Flights (${summary.flightsInPeriod.length})`}
@@ -468,75 +458,591 @@ export function CrewMonthlyReportPanel({
         />
       </ReportSection>
 
-      <ReportSection
-        title={`Planning log (${summary.activity.length})`}
-        note="Changes made in the app: stays placed, extended or cleared, role moves, bookings."
-      >
-        {summary.activity.length ? (
-          <ul className="max-h-80 divide-y divide-border overflow-y-auto print:max-h-none print:overflow-visible">
-            {summary.activity.map((row) => (
-              <li key={row.ActivityId} className="flex gap-3 px-4 py-2.5 text-sm">
-                <span className="w-16 shrink-0 tabular-nums text-muted-foreground">{shortDay(row.Date)}</span>
-                <span className="min-w-0 flex-1">{row.Detail}</span>
-                <span className="shrink-0 text-xs text-muted-foreground capitalize">{row.Kind}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="px-4 py-5 text-sm text-muted-foreground">No changes logged in this period.</p>
-        )}
-      </ReportSection>
+      <PlanningLogPanel activity={summary.activity} onOpen={onOpen} />
 
       <PowerBiPanel tables={tables} />
     </div>
   );
 }
 
-function ReportNarrative({ summary }: { summary: PeriodSummary }) {
-  if (!summary.personDays) {
-    return (
-      <p className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm leading-relaxed">
-        No one was scheduled on site in {summary.label}.
-      </p>
-    );
+type OpenItem = PeriodSummary["openItems"][number];
+
+type StaffingOutlook = {
+  days: string[];
+  headcount: number[];
+  target: number;
+  belowTarget: number;
+  start: string;
+};
+
+function buildStaffingOutlook(tables: ReportTables, year: number, averageHeadcount: number): StaffingOutlook {
+  const today = todayInZone();
+  const yearStart = `${year}-01-01`;
+  const yearEnd = `${year}-12-31`;
+  const start = today < yearStart ? yearStart : today > yearEnd ? yearEnd : today;
+  const days: string[] = [];
+  for (let i = 0; i < 30; i += 1) {
+    const iso = addDays(start, i);
+    if (iso > yearEnd) break;
+    days.push(iso);
   }
+  const byDate = new Map<string, number>();
+  for (const row of tables.daily) {
+    byDate.set(row.Date, (byDate.get(row.Date) ?? 0) + 1);
+  }
+  const headcount = days.map((iso) => byDate.get(iso) ?? 0);
+  const target = Math.max(1, Math.round(averageHeadcount || 0));
+  return {
+    days,
+    headcount,
+    target,
+    belowTarget: headcount.filter((count) => count < target).length,
+    start,
+  };
+}
+
+function OpsHero({
+  summary,
+  flightOpen,
+  roomOpen,
+  bookingReady,
+}: {
+  summary: PeriodSummary;
+  flightOpen: number;
+  roomOpen: number;
+  bookingReady: number;
+}) {
   const topSite = [...summary.bySite].sort((a, b) => b.personDays - a.personDays)[0];
-  const topRole = summary.byRole[0];
-  const sentences = [
-    `In ${summary.label.replace(" (full year)", "")}, ${plural(summary.peopleOnSite, "person", "people")} spent ${plural(summary.personDays, "person-day")} on site.`,
-    `On an average day ${summary.averageHeadcount.toFixed(1)} people were on site. The busiest day was ${formatMedium(summary.peak.date)} with ${summary.peak.count}; the quietest was ${formatMedium(summary.low.date)} with ${summary.low.count}.`,
-    topSite
-      ? summary.bySite.length > 1
-        ? `${topSite.site} accounted for ${percent(topSite.share)} of the time on site (${plural(topSite.people, "person", "people")}), across ${summary.bySite.length} sites in total.`
-        : `All time on site was at ${topSite.site}.`
-      : "",
-    topRole ? `${topRole.role} was the largest role, at ${plural(topRole.personDays, "person-day")}.` : "",
-    `${plural(summary.arrivals.length, "arrival")} and ${plural(summary.departures.length, "departure")} were scheduled.`,
-    summary.openItems.length
-      ? `${plural(summary.openItems.length, "item")} still need booking (see Open items).`
-      : "Every arrival and departure has its flights and rooms recorded.",
-  ].filter(Boolean);
+  const siteLine = !summary.personDays
+    ? "No one scheduled on site in this period."
+    : summary.bySite.length === 1 && topSite
+      ? `All ${plural(summary.personDays, "person-day")} are at ${topSite.site}`
+      : topSite
+        ? `${plural(summary.personDays, "person-day")} across ${summary.bySite.length} sites · ${topSite.site} leads at ${percent(topSite.share)}`
+        : plural(summary.personDays, "person-day");
+  const open = summary.openItems.length;
+
   return (
-    <p className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm leading-relaxed">
-      {sentences.join(" ")}
-    </p>
+    <section className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="grid gap-0 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="space-y-6 p-5 sm:p-6">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              {summary.label.replace(" (full year)", "")} operations
+            </p>
+            <h3 className="font-heading text-2xl tracking-tight sm:text-3xl">
+              {plural(summary.peopleOnSite, "crew member")}
+            </h3>
+            <p className="text-base text-muted-foreground">
+              across {plural(summary.bySite.length || 0, "site")}
+            </p>
+            <p className="text-sm leading-relaxed text-muted-foreground">{siteLine}</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <OpsMetric label="Daily crew average" value={summary.averageHeadcount.toFixed(1)} />
+            <OpsMetric
+              label="Peak crew"
+              value={String(summary.peak.count)}
+              hint={summary.personDays ? shortDay(summary.peak.date) : undefined}
+            />
+            <OpsMetric label="Arrivals" value={String(summary.arrivals.length)} hint="Scheduled this period" />
+            <OpsMetric label="Departures" value={String(summary.departures.length)} hint="Scheduled this period" />
+          </div>
+
+          <div className="space-y-1 text-xs text-muted-foreground">
+            <p>Booking readiness {percent(bookingReady)}</p>
+            {summary.bySite.length > 1 ? (
+              <p>
+                Sites: {summary.bySite.map((row) => `${row.site} ${percent(row.share)}`).join(" · ")}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div
+          className={cn(
+            "flex flex-col justify-between gap-6 border-t border-border p-5 sm:p-6 lg:border-t-0 lg:border-l",
+            open ? "bg-rose-50/80" : "bg-emerald-50/70",
+          )}
+        >
+          {open ? (
+            <>
+              <div className="space-y-3">
+                <p className="text-xs font-semibold tracking-wide text-rose-800 uppercase">Needs attention</p>
+                <p className="font-heading text-3xl tracking-tight text-rose-950 tabular-nums">
+                  {open}
+                </p>
+                <p className="text-base font-medium text-rose-950">outstanding bookings</p>
+                <p className="text-sm text-rose-900/80">Flights and rooms still need attention</p>
+                <ul className="space-y-2 pt-1 text-sm text-rose-950">
+                  {flightOpen ? (
+                    <li className="flex items-center gap-2">
+                      <span className="size-2 shrink-0 rounded-full bg-rose-600" aria-hidden />
+                      {plural(flightOpen, "flight")} to book
+                    </li>
+                  ) : null}
+                  {roomOpen ? (
+                    <li className="flex items-center gap-2">
+                      <span className="size-2 shrink-0 rounded-full bg-amber-500" aria-hidden />
+                      {plural(roomOpen, "room")} to confirm
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+              <a
+                href="#open-items"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-rose-900 hover:underline"
+              >
+                View open items <ArrowRight className="size-4" aria-hidden />
+              </a>
+            </>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold tracking-wide text-emerald-800 uppercase">Bookings</p>
+              <p className="font-heading text-2xl tracking-tight text-emerald-950">All clear</p>
+              <p className="text-sm leading-relaxed text-emerald-900/80">
+                Every arrival and departure in this period has flights and rooms recorded.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
-function Kpi({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: "alert" | "ok" }) {
+function OpsMetric({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3 break-inside-avoid">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          "mt-1 text-2xl font-semibold tabular-nums",
-          tone === "alert" && "text-rose-700",
-          tone === "ok" && "text-emerald-700",
-        )}
-      >
-        {value}
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+function MonthComparison({ current, prior }: { current: PeriodSummary; prior: PeriodSummary }) {
+  const deltas = [
+    { label: "Headcount", value: current.peopleOnSite - prior.peopleOnSite, format: (n: number) => String(Math.abs(n)) },
+    { label: "Person-days", value: current.personDays - prior.personDays, format: (n: number) => String(Math.abs(n)) },
+    {
+      label: "Average crew",
+      value: current.averageHeadcount - prior.averageHeadcount,
+      format: (n: number) => Math.abs(n).toFixed(1),
+    },
+    {
+      label: "Open bookings",
+      value: current.openItems.length - prior.openItems.length,
+      format: (n: number) => String(Math.abs(n)),
+    },
+  ];
+  return (
+    <section className="rounded-xl border border-border bg-card px-4 py-4 sm:px-5">
+      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        vs {prior.label.replace(" (full year)", "")}
       </p>
-      {hint ? <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p> : null}
+      <ul className="mt-3 space-y-2 text-sm">
+        {deltas.map((row) => {
+          const up = row.value > 0;
+          const flat = row.value === 0;
+          return (
+            <li key={row.label} className="flex items-baseline justify-between gap-4 tabular-nums">
+              <span className="text-muted-foreground">{row.label}</span>
+              <span className={cn("font-semibold", flat ? "text-muted-foreground" : up ? "text-sky-800" : "text-amber-800")}>
+                {flat ? "—" : `${up ? "↑" : "↓"} ${row.format(row.value)}`}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function ActionItemsPanel({
+  openItems,
+  flightOpen,
+  roomOpen,
+  onOpen,
+}: {
+  openItems: OpenItem[];
+  flightOpen: OpenItem[];
+  roomOpen: OpenItem[];
+  onOpen?: (personId: string) => void;
+}) {
+  return (
+    <section id="open-items" className="scroll-mt-24 overflow-hidden rounded-xl border border-border bg-card">
+      <div className="space-y-1.5 border-b border-border px-4 py-4 sm:px-5">
+        <h3 className="text-sm font-semibold tracking-tight">
+          Action list
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          {plural(openItems.length, "open item")}
+        </p>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Flights to book and rooms to confirm.
+          <br />
+          Click a name to open their record.
+        </p>
+      </div>
+      {!openItems.length ? (
+        <p className="px-4 py-5 text-sm text-emerald-800 sm:px-5">Nothing outstanding — bookings are complete for this period.</p>
+      ) : (
+        <div className="grid gap-0 lg:grid-cols-2">
+          <ActionGroup
+            title="Flights to book"
+            tone="flight"
+            rows={flightOpen}
+            empty="No flights outstanding."
+            onOpen={onOpen}
+          />
+          <ActionGroup
+            title="Rooms to confirm"
+            tone="room"
+            rows={roomOpen}
+            empty="No rooms outstanding."
+            onOpen={onOpen}
+            border
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ActionGroup({
+  title,
+  tone,
+  rows,
+  empty,
+  onOpen,
+  border,
+}: {
+  title: string;
+  tone: "flight" | "room";
+  rows: OpenItem[];
+  empty: string;
+  onOpen?: (personId: string) => void;
+  border?: boolean;
+}) {
+  return (
+    <div className={cn(border && "border-t border-border lg:border-t-0 lg:border-l")}>
+      <div className="flex items-center gap-2 border-b border-border/70 px-4 py-2.5 sm:px-5">
+        <span
+          className={cn("size-2.5 rounded-full", tone === "flight" ? "bg-rose-600" : "bg-amber-500")}
+          aria-hidden
+        />
+        <p className="text-sm font-semibold">
+          {title} <span className="font-normal text-muted-foreground">({rows.length})</span>
+        </p>
+      </div>
+      {rows.length ? (
+        <ul className="divide-y divide-border">
+          {rows.map((row, index) => (
+            <li key={`${row.personId}-${row.item}-${index}`}>
+              <button
+                type="button"
+                disabled={!onOpen}
+                onClick={() => onOpen?.(row.personId)}
+                className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-muted/50 disabled:cursor-default sm:px-5"
+              >
+                <span className="w-16 shrink-0 tabular-nums text-muted-foreground">{shortDay(row.date)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="font-medium">{row.name}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{row.item}</span>
+                </span>
+                {onOpen ? <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="px-4 py-4 text-sm text-muted-foreground sm:px-5">{empty}</p>
+      )}
+    </div>
+  );
+}
+
+function MovementList({
+  title,
+  note,
+  kind,
+  rows,
+  onOpen,
+}: {
+  title: string;
+  note: string;
+  kind: "arrival" | "departure";
+  rows: PeriodSummary["arrivals"] | PeriodSummary["departures"];
+  onOpen?: (personId: string) => void;
+}) {
+  const sorted = [...rows].sort((a, b) => {
+    const aOpen = [a.flight, "room" in a ? a.room : "Confirmed"].some((s) => s === "Not booked") ? 0 : 1;
+    const bOpen = [b.flight, "room" in b ? b.room : "Confirmed"].some((s) => s === "Not booked") ? 0 : 1;
+    return aOpen - bOpen || a.date.localeCompare(b.date) || a.name.localeCompare(b.name);
+  });
+
+  return (
+    <ReportSection title={title} note={note}>
+      {sorted.length ? (
+        <ul className="max-h-96 divide-y divide-border overflow-y-auto print:max-h-none print:overflow-visible">
+          {sorted.map((row) => {
+            const needs =
+              kind === "arrival"
+                ? [
+                    row.flight === "Not booked" ? "Flight" : null,
+                    "room" in row && row.room === "Not booked" ? "Room" : null,
+                  ].filter(Boolean)
+                : [row.flight === "Not booked" ? "Flight home" : null].filter(Boolean);
+            return (
+              <li key={`${row.personId}-${row.date}-${kind}`}>
+                <button
+                  type="button"
+                  disabled={!onOpen}
+                  onClick={() => onOpen?.(row.personId)}
+                  className="flex w-full items-start gap-3 px-4 py-3.5 text-left text-sm hover:bg-muted/50 disabled:cursor-default"
+                >
+                  <span className="w-16 shrink-0 pt-0.5 tabular-nums text-muted-foreground">{shortDay(row.date)}</span>
+                  <span className="min-w-0 flex-1 space-y-2">
+                    <span className="block">
+                      <span className="font-semibold">{row.name}</span>
+                    </span>
+                    <span className="block text-muted-foreground">{row.site}</span>
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <StatusBadge status={row.flight} />
+                      {"room" in row ? <StatusBadge status={row.room} /> : null}
+                      {needs.length ? (
+                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-900">
+                          Needs {needs.join(" + ")}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">
+                          Ready
+                        </span>
+                      )}
+                    </span>
+                    {"replacement" in row ? (
+                      <span className="block text-xs text-muted-foreground">
+                        {row.replacement ? `Replaced by ${row.replacement}` : "No replacement set"}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="px-4 py-5 text-sm text-muted-foreground">None.</p>
+      )}
+    </ReportSection>
+  );
+}
+
+const ACTIVITY_KIND_LABELS: Record<string, string> = {
+  role_section_move: "Role move",
+  stay_place: "Stay placed",
+  stay_clear: "Stay cleared",
+  stay_extend: "Stay extended",
+  stay_role: "Stay role",
+  employee_edit: "Employee edit",
+  flight_booking: "Flight booking",
+  accommodation: "Accommodation",
+  other: "Other",
+};
+
+function PlanningLogPanel({
+  activity,
+  onOpen,
+}: {
+  activity: ActivityRow[];
+  onOpen?: (personId: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [kind, setKind] = useState("all");
+  const [expanded, setExpanded] = useState(false);
+  const kinds = useMemo(() => [...new Set(activity.map((row) => row.Kind))].sort(), [activity]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return activity.filter((row) => {
+      if (kind !== "all" && row.Kind !== kind) return false;
+      if (!q) return true;
+      return (
+        row.Name.toLowerCase().includes(q) ||
+        row.Detail.toLowerCase().includes(q) ||
+        (ACTIVITY_KIND_LABELS[row.Kind] || row.Kind).toLowerCase().includes(q)
+      );
+    });
+  }, [activity, kind, query]);
+  const visible = expanded ? filtered : filtered.slice(0, 10);
+
+  return (
+    <ReportSection
+      title={`Planning log (${activity.length})`}
+      note="Changes made in the app. Latest ten shown; search or expand for the rest."
+    >
+      <div className="flex flex-wrap items-end gap-2 border-b border-border px-4 py-3 print:hidden">
+        <label className="grid min-w-[12rem] flex-1 gap-1 text-sm">
+          <span className="text-xs text-muted-foreground">Search employee or detail</span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Name or text…"
+            className="h-9 rounded-lg border border-input bg-card px-2.5 text-sm"
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          <span className="text-xs text-muted-foreground">Action type</span>
+          <select
+            value={kind}
+            onChange={(event) => setKind(event.target.value)}
+            className="h-9 min-w-[10rem] rounded-lg border border-input bg-card px-2 text-sm"
+          >
+            <option value="all">All types</option>
+            {kinds.map((value) => (
+              <option key={value} value={value}>
+                {ACTIVITY_KIND_LABELS[value] || value}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {filtered.length ? (
+        <>
+          <ul className="divide-y divide-border">
+            {visible.map((row) => (
+              <li key={row.ActivityId} className="flex gap-3 px-4 py-2.5 text-sm">
+                <span className="w-16 shrink-0 tabular-nums text-muted-foreground">{shortDay(row.Date)}</span>
+                <span className="min-w-0 flex-1">
+                  {row.PersonId && onOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpen(row.PersonId)}
+                      className="font-medium hover:text-primary hover:underline"
+                    >
+                      {row.Name || "Unknown"}
+                    </button>
+                  ) : row.Name ? (
+                    <span className="font-medium">{row.Name}</span>
+                  ) : null}
+                  {row.Name ? <span className="text-muted-foreground"> · </span> : null}
+                  <span>{row.Detail}</span>
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {ACTIVITY_KIND_LABELS[row.Kind] || row.Kind}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {filtered.length > 10 ? (
+            <div className="border-t border-border px-4 py-2.5 print:hidden">
+              <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                {expanded ? "Show latest 10" : `Show all ${filtered.length} entries`}
+              </button>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="px-4 py-5 text-sm text-muted-foreground">
+          {activity.length ? "No entries match this search." : "No changes logged in this period."}
+        </p>
+      )}
+    </ReportSection>
+  );
+}
+
+function StaffingOutlookChart({ outlook }: { outlook: StaffingOutlook }) {
+  const count = outlook.days.length;
+  if (!count) {
+    return <p className="px-4 py-5 text-sm text-muted-foreground">No outlook days in this schedule year.</p>;
+  }
+  const max = Math.max(1, outlook.target, ...outlook.headcount);
+  const niceMax = max <= 5 ? max : Math.ceil(max / 5) * 5;
+  const width = 1000;
+  const height = 180;
+  const left = 34;
+  const bottom = 24;
+  const top = 8;
+  const plotW = width - left - 8;
+  const plotH = height - top - bottom;
+  const barW = plotW / count;
+  const y = (value: number) => top + plotH - (value / niceMax) * plotH;
+  const ticks = [0, Math.round(niceMax / 2), niceMax];
+
+  return (
+    <div className="px-4 py-3">
+      <div className="mb-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+        <span>
+          From {formatMedium(outlook.start)} · target {outlook.target} (period average)
+        </span>
+        <span className="ml-auto">
+          {outlook.belowTarget
+            ? `${plural(outlook.belowTarget, "day")} below target`
+            : "At or above target every day"}
+        </span>
+      </div>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-44 w-full"
+        role="img"
+        aria-label="Staffing outlook, next 30 days"
+      >
+        {ticks.map((tick) => (
+          <g key={tick}>
+            <line x1={left} x2={width - 8} y1={y(tick)} y2={y(tick)} stroke="currentColor" className="text-border" strokeWidth={1} />
+            <text x={left - 6} y={y(tick) + 4} textAnchor="end" className="fill-muted-foreground text-[11px]">
+              {tick}
+            </text>
+          </g>
+        ))}
+        <line
+          x1={left}
+          x2={width - 8}
+          y1={y(outlook.target)}
+          y2={y(outlook.target)}
+          stroke="#b45309"
+          strokeDasharray="5 4"
+          strokeWidth={1.5}
+        />
+        {outlook.days.map((iso, i) => {
+          const value = outlook.headcount[i]!;
+          const h = y(0) - y(value);
+          const below = value < outlook.target;
+          return (
+            <g key={iso}>
+              <title>{`${formatMedium(iso)}: ${value} on site`}</title>
+              <rect
+                x={left + i * barW + 1}
+                y={y(value)}
+                width={Math.max(1, barW - 2)}
+                height={Math.max(0, h)}
+                fill={below ? "#f43f5e" : "#0ea5e9"}
+                opacity={0.85}
+              />
+            </g>
+          );
+        })}
+        {outlook.days.map((iso, i) => {
+          const day = Number(iso.slice(8, 10));
+          if (day !== 1 && day % 5 !== 0 && i !== 0) return null;
+          return (
+            <text
+              key={`l-${iso}`}
+              x={left + i * barW + barW / 2}
+              y={height - 6}
+              textAnchor="middle"
+              className="fill-muted-foreground text-[11px]"
+            >
+              {String(day)}
+            </text>
+          );
+        })}
+      </svg>
     </div>
   );
 }
@@ -544,9 +1050,9 @@ function Kpi({ label, value, hint, tone }: { label: string; value: string; hint?
 function ReportSection({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
     <section className="overflow-hidden rounded-xl border border-border bg-card">
-      <div className="border-b border-border px-4 py-3">
+      <div className="space-y-1 border-b border-border px-4 py-3.5">
         <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
-        {note ? <p className="mt-0.5 text-xs text-muted-foreground">{note}</p> : null}
+        {note ? <p className="text-xs leading-relaxed text-muted-foreground">{note}</p> : null}
       </div>
       {children}
     </section>
@@ -721,168 +1227,21 @@ function HeadcountChart({
 
 /* ---------------------------------------------------------- Power BI */
 
-type ExportTable = { file: string; title: string; description: string; rows: number; csv: () => string };
-
-function exportTables(tables: ReportTables): ExportTable[] {
-  const y = tables.year;
-  return [
-    {
-      file: `crew_people_${y}.csv`,
-      title: "People",
-      description: "One row per person: home role, hire type, status, days on site this year. PersonId is the key.",
-      rows: tables.people.length,
-      csv: () =>
-        toCsv(tables.people, [
-          { header: "PersonId", value: (r) => r.PersonId },
-          { header: "Name", value: (r) => r.Name },
-          { header: "HomeRole", value: (r) => r.HomeRole },
-          { header: "Category", value: (r) => r.Category },
-          { header: "Status", value: (r) => r.Status },
-          { header: "HomeSites", value: (r) => r.HomeSites },
-          { header: "DaysOnSiteInYear", value: (r) => r.DaysOnSiteInYear },
-        ]),
-    },
-    {
-      file: `crew_daily_onsite_${y}.csv`,
-      title: "Daily on site",
-      description: "One row per person per day on site (Date, PersonId, Role, Site). Count rows for headcount; sum for person-days.",
-      rows: tables.daily.length,
-      csv: () =>
-        toCsv(tables.daily, [
-          { header: "Date", value: (r) => r.Date },
-          { header: "PersonId", value: (r) => r.PersonId },
-          { header: "Name", value: (r) => r.Name },
-          { header: "Role", value: (r) => r.Role },
-          { header: "Category", value: (r) => r.Category },
-          { header: "Site", value: (r) => r.Site },
-        ]),
-    },
-    {
-      file: `crew_stays_${y}.csv`,
-      title: "Stays",
-      description: "One row per stay: site, role, first and last day, length, whether it came from the sheet or the app.",
-      rows: tables.stays.length,
-      csv: () =>
-        toCsv(tables.stays, [
-          { header: "StayId", value: (r) => r.StayId },
-          { header: "PersonId", value: (r) => r.PersonId },
-          { header: "Name", value: (r) => r.Name },
-          { header: "Role", value: (r) => r.Role },
-          { header: "Site", value: (r) => r.Site },
-          { header: "FirstDay", value: (r) => r.FirstDay },
-          { header: "LastDay", value: (r) => r.LastDay },
-          { header: "Days", value: (r) => r.Days },
-          { header: "OpenEnded", value: (r) => r.OpenEnded },
-          { header: "Source", value: (r) => r.Source },
-          { header: "Note", value: (r) => r.Note },
-        ]),
-    },
-    {
-      file: `crew_rotations_${y}.csv`,
-      title: "Rotations and bookings",
-      description: "One row per rotation: planned and actual dates, flight to site, flight home, room, replacement.",
-      rows: tables.rotations.length,
-      csv: () =>
-        toCsv(tables.rotations, [
-          { header: "RotationId", value: (r) => r.RotationId },
-          { header: "PersonId", value: (r) => r.PersonId },
-          { header: "Name", value: (r) => r.Name },
-          { header: "Role", value: (r) => r.Role },
-          { header: "Site", value: (r) => r.Site },
-          { header: "PlannedIn", value: (r) => r.PlannedIn },
-          { header: "PlannedLastDay", value: (r) => r.PlannedLastDay },
-          { header: "PlannedDays", value: (r) => r.PlannedDays },
-          { header: "ActualIn", value: (r) => r.ActualIn },
-          { header: "ActualOut", value: (r) => r.ActualOut },
-          { header: "FlightToSite", value: (r) => r.FlightToSite },
-          { header: "FlightHome", value: (r) => r.FlightHome },
-          { header: "Room", value: (r) => r.Room },
-          { header: "ReplacedBy", value: (r) => r.ReplacedBy },
-          { header: "Replaces", value: (r) => r.Replaces },
-        ]),
-    },
-    {
-      file: `crew_flights_${y}.csv`,
-      title: "Flights",
-      description: "Every flight booking and sheet flight: direction, route, PNR, status, dates.",
-      rows: tables.flights.length,
-      csv: () =>
-        toCsv(tables.flights, [
-          { header: "FlightId", value: (r) => r.FlightId },
-          { header: "PersonId", value: (r) => r.PersonId },
-          { header: "Name", value: (r) => r.Name },
-          { header: "Direction", value: (r) => r.Direction },
-          { header: "Status", value: (r) => r.Status },
-          { header: "Source", value: (r) => r.Source },
-          { header: "Airline", value: (r) => r.Airline },
-          { header: "PNR", value: (r) => r.PNR },
-          { header: "TicketNumber", value: (r) => r.TicketNumber },
-          { header: "DepartDate", value: (r) => r.DepartDate },
-          { header: "ArriveDate", value: (r) => r.ArriveDate },
-          { header: "FromAirport", value: (r) => r.FromAirport },
-          { header: "ToAirport", value: (r) => r.ToAirport },
-          { header: "Route", value: (r) => r.Route },
-          { header: "Legs", value: (r) => r.Legs },
-          { header: "BookedOn", value: (r) => r.BookedOn },
-          { header: "EnteredBy", value: (r) => r.EnteredBy },
-          { header: "Reference", value: (r) => r.Reference },
-        ]),
-    },
-    {
-      file: `crew_activity_${y}.csv`,
-      title: "Planning log",
-      description: "Every change logged in the app with its timestamp and person.",
-      rows: tables.activity.length,
-      csv: () =>
-        toCsv(tables.activity, [
-          { header: "ActivityId", value: (r) => r.ActivityId },
-          { header: "Timestamp", value: (r) => r.Timestamp },
-          { header: "Date", value: (r) => r.Date },
-          { header: "Kind", value: (r) => r.Kind },
-          { header: "PersonId", value: (r) => r.PersonId },
-          { header: "Name", value: (r) => r.Name },
-          { header: "Detail", value: (r) => r.Detail },
-        ]),
-    },
-  ];
-}
-
 function downloadPowerBiPack(tables: ReportTables) {
-  const files = exportTables(tables).map((table) => ({ name: table.file, bytes: csvBytes(table.csv()) }));
-  files.push({ name: "README.txt", bytes: new TextEncoder().encode(powerBiReadme(tables.year)) });
+  const files = exportPowerBiTables(tables).map((table) => ({
+    name: table.file,
+    bytes: csvBytes(table.csv()),
+  }));
+  files.push({ name: "README.txt", bytes: new TextEncoder().encode(powerBiZipReadme(tables.year)) });
   downloadFile(`crew-logistics-powerbi-${tables.year}.zip`, buildZip(files));
 }
 
-function powerBiReadme(year: number) {
-  return [
-    `Crew Schedule data pack for ${year}`,
-    `Exported ${new Date().toISOString()}`,
-    "",
-    "Tables (CSV, UTF-8, dates as YYYY-MM-DD):",
-    "  crew_people           one row per person (key: PersonId)",
-    "  crew_daily_onsite     one row per person per day on site",
-    "  crew_stays            one row per stay",
-    "  crew_rotations        one row per rotation, with flight and room status",
-    "  crew_flights          one row per flight booking or sheet flight",
-    "  crew_activity         planning log",
-    "",
-    "Power BI setup (once):",
-    "  1. Unzip into a OneDrive or SharePoint folder, e.g. Crew Schedule/Power BI.",
-    "  2. Power BI Desktop: Get data > Text/CSV, load each file (or SharePoint folder and filter by name).",
-    "  3. Model view: link crew_people[PersonId] one-to-many to PersonId in every other table.",
-    "  4. Add a date table and link it to crew_daily_onsite[Date].",
-    "  5. Useful measures:",
-    "       Person-days = COUNTROWS(crew_daily_onsite)",
-    "       Headcount = DISTINCTCOUNT(crew_daily_onsite[PersonId])   (per day on a date axis)",
-    "       Flights not booked = COUNTROWS(FILTER(crew_rotations, crew_rotations[FlightHome] = \"Not booked\"))",
-    "",
-    "To refresh: export a new pack, replace the files in the same folder (keep the file names), then Refresh in Power BI.",
-    "",
-  ].join("\r\n");
-}
-
 function PowerBiPanel({ tables }: { tables: ReportTables }) {
-  const list = exportTables(tables);
+  const list = exportPowerBiTables(tables);
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "https://your-app.example";
+  const exampleDaily = `${origin}/api/powerbi/daily.csv?year=${tables.year}&key=YOUR_KEY`;
+  const exampleCatalog = `${origin}/api/powerbi?year=${tables.year}&key=YOUR_KEY`;
   return (
     <section className="overflow-hidden rounded-xl border border-primary/30 bg-card print:hidden">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-primary/5 px-4 py-3">
@@ -891,10 +1250,9 @@ function PowerBiPanel({ tables }: { tables: ReportTables }) {
             <Database className="size-4 text-primary" /> Data for Power BI and Excel
           </h3>
           <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">
-            Six tables for the whole of {tables.year}, linked by PersonId. Download the pack, unzip it into a
-            OneDrive or SharePoint folder, and point Power BI at that folder. To refresh, export again, replace the
-            files (same names), and press Refresh in Power BI. A README with setup steps and ready-made measures is
-            included.
+            Six tables for {tables.year}, linked by PersonId. Prefer the live API so Power BI refreshes without a
+            zip: set CREW_POWERBI_KEY on the server, then in Power BI use Get data → Web with the URLs below. Zip
+            download remains as an offline backup.
           </p>
         </div>
         <button
@@ -905,6 +1263,26 @@ function PowerBiPanel({ tables }: { tables: ReportTables }) {
           <Download className="size-4" /> Download all (.zip)
         </button>
       </div>
+      <div className="space-y-2 border-b border-border px-4 py-3 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground">Live API (Power BI Get data → Web)</p>
+        <p>
+          Example:{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-[0.7rem] break-all text-foreground">
+            {exampleDaily}
+          </code>
+        </p>
+        <p>
+          Catalog:{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-[0.7rem] break-all text-foreground">
+            {exampleCatalog}
+          </code>
+        </p>
+        <p>
+          Tables: people, daily, stays, rotations, flights, activity. Replace YOUR_KEY with the server
+          CREW_POWERBI_KEY (never shown here). Model: relate PersonId; date table → daily[Date]. Schedule Refresh
+          in Power BI Service.
+        </p>
+      </div>
       <ul className="divide-y divide-border">
         {list.map((table) => (
           <li key={table.file} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
@@ -912,7 +1290,7 @@ function PowerBiPanel({ tables }: { tables: ReportTables }) {
               <p className="font-medium">
                 {table.title}{" "}
                 <span className="font-normal text-muted-foreground">
-                  · {table.file} · {table.rows.toLocaleString("en-CA")} rows
+                  · {table.slug}.csv · {table.file} · {table.rows.toLocaleString("en-CA")} rows
                 </span>
               </p>
               <p className="text-xs text-muted-foreground">{table.description}</p>
@@ -928,7 +1306,7 @@ function PowerBiPanel({ tables }: { tables: ReportTables }) {
         ))}
       </ul>
       <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
-        Bookings and placements are saved in this browser, so export from the computer where they are entered.
+        Live API reads the shared server copy. Zip export uses this browser&apos;s current view of the data.
       </p>
     </section>
   );

@@ -31,12 +31,13 @@ export function CrewSyncStatus() {
       role="status"
       title={[status.error, last, "Changes are shared with everyone and checked every 15 seconds."].filter(Boolean).join("\n")}
       className={cn(
-        "hidden h-8 items-center gap-1.5 rounded-lg border border-input bg-card px-2.5 text-xs font-medium sm:inline-flex",
+        // Fixed width so Saving ↔ Saved does not shove the year control / tabs sideways.
+        "hidden h-8 w-[9.75rem] items-center gap-1.5 rounded-lg border border-input bg-card px-2.5 text-xs font-medium sm:inline-flex",
         view.tone,
       )}
     >
       {view.icon}
-      {view.text}
+      <span className="min-w-0 truncate">{view.text}</span>
     </span>
   );
 }

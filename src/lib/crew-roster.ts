@@ -1,6 +1,6 @@
 /** Editable roster layered on the imported schedule: manual employees and project links. */
 
-import { mergePeopleByName } from "@/lib/crew-schedule";
+import { isCrewCategory, mergePeopleByName, type CrewCategory } from "@/lib/crew-schedule";
 
 export type CrewProjectWindow = {
   from: string | null;
@@ -85,8 +85,8 @@ export type ManualCrewPerson = {
   employmentStatus?: EmploymentStatus;
   /** What-if hire, place on Calendar, then Save or Discard. */
   provisional?: boolean;
-  /** Hire type overlay (REG / LOC / SUB). */
-  category?: "Regular" | "Local" | "Subcontractor";
+  /** Hire type overlay (REG / LOC / SUB / TMP). */
+  category?: CrewCategory;
 };
 
 /** Next on-site stretch added in the app (painted onto the schedule). */
@@ -304,10 +304,7 @@ function readEmployee(value: unknown): ManualCrewPerson | null {
     createdAt: typeof row.createdAt === "string" ? row.createdAt : new Date().toISOString(),
     employmentStatus: normalizeEmploymentStatus(row.employmentStatus) ?? undefined,
     provisional: row.provisional === true,
-    category:
-      row.category === "Regular" || row.category === "Local" || row.category === "Subcontractor"
-        ? row.category
-        : undefined,
+    category: isCrewCategory(row.category) ? row.category : undefined,
   };
 }
 
@@ -612,7 +609,9 @@ export function loadRoster(): CrewRosterBook {
 
 export function saveRoster(book: CrewRosterBook) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(book));
+  const next = JSON.stringify(book);
+  if (localStorage.getItem(STORAGE_KEY) === next) return;
+  localStorage.setItem(STORAGE_KEY, next);
 }
 
 export function projectsForPerson(
@@ -788,7 +787,7 @@ type ImportedPerson = {
   provisional?: boolean;
   active?: boolean;
   aliases?: string[];
-  category?: "Regular" | "Local" | "Subcontractor";
+  category?: CrewCategory;
 };
 
 export function employmentStatusFor(roster: CrewRosterBook, personId: string): EmploymentStatus {
@@ -1013,7 +1012,7 @@ export function upsertEmployeeProfile(
     role?: string;
     notes?: string;
     /** Pass null to clear a previously saved hire type. */
-    category?: "Regular" | "Local" | "Subcontractor" | null;
+    category?: CrewCategory | null;
   },
   seed?: { name: string; role: string },
 ): CrewRosterBook {

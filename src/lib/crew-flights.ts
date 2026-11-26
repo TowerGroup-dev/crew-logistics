@@ -186,7 +186,9 @@ export function loadFlights(): FlightBook {
 
 export function saveFlights(book: FlightBook) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(book));
+  const next = JSON.stringify(book);
+  if (localStorage.getItem(STORAGE_KEY) === next) return;
+  localStorage.setItem(STORAGE_KEY, next);
 }
 
 export function emptySegment(): FlightSegment {
@@ -322,6 +324,40 @@ export function outboundBookingForStay(
       const last = row.segments[row.segments.length - 1];
       const arrive = last?.arriveDate || last?.departDate || "";
       return arrive === from || row.rotationDate === from;
+    }) ||
+    null
+  );
+}
+
+/** Return journey tied to a stay OUT day (leave caption / Site → Home). */
+export function returnBookingForStay(
+  book: FlightBook,
+  personId: string,
+  stayLastInclusive: string,
+): FlightBooking | null {
+  const last = stayLastInclusive.slice(0, 10);
+  if (!last) return null;
+  const active = book.bookings.filter(
+    (row) =>
+      row.personId === personId &&
+      row.direction === "return" &&
+      row.status !== "cancelled" &&
+      row.segments?.length,
+  );
+  return (
+    active.find((row) => row.rotationDate === last) ||
+    active.find((row) =>
+      row.segments.some(
+        (leg) => leg.departDate === last || (leg.arriveDate || leg.departDate) === last,
+      ),
+    ) ||
+    active.find((row) => {
+      if (row.personId !== personId || row.status === "cancelled" || !row.segments?.length) {
+        return false;
+      }
+      return row.segments.some(
+        (leg) => leg.departDate <= last && last <= (leg.arriveDate || leg.departDate),
+      );
     }) ||
     null
   );

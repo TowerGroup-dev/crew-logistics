@@ -342,7 +342,47 @@ export function loadRotations(): RotationBook {
 
 export function saveRotations(book: RotationBook) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(book));
+  const next = JSON.stringify(book);
+  // Identical write still fires storage hooks → sync dirty → pull → re-render loop.
+  if (localStorage.getItem(STORAGE_KEY) === next) return;
+  localStorage.setItem(STORAGE_KEY, next);
+}
+
+/** True when two books describe the same stays/bookings (ignores object identity). */
+export function rotationBooksEquivalent(a: RotationBook, b: RotationBook) {
+  if (a.rotations.length !== b.rotations.length) return false;
+  const byId = new Map(b.rotations.map((row) => [row.id, row]));
+  for (const row of a.rotations) {
+    const other = byId.get(row.id);
+    if (!other) return false;
+    if (
+      row.personId !== other.personId ||
+      row.plannedIn !== other.plannedIn ||
+      row.plannedOut !== other.plannedOut ||
+      row.site !== other.site ||
+      row.role !== other.role ||
+      row.rotationDays !== other.rotationDays ||
+      row.actualIn !== other.actualIn ||
+      row.actualOut !== other.actualOut ||
+      row.notes !== other.notes ||
+      row.source !== other.source ||
+      row.replacementNeeded !== other.replacementNeeded ||
+      row.replacesRotationId !== other.replacesRotationId ||
+      row.replacedByRotationId !== other.replacedByRotationId ||
+      row.stay.checkIn !== other.stay.checkIn ||
+      row.stay.checkOut !== other.stay.checkOut ||
+      row.stay.site !== other.stay.site ||
+      row.stay.confirmed !== other.stay.confirmed ||
+      row.stay.room !== other.stay.room ||
+      JSON.stringify(row.outbound) !== JSON.stringify(other.outbound) ||
+      JSON.stringify(row.returnTravel) !== JSON.stringify(other.returnTravel) ||
+      JSON.stringify(row.moves ?? []) !== JSON.stringify(other.moves ?? []) ||
+      JSON.stringify(row.todoDone ?? []) !== JSON.stringify(other.todoDone ?? [])
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function stintToSeed(person: CrewPerson, stint: CrewStint): CrewRotation {
@@ -730,6 +770,26 @@ export function rotationForPersonOnDay(book: RotationBook, personId: string, iso
   );
 }
 
+/** Stay that ended on/before `iso` within the leave window (for click on post-OUT travel days). */
+export function rotationJustEndedNear(
+  book: RotationBook,
+  personId: string,
+  iso: string,
+  withinDays = 14,
+) {
+  const day = iso.slice(0, 10);
+  return (
+    book.rotations
+      .filter((row) => {
+        if (row.personId !== personId) return false;
+        const last = addDays(row.plannedOut, -1);
+        if (last > day) return false;
+        return daysBetween(last, day) <= withinDays;
+      })
+      .sort((a, b) => b.plannedOut.localeCompare(a.plannedOut))[0] || null
+  );
+}
+
 /** Current stay on `asOf`, else the next upcoming stay. Never falls back to a past rotation. */
 export function currentRotationForPerson(book: RotationBook, personId: string, asOf: string) {
   return (
@@ -737,6 +797,20 @@ export function currentRotationForPerson(book: RotationBook, personId: string, a
     book.rotations
       .filter((row) => row.personId === personId && row.plannedIn > asOf)
       .sort((a, b) => a.plannedIn.localeCompare(b.plannedIn))[0] ||
+    null
+  );
+}
+
+/**
+ * Rotation for a calendar click: covering that day, else just-ended (leave days),
+ * else next upcoming from that day. Does not jump to "today's" stay when the click
+ * was on another date (that caused Dec details when clicking late November).
+ */
+export function rotationForCalendarClick(book: RotationBook, personId: string, iso: string) {
+  return (
+    rotationForPersonOnDay(book, personId, iso) ||
+    rotationJustEndedNear(book, personId, iso) ||
+    currentRotationForPerson(book, personId, iso) ||
     null
   );
 }

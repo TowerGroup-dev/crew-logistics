@@ -33,7 +33,7 @@ export function emptyActivityLog(): CrewActivityLog {
   return { version: 1, entries: [] };
 }
 
-function readLog(raw: unknown): CrewActivityLog {
+export function readActivityLog(raw: unknown): CrewActivityLog {
   if (!raw || typeof raw !== "object") return emptyActivityLog();
   const data = raw as Partial<CrewActivityLog>;
   const entries = Array.isArray(data.entries)
@@ -53,7 +53,7 @@ function readLog(raw: unknown): CrewActivityLog {
 export function loadActivityLog(): CrewActivityLog {
   if (typeof window === "undefined") return emptyActivityLog();
   try {
-    return readLog(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}"));
+    return readActivityLog(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}"));
   } catch {
     return emptyActivityLog();
   }

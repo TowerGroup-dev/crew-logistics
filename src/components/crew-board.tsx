@@ -31,18 +31,22 @@ import {
   type CrewNotifySettings,
 } from "@/lib/crew-notify-settings";
 import {
+  CREW_CATEGORIES,
   CREW_ROLE_ORDER,
   CREW_ROLES,
   CREW_SCHEDULE,
+  crewCategoryFor,
   crewOverview,
   dutyLabel,
   isCampSite,
+  isCrewCategory,
   isOffRotation,
   normalizeRole,
   personSegments,
   roleLabel,
   rotationFor,
   siteLabel,
+  type CrewCategory,
   type CrewDutyStatus,
   type CrewSnapshot,
 } from "@/lib/crew-schedule";
@@ -78,6 +82,7 @@ import { KeepAlive } from "@/components/crew-keep-alive";
 import { CrewNextRotationForm } from "@/components/crew-next-rotation";
 import { CrewOverview, CrewReminders } from "@/components/crew-overview";
 import { buildSituationReminders } from "@/lib/crew-situation-reminders";
+import { isChecklistDone, isChecklistDoneExpired, loadChecklistDone } from "@/lib/crew-checklist-done";
 import { CrewRoleHeader } from "@/components/crew-role-header";
 import { CrewConfirmDialog } from "@/components/crew-confirm-dialog";
 import { CrewRoleAddDialog } from "@/components/crew-role-add-dialog";
@@ -97,12 +102,14 @@ import {
   moveRotationIn,
   loadRotations,
   mergeRotationBook,
+  rotationBooksEquivalent,
   dropAssumedFlights,
   applyRotationMoves,
   newMove,
   upsertRotation,
   bookingsFromRotations,
   migrateOpsIntoRotations,
+  rotationForCalendarClick,
   rotationForPersonOnDay,
   saveRotations,
   type RotationBook,
@@ -115,6 +122,7 @@ import {
   loadFlights,
   outboundBookingForStay,
   removeFlightBooking,
+  returnBookingForStay,
   saveFlights,
   shiftBookingByDays,
   syncOpsFromFlights,
@@ -325,7 +333,7 @@ export function CrewBoard({
     name: "",
     role: "",
     notes: "",
-    category: "" as "" | "Regular" | "Local" | "Subcontractor",
+    category: "" as "" | CrewCategory,
   });
   const [sitesBook, setSitesBook] = useState<CrewSitesBook>(() => loadSitesBook());
   const [travelHubsBook, setTravelHubsBook] = useState<CrewTravelHubsBook>(() => loadTravelHubs());
@@ -441,6 +449,7 @@ export function CrewBoard({
       const merged = mergeRotationBook(mergedPeople, rotationBook);
       const migrated = migrateOpsIntoRotations(merged, seededOps, flights);
       const withFlights = dropAssumedFlights(migrated);
+      if (rotationBooksEquivalent(withFlights, rotationBook)) return;
       setRotationBook(withFlights);
       saveRotations(withFlights);
     });
@@ -590,11 +599,12 @@ export function CrewBoard({
   }, [scheduleYear, today]);
 
   function openPersonRotation(personId: string, iso = asOf, travel: "outbound" | "return" | "moves" | null = null) {
-    // Prefer the stay covering the clicked day, else current/next from today, never a past rotation.
+    // Clicked day: covering that day, else just-ended leave window, else next from that day.
+    // Do not fall back to "today's" stay when the click was on another date.
     const hit =
-      rotationForPersonOnDay(rotationBook, personId, iso) ||
-      currentRotationForPerson(rotationBook, personId, asOf) ||
-      (iso !== asOf ? currentRotationForPerson(rotationBook, personId, iso) : null);
+      iso === asOf
+        ? currentRotationForPerson(rotationBook, personId, asOf)
+        : rotationForCalendarClick(rotationBook, personId, iso);
     // Same cell again → close (undo the open).
     if (hit && selectedRotationId === hit.id && !travel) {
       setSelectedRotationId(null);
@@ -634,7 +644,12 @@ export function CrewBoard({
     function onShared(event: Event) {
       const keys = new Set((event as CustomEvent<{ keys: string[] }>).detail?.keys ?? []);
       if (keys.has("tower-arctic-crew-roster")) setRoster(loadRoster());
-      if (keys.has("tower-arctic-crew-rotations-v1")) setRotationBook(loadRotations());
+      if (keys.has("tower-arctic-crew-rotations-v1")) {
+        setRotationBook((prev) => {
+          const next = loadRotations();
+          return rotationBooksEquivalent(prev, next) ? prev : next;
+        });
+      }
       if (keys.has("tower-arctic-crew-ops")) setOpsBook(loadCrewOps());
       if (keys.has("tower-arctic-crew-flights")) setFlightBook(loadFlights());
       if (keys.has("tower-arctic-crew-stopovers-v1")) setStopoverBook(loadStopovers());
@@ -650,33 +665,15 @@ export function CrewBoard({
   }, []);
 
   // Keep rotation book in sync when roster people/stints change.
-  // Bail out without saveRotations when nothing meaningful changed — avoids a
+  // Bail out without save when nothing meaningful changed — avoids a
   // sync announce → reload → merge → save loop that keeps re-rendering locally.
   useEffect(() => {
     if (!hydrated) return;
     setRotationBook((prev) => {
       const merged = dropAssumedFlights(mergeRotationBook(basePeople, prev));
-      if (merged.rotations.length !== prev.rotations.length) {
-        saveRotations(merged);
-        return merged;
-      }
-      const prevById = new Map(prev.rotations.map((row) => [row.id, row]));
-      for (const row of merged.rotations) {
-        const prior = prevById.get(row.id);
-        if (
-          !prior ||
-          prior.plannedIn !== row.plannedIn ||
-          prior.plannedOut !== row.plannedOut ||
-          prior.outbound.confirmed !== row.outbound.confirmed ||
-          prior.returnTravel.confirmed !== row.returnTravel.confirmed ||
-          prior.site !== row.site ||
-          prior.personId !== row.personId
-        ) {
-          saveRotations(merged);
-          return merged;
-        }
-      }
-      return prev;
+      if (rotationBooksEquivalent(merged, prev)) return prev;
+      saveRotations(merged);
+      return merged;
     });
   }, [hydrated, basePeople]);
 
@@ -708,10 +705,16 @@ export function CrewBoard({
       asOf: today,
       planDays: notify.reminderPlanDays,
     });
-    return board.week.length + board.lookahead.length;
-  }, [reminderRows, opsBook, rotationBook, today, notify.reminderPlanDays]);
+    const done = typeof window !== "undefined" ? loadChecklistDone() : { version: 1 as const, done: {} };
+    const open = (item: { id: string }) =>
+      !isChecklistDoneExpired(done, item.id, today) && !isChecklistDone(done, item.id);
+    return board.week.filter(open).length + board.lookahead.filter(open).length;
+  }, [reminderRows, opsBook, rotationBook, today, notify.reminderPlanDays, remindersOpen]);
 
+  const lastReminderCount = useRef<number | null>(null);
   useEffect(() => {
+    if (lastReminderCount.current === reminderCount) return;
+    lastReminderCount.current = reminderCount;
     onReminderCountChange?.(reminderCount);
   }, [onReminderCountChange, reminderCount]);
 
@@ -851,12 +854,7 @@ export function CrewBoard({
       name: person.name,
       role: person.role,
       notes: overlay?.notes || "",
-      category:
-        person.category === "Regular" ||
-        person.category === "Local" ||
-        person.category === "Subcontractor"
-          ? person.category
-          : "",
+      category: isCrewCategory(person.category) ? person.category : "",
     });
   }
 
@@ -1485,7 +1483,23 @@ export function CrewBoard({
               onBookMove={(personId, iso) => openPersonRotation(personId, iso, "moves")}
               onExtendStay={(personId, stintFrom, newOut) => {
                 // Sheet + app stays: set exclusive OUT (extend or end early).
+                // Leave travel (→ YUL etc.) moves with the new last day.
                 captureHistory();
+                const person = people.find((row) => row.id === personId);
+                const from = stintFrom.slice(0, 10);
+                const nextOut = newOut.slice(0, 10);
+                const stint = (person?.stints || []).find(
+                  (row) => row.from === from || row.idFrom === from,
+                );
+                const oldOut =
+                  stint?.out && stint.out.length >= 10
+                    ? stint.out.slice(0, 10)
+                    : null;
+                const oldLast = oldOut ? addDays(oldOut, -1) : null;
+                const newLast = addDays(nextOut, -1);
+                const delta =
+                  oldLast && newLast ? daysBetween(oldLast, newLast) : 0;
+
                 patchRoster((current) => setStayOut(current, personId, stintFrom, newOut));
                 setRotationBook((current) => {
                   const hit = current.rotations.find(
@@ -1496,12 +1510,63 @@ export function CrewBoard({
                   saveRotations(next);
                   return next;
                 });
-                const person = overview.rows.find((row) => row.person.id === personId)?.person;
+                if (delta !== 0 && oldLast) {
+                  setFlightBook((prev) => {
+                    const booking = returnBookingForStay(prev, personId, oldLast);
+                    if (!booking) {
+                      // Painted hub-only leave mark (no full journey yet).
+                      setStopoverBook((stopPrev) => {
+                        const hub = stopoverOnDay(stopPrev, personId, oldLast);
+                        if (!hub) return stopPrev;
+                        let nextStop = clearStopoversInRange(stopPrev, personId, oldLast, oldLast);
+                        nextStop = paintStopoverDayMap(nextStop, personId, [
+                          { iso: addDays(oldLast, delta), hub },
+                        ]);
+                        saveStopovers(nextStop);
+                        return nextStop;
+                      });
+                      return prev;
+                    }
+                    const oldSpan = journeyDateSpan(booking.segments);
+                    const shifted = shiftBookingByDays(booking, delta);
+                    const next = upsertFlightBooking(prev, shifted);
+                    saveFlights(next);
+                    if (oldSpan) {
+                      setStopoverBook((stopPrev) => {
+                        const hubs: { iso: string; hub: string }[] = [];
+                        for (let d = oldSpan.from; d <= oldSpan.to; d = addDays(d, 1)) {
+                          const hub = stopoverOnDay(stopPrev, personId, d);
+                          if (hub) hubs.push({ iso: addDays(d, delta), hub });
+                        }
+                        let nextStop = clearStopoversInRange(
+                          stopPrev,
+                          personId,
+                          oldSpan.from,
+                          oldSpan.to,
+                        );
+                        nextStop = paintStopoverDayMap(nextStop, personId, hubs);
+                        saveStopovers(nextStop);
+                        return nextStop;
+                      });
+                    }
+                    setOpsBook((opsPrev) => {
+                      const synced = {
+                        ...opsPrev,
+                        [personId]: syncOpsFromFlights(opsPrev, next, personId),
+                      };
+                      saveCrewOps(synced);
+                      return synced;
+                    });
+                    return next;
+                  });
+                }
                 logActivity({
                   kind: "stay_extend",
                   personId,
                   personName: person?.name,
-                  text: `${person?.name || personId} stay changed · out ${newOut}`,
+                  text: `${person?.name || personId} stay changed · out ${newOut}${
+                    delta !== 0 ? " · leave travel moved" : ""
+                  }`,
                 });
               }}
               onSetStayTentative={(personId, stintFrom, tentative) => {
@@ -1763,15 +1828,17 @@ export function CrewBoard({
                       onChange={(event) =>
                         setEmployeeEditDraft((current) => ({
                           ...current,
-                          category: event.target.value as "" | "Regular" | "Local" | "Subcontractor",
+                          category: event.target.value as "" | CrewCategory,
                         }))
                       }
                       className="h-9 rounded-lg border border-input bg-card px-2"
                     >
                       <option value="">-</option>
-                      <option value="Regular">Regular</option>
-                      <option value="Local">Local</option>
-                      <option value="Subcontractor">Subcontractor</option>
+                      {CREW_CATEGORIES.map((entry) => (
+                        <option key={entry} value={entry}>
+                          {entry}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label className="grid gap-1 text-sm sm:col-span-2 lg:col-span-4">
@@ -1865,7 +1932,11 @@ export function CrewBoard({
                           </span>
                         ) : null}
                       </p>
-                      <p className="text-xs text-muted-foreground">{roleLabel(row.person)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {roleLabel(row.person)}
+                        {` · ${crewCategoryFor(row.person)}`}
+                        {row.person.manual ? " · Manual" : ""}
+                      </p>
                     </button>
                     <span
                       className={cn(
@@ -2262,6 +2333,7 @@ export function CrewBoard({
           asOf={today}
           planDays={notify.reminderPlanDays}
           onClose={onCloseReminders}
+          onCountChange={onReminderCountChange}
           onOpenPerson={(personId) => {
             openPersonRotation(personId);
             onCloseReminders();

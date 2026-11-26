@@ -170,11 +170,11 @@ export function CrewNav({
 
   return (
     <>
-    <nav className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
+    <nav className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 py-1.5 sm:py-2">
         {/* Phones use the tab bar at the bottom instead. */}
-        <div className="hidden items-stretch overflow-hidden rounded-md border border-border sm:flex">
-          {PRIMARY.map((section, index) => {
+        <div className="-mb-px hidden flex-wrap items-center gap-1 sm:flex">
+          {PRIMARY.map((section) => {
             const active =
               section.key === "calendar"
                 ? inCalendar
@@ -187,7 +187,6 @@ export function CrewNav({
                 section={section}
                 href={hrefFor(section.href)}
                 active={active}
-                showDivider={index > 0}
                 onNavigate={() =>
                   goTo(
                     section.href,
@@ -206,12 +205,8 @@ export function CrewNav({
           </h1>
         ) : null}
         {inCalendar ? (
-          <div
-            className="flex items-stretch overflow-hidden rounded-md border border-border"
-            role="group"
-            aria-label="Calendar view"
-          >
-            {CALENDAR_VIEWS.map((item, index) => {
+          <div className="-mb-px flex items-end gap-1" role="group" aria-label="Calendar view">
+            {CALENDAR_VIEWS.map((item) => {
               const active =
                 (item.href === "/month" && activeView === "month") ||
                 (item.href === "/year" && activeView === "year") ||
@@ -228,11 +223,10 @@ export function CrewNav({
                     )
                   }
                   className={cn(
-                    "px-3 py-2 text-sm font-medium transition",
-                    index > 0 && "border-l border-border",
+                    "border-b-[3px] px-3 py-2 text-sm font-medium transition",
                     active
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {item.label}
@@ -395,7 +389,7 @@ export function CrewNav({
           </a>
         </div>
       ) : null}
-      <div className="grid grid-cols-4 divide-x divide-border">
+      <div className="grid grid-cols-4">
         {PRIMARY.map((section) => {
           const Icon = section.icon;
           const active =
@@ -415,7 +409,7 @@ export function CrewNav({
               }}
               className={cn(
                 "flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium [@media(max-height:511px)]:h-10 [@media(max-height:511px)]:flex-row [@media(max-height:511px)]:gap-1.5 [@media(max-height:511px)]:text-xs",
-                active ? "bg-muted text-primary" : "text-slate-500",
+                active ? "text-primary" : "text-slate-500",
               )}
             >
               <Icon className={cn("size-5", active && "stroke-[2.25]")} />
@@ -429,7 +423,7 @@ export function CrewNav({
           aria-expanded={moreOpen}
           className={cn(
             "flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium [@media(max-height:511px)]:h-10 [@media(max-height:511px)]:flex-row [@media(max-height:511px)]:gap-1.5 [@media(max-height:511px)]:text-xs",
-            moreOpen || moreActive ? "bg-muted text-primary" : "text-slate-500",
+            moreOpen || moreActive ? "text-primary" : "text-slate-500",
           )}
         >
           <MoreHorizontal className="size-5" />
@@ -472,13 +466,11 @@ function NavTab({
   section,
   href,
   active,
-  showDivider,
   onNavigate,
 }: {
   section: Section;
   href: string;
   active: boolean;
-  showDivider?: boolean;
   onNavigate?: () => void;
 }) {
   const Icon = section.icon;
@@ -494,11 +486,10 @@ function NavTab({
         onNavigate();
       }}
       className={cn(
-        "flex items-center gap-2 px-3 py-2 text-sm font-medium transition",
-        showDivider && "border-l border-border",
+        "flex items-center gap-2 border-b-[3px] px-3 py-2.5 text-sm font-medium",
         active
-          ? "bg-muted text-foreground"
-          : "text-slate-600 hover:bg-muted/50 hover:text-slate-900",
+          ? "border-primary text-foreground"
+          : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900",
       )}
     >
       <Icon className="size-4" aria-hidden suppressHydrationWarning />

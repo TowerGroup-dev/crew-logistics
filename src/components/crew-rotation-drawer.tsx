@@ -136,7 +136,7 @@ export function CrewRotationDrawer({
         <header className="border-b border-border bg-card px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 sm:px-6 sm:py-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="truncate text-lg font-semibold text-foreground">{person.name}</h2>
+              <h2 className="truncate text-lg font-medium text-foreground">{person.name}</h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 {draft.role} · {draft.site || "-"} · {formatMedium(draft.plannedIn)} –{" "}
                 {formatMedium(outInclusive)}
@@ -150,7 +150,7 @@ export function CrewRotationDrawer({
               <X className="size-4" />
             </button>
           </div>
-          <nav className="mt-5 flex gap-5 overflow-x-auto text-sm">
+          <nav className="mt-5 flex flex-wrap gap-x-5 gap-y-1 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {(
               [
                 ["overview", "Overview", null],
@@ -231,7 +231,7 @@ export function CrewRotationDrawer({
 
           {section === "travel" ? (
             <div className="space-y-6">
-              <nav className="flex gap-5 overflow-x-auto border-b border-border text-sm">
+              <nav className="flex flex-wrap gap-x-5 gap-y-1 border-b border-border text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {(
                   [
                     ["outbound", "Coming to Site"],

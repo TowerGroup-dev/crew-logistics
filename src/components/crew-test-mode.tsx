@@ -298,13 +298,13 @@ function TestGuide() {
       aria-label="Test guide"
       className="fixed right-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[60] flex max-h-[70vh] w-[min(380px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl sm:right-5 sm:bottom-5"
     >
-      <div className="flex items-start gap-2 border-b border-border px-4 py-3">
-        <div className="min-w-0 flex-1">
+      <div className="flex items-start gap-2 border-b border-border px-4 py-3.5">
+        <div className="min-w-0 flex-1 space-y-1.5">
           <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
             Test guide · page {index + 1} of {TEST_GUIDE.length}
           </p>
           <p className="text-base font-semibold leading-snug">{section.title}</p>
-          <p className="text-xs text-muted-foreground">{section.about}</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">{section.about}</p>
         </div>
         <button type="button" onClick={() => toggleOpen(false)} aria-label="Hide guide" className="rounded-md p-1 text-muted-foreground hover:bg-muted">
           <ChevronDown className="size-4" />
@@ -334,10 +334,14 @@ function TestGuide() {
           </button>
         </form>
       ) : null}
-      <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+      <ol className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-3">
         {section.steps.map((step, i) => (
           <li key={step.id}>
-            <button type="button" onClick={() => tick(step.id)} className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-muted/70">
+            <button
+              type="button"
+              onClick={() => tick(step.id)}
+              className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2.5 text-left hover:bg-muted/70"
+            >
               <span
                 className={cn(
                   "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border text-[11px] font-bold",
@@ -346,9 +350,16 @@ function TestGuide() {
               >
                 {ticks[step.id] ? <Check className="size-3" strokeWidth={3} /> : i + 1}
               </span>
-              <span className="min-w-0">
-                <span className={cn("block text-sm font-medium leading-snug", ticks[step.id] && "text-muted-foreground line-through")}>{step.do}</span>
-                <span className="block text-xs text-muted-foreground">Expected: {step.expect}</span>
+              <span className="min-w-0 space-y-1">
+                <span className={cn("block text-sm font-medium leading-snug", ticks[step.id] && "text-muted-foreground line-through")}>
+                  {step.do}
+                </span>
+                <span className="block text-xs leading-relaxed text-muted-foreground">
+                  Expected
+                </span>
+                <span className="block text-xs leading-relaxed text-muted-foreground">
+                  {step.expect}
+                </span>
               </span>
             </button>
           </li>

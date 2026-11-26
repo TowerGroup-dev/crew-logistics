@@ -210,10 +210,21 @@ export function roleLabel(person: Pick<CrewPerson, "role" | "roles">) {
 }
 
 /**
- * Hire type on the Month Type column.
- * Regular = Tower crew · Local = local hires · Subcontractor = Gemtec etc.
+ * Hire type on the Month Type column / Employees list.
+ * Regular = Tower crew · Local = local hires · Subcontractor = Gemtec etc. · Temporary = short-term.
  */
-export type CrewCategory = "Regular" | "Local" | "Subcontractor";
+export type CrewCategory = "Regular" | "Local" | "Subcontractor" | "Temporary";
+
+export const CREW_CATEGORIES: readonly CrewCategory[] = [
+  "Regular",
+  "Local",
+  "Subcontractor",
+  "Temporary",
+];
+
+export function isCrewCategory(value: unknown): value is CrewCategory {
+  return typeof value === "string" && (CREW_CATEGORIES as readonly string[]).includes(value);
+}
 
 /** Explicit local hires (name match, case-insensitive). */
 const LOCAL_CREW_NAMES = new Set([
@@ -225,9 +236,7 @@ const LOCAL_CREW_NAMES = new Set([
 export function crewCategoryFor(
   person: Pick<CrewPerson, "name"> & { category?: CrewCategory | null },
 ): CrewCategory {
-  if (person.category === "Regular" || person.category === "Local" || person.category === "Subcontractor") {
-    return person.category;
-  }
+  if (isCrewCategory(person.category)) return person.category;
   // Subcontractor firm rows (Gemtec, …).
   if (/\bgemtec\b/i.test(person.name)) return "Subcontractor";
   const key = person.name.trim().toLowerCase();
@@ -244,12 +253,14 @@ export function crewCategoryLabel(category: CrewCategory) {
       return "LOC";
     case "Subcontractor":
       return "SUB";
+    case "Temporary":
+      return "TMP";
     default:
       return "REG";
   }
 }
 
-export const CREW_CATEGORY_ORDER: CrewCategory[] = ["Regular", "Local", "Subcontractor"];
+export const CREW_CATEGORY_ORDER: CrewCategory[] = [...CREW_CATEGORIES];
 
 function roleRank(value: string) {
   const index = (CREW_ROLE_ORDER as readonly string[]).indexOf(value);
@@ -537,8 +548,7 @@ export const CREW_SCHEDULE: CrewScheduleData = {
           warnings: "warnings" in person ? [...person.warnings] : undefined,
           category: (() => {
             if (!("category" in person) || typeof person.category !== "string") return undefined;
-            const value = person.category as CrewCategory;
-            return value === "Local" || value === "Subcontractor" || value === "Regular" ? value : undefined;
+            return isCrewCategory(person.category) ? person.category : undefined;
           })(),
         };
       }),

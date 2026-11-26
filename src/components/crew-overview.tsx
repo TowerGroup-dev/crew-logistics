@@ -7,20 +7,16 @@ import {
   ChevronDown,
   CircleCheck,
   Clock3,
-  PlaneLanding,
-  PlaneTakeoff,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
-import type { ChecklistItem, RotationBook } from "@/lib/crew-rotations";
+import type { RotationBook } from "@/lib/crew-rotations";
 import type { CrewOpsBook } from "@/lib/crew-ops";
 import type { CrewSnapshot } from "@/lib/crew-schedule";
 import {
   buildOverview,
   buildWeekStory,
-  type ActionGroup,
-  type ArrivingRow,
   type BookingState,
-  type LeavingRow,
   type OnSiteRow,
   type WeekStoryLine,
 } from "@/lib/crew-overview-model";
@@ -41,12 +37,16 @@ import {
   unmarkChecklistDone,
   type ChecklistDoneBook,
 } from "@/lib/crew-checklist-done";
-import { daysBetween, formatShort, parseISODate, todayInZone } from "@/lib/dates";
+import { formatShort, parseISODate, todayInZone } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 
 function emptyDoneSafe() {
   if (typeof window === "undefined") return emptyChecklistDone();
   return loadChecklistDone();
+}
+
+function reminderStillOpen(doneBook: ChecklistDoneBook, id: string, asOf: string) {
+  return !isChecklistDoneExpired(doneBook, id, asOf) && !isChecklistDone(doneBook, id);
 }
 
 function shortDate(iso: string | null) {
@@ -56,16 +56,6 @@ function shortDate(iso: string | null) {
 
 function plural(n: number, word: string) {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
-}
-
-function dueText(dueOn: string | null, asOf: string) {
-  if (!dueOn) return { text: "No date", late: false };
-  const diff = daysBetween(asOf, dueOn);
-  if (diff < 0) return { text: `${plural(-diff, "day")} late`, late: true };
-  if (diff === 0) return { text: "Due today", late: true };
-  if (diff === 1) return { text: "Due tomorrow", late: false };
-  if (diff <= 7) return { text: `Due in ${diff} days`, late: false };
-  return { text: `Due ${shortDate(dueOn)}`, late: false };
 }
 
 export function CrewReminders({
@@ -89,6 +79,12 @@ export function CrewReminders({
   onClose?: () => void;
   onCountChange?: (count: number) => void;
 }) {
+  const [doneBook, setDoneBook] = useState<ChecklistDoneBook>(() => emptyDoneSafe());
+
+  useEffect(() => {
+    setDoneBook(loadChecklistDone());
+  }, []);
+
   const board = useMemo(
     () =>
       buildSituationReminders({
@@ -101,7 +97,15 @@ export function CrewReminders({
     [asOf, opsBook, planDays, rotationBook, rows],
   );
 
-  const count = board.week.length + board.lookahead.length;
+  const openWeek = useMemo(
+    () => board.week.filter((item) => reminderStillOpen(doneBook, item.id, asOf)),
+    [asOf, board.week, doneBook],
+  );
+  const openNext = useMemo(
+    () => board.lookahead.filter((item) => reminderStillOpen(doneBook, item.id, asOf)),
+    [asOf, board.lookahead, doneBook],
+  );
+  const count = openWeek.length + openNext.length;
 
   useEffect(() => {
     onCountChange?.(count);
@@ -113,6 +117,16 @@ export function CrewReminders({
     onClose?.();
   }
 
+  function toggleDone(id: string) {
+    setDoneBook((current) => {
+      const next = isChecklistDone(current, id)
+        ? unmarkChecklistDone(current, id)
+        : markChecklistDone(current, id, asOf);
+      saveChecklistDone(next);
+      return next;
+    });
+  }
+
   if (!onClose) {
     return (
       <section className="overflow-hidden rounded-xl border border-border bg-card">
@@ -122,10 +136,16 @@ export function CrewReminders({
             <h2 className="text-base font-semibold tracking-tight">Reminders</h2>
           </div>
           <span className="text-xs text-muted-foreground">
-            {count ? `${board.week.length} this week · ${board.lookahead.length} next` : "None"}
+            {count ? `${openWeek.length} this week · ${openNext.length} next` : "None"}
           </span>
         </div>
-        <RemindersList board={board} onOpen={(item) => open(item.rotationId, item.personId)} />
+        <RemindersList
+          board={board}
+          doneBook={doneBook}
+          asOf={asOf}
+          onToggleDone={toggleDone}
+          onOpen={(item) => open(item.rotationId, item.personId)}
+        />
       </section>
     );
   }
@@ -144,34 +164,31 @@ export function CrewReminders({
         aria-labelledby="crew-reminders-title"
         className="relative flex max-h-[min(90vh,44rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[0_24px_64px_-16px_rgba(28,25,23,0.35)]"
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5 pb-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="flex size-8 items-center justify-center rounded-full bg-amber-100 text-amber-800">
-                <Bell className="size-4" />
-              </span>
-              <h2 id="crew-reminders-title" className="font-heading text-xl font-medium tracking-tight text-stone-900">
-                Reminders
-              </h2>
-            </div>
-            <p className="mt-1.5 pl-10 text-xs text-stone-500">
-              {count
-                ? `${board.week.length} this week · ${board.lookahead.length} next week`
-                : "No reminders due this week or next."}
-            </p>
-          </div>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <h2 id="crew-reminders-title" className="text-base font-semibold tracking-tight">
+            Reminders
+            {count ? (
+              <span className="ml-2 text-sm font-medium text-muted-foreground">{count}</span>
+            ) : null}
+          </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-full p-2 text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
+            className="rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
           >
             <X className="size-4" />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4">
-          <RemindersSheet board={board} onOpen={(item) => open(item.rotationId, item.personId)} />
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-3">
+          <RemindersSheet
+            board={board}
+            doneBook={doneBook}
+            asOf={asOf}
+            onToggleDone={toggleDone}
+            onOpen={(item) => open(item.rotationId, item.personId)}
+          />
         </div>
       </div>
     </div>
@@ -198,17 +215,12 @@ export function CrewOverview({
   const today = todayInZone();
   // Future year (e.g. 2027 while still in 2026): planning desk, not a live ops day.
   const planning = asOf > today;
-  const [horizon, setHorizon] = useState<14 | 30>(planning ? 30 : 14);
   const [onSiteOpen, setOnSiteOpen] = useState(false);
   const [doneBook, setDoneBook] = useState<ChecklistDoneBook>(() => emptyDoneSafe());
 
   useEffect(() => {
     setDoneBook(loadChecklistDone());
   }, []);
-
-  useEffect(() => {
-    setHorizon(planning ? 30 : 14);
-  }, [planning]);
 
   const thresholds = useMemo(
     () => ({
@@ -227,14 +239,14 @@ export function CrewOverview({
         rows,
         book: rotationBook,
         asOf,
-        horizonDays: horizon,
+        horizonDays: 14,
         thresholds,
         opsBook,
         includeArrivalDay: planning,
         planningYear,
         clockAsOf: planning ? today : asOf,
       }),
-    [asOf, horizon, opsBook, planning, planningYear, rotationBook, rows, thresholds, today],
+    [asOf, opsBook, planning, planningYear, rotationBook, rows, thresholds, today],
   );
 
   const confirmedTentativeIds = useMemo(() => {
@@ -258,32 +270,9 @@ export function CrewOverview({
     [asOf, confirmedTentativeIds, opsBook, planningYear, rotationBook, rows],
   );
 
-  const openCount = useMemo(() => {
-    let count = 0;
-    for (const group of data.groups) {
-      for (const item of group.items) {
-        if (isChecklistDoneExpired(doneBook, item.id, asOf)) continue;
-        if (isChecklistDone(doneBook, item.id)) continue;
-        // Tentative confirms and booking work both count as open.
-        count += 1;
-      }
-    }
-    return count;
-  }, [asOf, data.groups, doneBook]);
-
   function open(rotationId: string | null, personId: string) {
     if (rotationId) onOpenRotation(rotationId);
     else onOpenPerson(personId);
-  }
-
-  function toggleDone(id: string) {
-    setDoneBook((current) => {
-      const next = isChecklistDone(current, id)
-        ? unmarkChecklistDone(current, id)
-        : markChecklistDone(current, id, asOf);
-      saveChecklistDone(next);
-      return next;
-    });
   }
 
   const asOfLabel = (() => {
@@ -299,24 +288,7 @@ export function CrewOverview({
     }
   })();
 
-  const hasMovement = data.arriving.length + data.leaving.length > 0;
   const hasOnSite = data.onSite.length > 0;
-
-  const onSitePanel = (
-    <Panel
-      title="On site now"
-      accent="sky"
-      expanded={onSiteOpen}
-      onExpandedChange={setOnSiteOpen}
-      aside={
-        hasOnSite
-          ? `${data.onSite.length} people · soonest departures first`
-          : "Nobody on site"
-      }
-    >
-      <OnSiteTable rows={data.onSite} onOpen={open} emptyLabel="Nobody on site right now." />
-    </Panel>
-  );
 
   // Future year: keep Overview quiet — place stays on Calendar first.
   if (planning) {
@@ -336,74 +308,31 @@ export function CrewOverview({
     <div className="space-y-8">
       <header className="min-w-0">
         <p className="text-base font-semibold tracking-tight text-foreground">{asOfLabel}</p>
-        {openCount ? (
-          <p className="mt-0.5 text-sm text-muted-foreground">{openCount} open</p>
-        ) : null}
       </header>
 
-      <div className="grid items-start gap-6 xl:grid-cols-2">
-        <div className="space-y-6">
-          <Panel
-            title="This week"
-            accent="sky"
-            defaultOpen
-            aside={`${formatShort(weekStory.weekStart)} – ${formatShort(weekStory.weekEnd)}`}
-          >
-            <WeekStoryList
-              lines={weekStory.lines}
-              onOpen={(line) => {
-                if (line.personId) open(line.rotationId, line.personId);
-              }}
-            />
-          </Panel>
+      <Panel
+        title="This week"
+        accent="sky"
+        defaultOpen
+        aside={`${formatShort(weekStory.weekStart)} – ${formatShort(weekStory.weekEnd)}`}
+      >
+        <WeekStoryList
+          lines={weekStory.lines}
+          onOpen={(line) => {
+            if (line.personId) open(line.rotationId, line.personId);
+          }}
+        />
+      </Panel>
 
-          <Panel
-            title="Flights"
-            accent="indigo"
-            defaultOpen={hasMovement}
-            aside={
-              <span className="inline-flex rounded-md bg-muted p-0.5">
-                {([14, 30] as const).map((days) => (
-                  <button
-                    key={days}
-                    type="button"
-                    onClick={() => setHorizon(days)}
-                    className={cn(
-                      "rounded px-2.5 py-1 text-xs font-medium transition",
-                      horizon === days
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {days}d
-                  </button>
-                ))}
-              </span>
-            }
-          >
-            <Movement arriving={data.arriving} leaving={data.leaving} onOpen={onOpenRotation} />
-          </Panel>
-
-          {!onSiteOpen ? onSitePanel : null}
-        </div>
-
-        <Panel
-          title="To do"
-          accent="amber"
-          defaultOpen
-          aside={openCount ? `${openCount} open` : "None open"}
-        >
-          <ActionList
-            groups={data.groups}
-            asOf={data.clockAsOf}
-            doneBook={doneBook}
-            onToggleDone={toggleDone}
-            onOpen={onOpenRotation}
-          />
-        </Panel>
-      </div>
-
-      {onSiteOpen ? onSitePanel : null}
+      <Panel
+        title="On site now"
+        accent="sky"
+        expanded={onSiteOpen}
+        onExpandedChange={setOnSiteOpen}
+        aside={hasOnSite ? "Next to leave first" : "Nobody on site"}
+      >
+        <OnSiteTable rows={data.onSite} onOpen={open} emptyLabel="Nobody on site right now." />
+      </Panel>
     </div>
   );
 }
@@ -479,15 +408,112 @@ function Panel({
 
 /* ---------- Reminders ---------- */
 
+function filterReminderSections(
+  sections: ReminderSectionGroup[],
+  doneBook: ChecklistDoneBook,
+  asOf: string,
+) {
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !isChecklistDoneExpired(doneBook, item.id, asOf)),
+    }))
+    .filter((section) => section.items.length);
+}
+
+function ReminderRow({
+  item,
+  done,
+  onToggleDone,
+  onOpen,
+}: {
+  item: SituationReminder;
+  done: boolean;
+  onToggleDone: () => void;
+  onOpen: () => void;
+}) {
+  const urgent = !done && item.urgency === "now";
+  const soon = !done && item.urgency === "soon";
+  return (
+    <li className={cn("flex items-stretch", done && "opacity-60")}>
+      <button
+        type="button"
+        title={done ? "Mark not done" : "Mark done"}
+        aria-label={done ? "Mark not done" : "Mark done"}
+        onClick={onToggleDone}
+        className={cn(
+          "flex w-9 shrink-0 items-center justify-center transition hover:bg-muted/50",
+          done ? "text-emerald-700" : "text-muted-foreground",
+        )}
+      >
+        {done ? (
+          <Check className="size-3.5 stroke-[2.5]" />
+        ) : (
+          <span className="size-3.5 rounded border border-border bg-card" />
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="grid min-w-0 flex-1 grid-cols-[4.5rem_minmax(0,1fr)] items-baseline gap-x-2 py-1.5 pr-3 text-left transition hover:bg-muted/40"
+      >
+        <span
+          className={cn(
+            "min-w-0 truncate text-xs tabular-nums",
+            done && "text-muted-foreground line-through",
+            urgent && "font-semibold text-rose-700",
+            soon && "font-semibold text-amber-800",
+            !done && !urgent && !soon && "text-muted-foreground",
+          )}
+        >
+          {item.dateLabel}
+        </span>
+        <span
+          className={cn(
+            "min-w-0 break-words text-sm leading-snug text-foreground",
+            done && "text-muted-foreground line-through decoration-foreground/40",
+          )}
+        >
+          {item.text}
+        </span>
+      </button>
+    </li>
+  );
+}
+
 /** Flat sheet for the popup, one scroll, no nested expanders. */
 function RemindersSheet({
   board,
+  doneBook,
+  asOf,
+  onToggleDone,
   onOpen,
 }: {
   board: SituationReminderBoard;
+  doneBook: ChecklistDoneBook;
+  asOf: string;
+  onToggleDone: (id: string) => void;
   onOpen: (item: SituationReminder) => void;
 }) {
-  if (!board.week.length && !board.lookahead.length) {
+  const windows: {
+    label: string;
+    tone: "week" | "next";
+    sections: ReminderSectionGroup[];
+  }[] = [
+    {
+      label: "This week",
+      tone: "week",
+      sections: filterReminderSections(board.weekSections, doneBook, asOf),
+    },
+    {
+      label: "Next week",
+      tone: "next",
+      sections: filterReminderSections(board.lookaheadSections, doneBook, asOf),
+    },
+  ];
+  const any = windows.some((window) => window.sections.length);
+
+  if (!any) {
     return (
       <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
         <CircleCheck className="size-8 text-emerald-600/80" />
@@ -497,70 +523,69 @@ function RemindersSheet({
     );
   }
 
-  const windows: { label: string; range: string; sections: ReminderSectionGroup[] }[] = [
-    {
-      label: "This week",
-      range: `${formatShort(board.weekStart)} – ${formatShort(board.weekEnd)}`,
-      sections: board.weekSections,
-    },
-    {
-      label: "Next week",
-      range: `${formatShort(board.lookaheadStart)} – ${formatShort(board.lookaheadEnd)}`,
-      sections: board.lookaheadSections,
-    },
-  ];
-
   return (
-    <div className="space-y-4">
-      {windows.map((window) =>
-        window.sections.length ? (
-          <div key={window.label} className="space-y-2">
-            <div className="px-2 pt-1">
-              <p className="text-[0.8125rem] font-semibold tracking-[0.12em] text-foreground uppercase">{window.label}</p>
-              <p className="text-[0.8125rem] text-foreground/70">{window.range}</p>
-            </div>
+    <div className="divide-y divide-border">
+      {windows.map((window) => {
+        if (!window.sections.length) return null;
+        const openCount = window.sections.reduce(
+          (n, section) => n + section.items.filter((item) => !isChecklistDone(doneBook, item.id)).length,
+          0,
+        );
+        return (
+          <div key={window.label} className="py-2">
+            <p
+              className={cn(
+                "px-3 pb-1 text-sm font-medium",
+                window.tone === "week" ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {window.label}
+              <span className="ml-1.5 tabular-nums text-muted-foreground">{openCount}</span>
+            </p>
             {window.sections.map((section) => (
-              <div key={`${window.label}-${section.key}`} className="overflow-hidden rounded-xl border border-border/70">
-                <p className="border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[0.8125rem] font-semibold text-foreground">
+              <div key={`${window.label}-${section.key}`}>
+                <p className="px-3 pt-2 pb-0.5 text-xs font-medium text-muted-foreground">
                   {section.label}
                 </p>
-                <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 border-b border-border/60 px-3 py-1.5 text-xs font-semibold tracking-wide text-foreground uppercase">
-                  <span>Date</span>
-                  <span>Description</span>
-                </div>
                 <ul>
                   {section.items.map((item) => (
-                    <li key={item.id} className="border-b border-border/50 last:border-b-0">
-                      <button
-                        type="button"
-                        onClick={() => onOpen(item)}
-                        className="grid w-full grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 px-3 py-2.5 text-left transition hover:bg-muted/50"
-                      >
-                        <span className="min-w-0 break-words text-xs font-medium tabular-nums text-muted-foreground">
-                          {item.dateLabel}
-                        </span>
-                        <span className="min-w-0 break-words text-sm leading-snug text-foreground">{item.text}</span>
-                      </button>
-                    </li>
+                    <ReminderRow
+                      key={item.id}
+                      item={item}
+                      done={isChecklistDoneVisible(doneBook, item.id, asOf)}
+                      onToggleDone={() => onToggleDone(item.id)}
+                      onOpen={() => onOpen(item)}
+                    />
                   ))}
                 </ul>
               </div>
             ))}
           </div>
-        ) : null,
-      )}
+        );
+      })}
     </div>
   );
 }
 
 function RemindersList({
   board,
+  doneBook,
+  asOf,
+  onToggleDone,
   onOpen,
 }: {
   board: SituationReminderBoard;
+  doneBook: ChecklistDoneBook;
+  asOf: string;
+  onToggleDone: (id: string) => void;
   onOpen: (item: SituationReminder) => void;
 }) {
-  if (!board.week.length && !board.lookahead.length) {
+  const weekSections = filterReminderSections(board.weekSections, doneBook, asOf);
+  const nextSections = filterReminderSections(board.lookaheadSections, doneBook, asOf);
+  const weekCount = weekSections.reduce((n, section) => n + section.items.filter((item) => !isChecklistDone(doneBook, item.id)).length, 0);
+  const nextCount = nextSections.reduce((n, section) => n + section.items.filter((item) => !isChecklistDone(doneBook, item.id)).length, 0);
+
+  if (!weekSections.length && !nextSections.length) {
     return (
       <p className="flex items-center gap-2 px-4 py-7 text-sm text-muted-foreground">
         <CircleCheck className="size-4" /> No open items this week or next.
@@ -571,19 +596,25 @@ function RemindersList({
     <div className="divide-y divide-border">
       <ReminderWindow
         label="This week"
-        range={`${formatShort(board.weekStart)} to ${formatShort(board.weekEnd)}`}
-        sections={board.weekSections}
-        count={board.week.length}
+        sections={weekSections}
+        count={weekCount}
+        tone="week"
+        doneBook={doneBook}
+        asOf={asOf}
+        onToggleDone={onToggleDone}
         onOpen={onOpen}
         defaultOpen
       />
       <ReminderWindow
         label="Next week"
-        range={`${formatShort(board.lookaheadStart)} to ${formatShort(board.lookaheadEnd)}`}
-        sections={board.lookaheadSections}
-        count={board.lookahead.length}
+        sections={nextSections}
+        count={nextCount}
+        tone="next"
+        doneBook={doneBook}
+        asOf={asOf}
+        onToggleDone={onToggleDone}
         onOpen={onOpen}
-        defaultOpen={board.week.length === 0}
+        defaultOpen={weekCount === 0}
       />
     </div>
   );
@@ -591,16 +622,22 @@ function RemindersList({
 
 function ReminderWindow({
   label,
-  range,
   sections,
   count,
+  tone,
+  doneBook,
+  asOf,
+  onToggleDone,
   onOpen,
   defaultOpen,
 }: {
   label: string;
-  range: string;
   sections: ReminderSectionGroup[];
   count: number;
+  tone: "week" | "next";
+  doneBook: ChecklistDoneBook;
+  asOf: string;
+  onToggleDone: (id: string) => void;
   onOpen: (item: SituationReminder) => void;
   defaultOpen: boolean;
 }) {
@@ -610,50 +647,43 @@ function ReminderWindow({
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-muted/40"
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-muted/40"
       >
-        <span className="min-w-0">
-          <span className="block text-sm font-semibold tracking-wide text-foreground uppercase">{label}</span>
-          <span className="block text-[0.8125rem] font-medium text-foreground/75">
-            {range}
-            {count ? ` · ${count}` : " · clear"}
-          </span>
+        <span
+          className={cn(
+            "text-sm font-medium",
+            tone === "week" ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
+          {label}
+          <span className="ml-1.5 tabular-nums text-muted-foreground">{count || "clear"}</span>
         </span>
         <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition", !expanded && "-rotate-90")} />
       </button>
       {expanded ? (
         sections.length ? (
-          <div className="border-t border-border/70">
+          <div>
             {sections.map((section) => (
-              <div key={section.key} className="border-b border-border/60 last:border-b-0">
-                <p className="px-4 pt-3 pb-1 text-[0.8125rem] font-semibold tracking-wide text-foreground uppercase">
+              <div key={section.key}>
+                <p className="px-3 pt-1.5 pb-0.5 text-xs font-medium text-muted-foreground">
                   {section.label}
                 </p>
-                <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 px-4 pb-1 text-xs font-semibold tracking-wide text-foreground uppercase">
-                  <span>Date</span>
-                  <span>Description</span>
-                </div>
                 <ul>
                   {section.items.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => onOpen(item)}
-                        className="grid w-full grid-cols-[6.75rem_minmax(0,1fr)] gap-x-3 px-4 py-2.5 text-left hover:bg-muted/40"
-                      >
-                        <span className="min-w-0 break-words text-xs font-medium tabular-nums text-muted-foreground">
-                          {item.dateLabel}
-                        </span>
-                        <span className="min-w-0 break-words text-sm text-foreground">{item.text}</span>
-                      </button>
-                    </li>
+                    <ReminderRow
+                      key={item.id}
+                      item={item}
+                      done={isChecklistDoneVisible(doneBook, item.id, asOf)}
+                      onToggleDone={() => onToggleDone(item.id)}
+                      onOpen={() => onOpen(item)}
+                    />
                   ))}
                 </ul>
               </div>
             ))}
           </div>
         ) : (
-          <p className="border-t border-border/70 px-4 py-3 text-sm text-muted-foreground">Nothing in this window.</p>
+          <p className="px-3 py-2 text-sm text-muted-foreground">Nothing in this window.</p>
         )
       ) : null}
     </div>
@@ -702,7 +732,7 @@ function WeekStoryList({
     );
   }
   return (
-    <ul>
+    <ul className="divide-y divide-slate-300">
       {lines.map((line) => (
         <li key={line.id}>
           <button
@@ -737,187 +767,6 @@ function WeekStoryList({
   );
 }
 
-/* ---------- To do ---------- */
-
-function ActionList({
-  groups,
-  asOf,
-  doneBook,
-  onToggleDone,
-  onOpen,
-  planning = false,
-}: {
-  groups: ActionGroup[];
-  asOf: string;
-  doneBook: ChecklistDoneBook;
-  onToggleDone: (id: string) => void;
-  onOpen: (rotationId: string) => void;
-  planning?: boolean;
-}) {
-  const visible = groups
-    .map((group) => {
-      // Crossed-off items leave the list after a week.
-      const items = group.items.filter((item) => !isChecklistDoneExpired(doneBook, item.id, asOf));
-      return {
-        ...group,
-        items,
-        openCount: items.filter((item) => !isChecklistDone(doneBook, item.id)).length,
-      };
-    })
-    .filter((group) => group.items.length);
-  if (!visible.length) {
-    return (
-      <p className="flex items-center gap-2 px-4 py-7 text-sm text-muted-foreground">
-        <CircleCheck className="size-4" />{" "}
-        {planning
-          ? "Nothing to book yet — place stays first."
-          : "All caught up. Flights and rooms are covered."}
-      </p>
-    );
-  }
-  return (
-    <div>
-      {visible.map((group) => (
-        <ActionGroupBlock
-          key={group.key}
-          group={group}
-          asOf={asOf}
-          doneBook={doneBook}
-          onToggleDone={onToggleDone}
-          onOpen={onOpen}
-        />
-      ))}
-    </div>
-  );
-}
-
-function ActionGroupBlock({
-  group,
-  asOf,
-  doneBook,
-  onToggleDone,
-  onOpen,
-}: {
-  group: ActionGroup & { openCount: number };
-  asOf: string;
-  doneBook: ChecklistDoneBook;
-  onToggleDone: (id: string) => void;
-  onOpen: (rotationId: string) => void;
-}) {
-  const collapsedByDefault = group.key === "housekeeping";
-  const [expanded, setExpanded] = useState(!collapsedByDefault || group.key === "overdue");
-  const [showAll, setShowAll] = useState(group.key === "overdue");
-  const byDate = (a: (typeof group.items)[number], b: (typeof group.items)[number]) =>
-    (a.dueOn || "9999-12-31").localeCompare(b.dueOn || "9999-12-31") ||
-    a.personName.localeCompare(b.personName);
-  const openItems = group.items.filter((item) => !isChecklistDone(doneBook, item.id)).sort(byDate);
-  // Crossed out for up to a week, then they drop off.
-  const doneItems = group.items.filter((item) => isChecklistDoneVisible(doneBook, item.id, asOf)).sort(byDate);
-  const ordered = [...openItems, ...doneItems];
-  const limit = group.key === "overdue" ? 100 : 8;
-  const items = showAll || group.key === "overdue" ? ordered : ordered.slice(0, limit);
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-muted/40"
-      >
-        <span className="flex items-center gap-2">
-          <span className="text-xs font-semibold tracking-wide text-foreground uppercase">{group.label}</span>
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {group.openCount} open
-            {doneItems.length ? ` · ${doneItems.length} crossed out` : ""}
-          </span>
-        </span>
-        <ChevronDown className={cn("size-4 text-muted-foreground transition", !expanded && "-rotate-90")} />
-      </button>
-      {expanded ? (
-        <ul className="border-t border-border/50">
-          {items.map((item) => (
-            <ActionRow
-              key={item.id}
-              item={item}
-              asOf={asOf}
-              done={isChecklistDoneVisible(doneBook, item.id, asOf)}
-              onToggleDone={() => onToggleDone(item.id)}
-              onOpen={() => onOpen(item.rotationId)}
-            />
-          ))}
-          {ordered.length > limit ? (
-            <li>
-              <button
-                type="button"
-                onClick={() => setShowAll((value) => !value)}
-                className="w-full px-4 py-2 text-left text-sm font-medium text-primary hover:bg-muted/50"
-              >
-                {showAll ? "Show fewer" : `Show all ${ordered.length}`}
-              </button>
-            </li>
-          ) : null}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
-function ActionRow({
-  item,
-  asOf,
-  done,
-  onToggleDone,
-  onOpen,
-}: {
-  item: ChecklistItem;
-  asOf: string;
-  done: boolean;
-  onToggleDone: () => void;
-  onOpen: () => void;
-}) {
-  const due = dueText(item.dueOn, asOf);
-  return (
-    <li className={cn("flex items-stretch", done && "bg-muted/15")}>
-      <button
-        type="button"
-        title={done ? "Undo" : "Mark done"}
-        aria-label={done ? "Undo" : "Mark done"}
-        onClick={onToggleDone}
-        className={cn(
-          "flex w-11 shrink-0 items-center justify-center border-r border-border/70 transition hover:bg-muted/50",
-          done ? "text-emerald-700" : "text-muted-foreground",
-        )}
-      >
-        {done ? <Check className="size-4 stroke-[2.5]" /> : <span className="size-4 rounded border border-border" />}
-      </button>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left transition hover:bg-muted/40"
-      >
-        <span className="min-w-0 flex-1">
-          <span
-            className={cn(
-              "block truncate text-sm font-medium",
-              done && "text-muted-foreground line-through decoration-foreground/40",
-            )}
-          >
-            {item.title}
-          </span>
-          <span className={cn("block truncate text-xs text-muted-foreground", done && "line-through")}>
-            {item.personName}
-          </span>
-        </span>
-        {!done ? (
-          <span className={cn("shrink-0 text-xs", due.late ? "font-semibold text-foreground" : "text-muted-foreground")}>
-            {due.text}
-          </span>
-        ) : null}
-      </button>
-    </li>
-  );
-}
-
 /* ---------- On site ---------- */
 
 function OnSiteTable({
@@ -929,11 +778,120 @@ function OnSiteTable({
   onOpen: (rotationId: string | null, personId: string) => void;
   emptyLabel?: string;
 }) {
+  const [query, setQuery] = useState("");
+  const [site, setSite] = useState("");
+  const [role, setRole] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const sites = useMemo(
+    () =>
+      [...new Set(rows.map((row) => row.site).filter((value): value is string => Boolean(value)))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [rows],
+  );
+  const roles = useMemo(
+    () => [...new Set(rows.map((row) => row.role).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [rows],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (site && row.site !== site) return false;
+      if (role && row.role !== role) return false;
+      if (!q) return true;
+      return (
+        row.name.toLowerCase().includes(q) ||
+        row.role.toLowerCase().includes(q) ||
+        (row.site || "").toLowerCase().includes(q)
+      );
+    });
+  }, [query, role, rows, site]);
+
   if (!rows.length) return <p className="px-4 py-7 text-sm text-muted-foreground">{emptyLabel}</p>;
+
   const cols =
     "lg:grid-cols-[minmax(11rem,1.3fr)_minmax(4.5rem,0.65fr)_minmax(7.5rem,1fr)_minmax(7.5rem,1fr)_minmax(6.5rem,0.8fr)_minmax(6.5rem,0.8fr)_minmax(6.5rem,0.8fr)]";
+
   return (
     <div>
+      <div className="flex flex-wrap items-end gap-2 border-b border-border px-2 py-2 sm:gap-3 sm:px-4 sm:py-3">
+        <label className="grid min-w-0 flex-1 gap-1 text-sm text-muted-foreground sm:flex-none">
+          <span className="hidden sm:inline">Search</span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search name or role"
+            aria-label="Search"
+            type="search"
+            className="h-10 w-full rounded-lg border border-input bg-card px-2 text-sm text-foreground sm:h-9 sm:w-44"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((open) => !open)}
+          aria-expanded={filtersOpen}
+          className={cn(
+            "flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium sm:hidden",
+            filtersOpen || role || site
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-input bg-card text-foreground",
+          )}
+        >
+          <SlidersHorizontal className="size-4" />
+          Filters{role || site ? ` · ${[role, site].filter(Boolean).length}` : ""}
+        </button>
+        <label
+          className={cn(
+            "gap-1 text-sm text-muted-foreground sm:grid",
+            filtersOpen ? "grid flex-1" : "hidden",
+          )}
+        >
+          <span>Role</span>
+          <select
+            value={role}
+            onChange={(event) => setRole(event.target.value)}
+            className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+          >
+            <option value="">All roles</option>
+            {roles.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label
+          className={cn(
+            "gap-1 text-sm text-muted-foreground sm:grid",
+            filtersOpen ? "grid flex-1" : "hidden",
+          )}
+        >
+          <span>Site</span>
+          <select
+            value={site}
+            onChange={(event) => setSite(event.target.value)}
+            className="h-9 rounded-lg border border-input bg-card px-2 text-sm text-foreground"
+          >
+            <option value="">All sites</option>
+            {sites.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div
+          className={cn(
+            "ml-auto flex-wrap items-end gap-2 pb-0.5 sm:flex",
+            filtersOpen ? "flex w-full justify-between sm:w-auto" : "hidden",
+          )}
+        >
+          <p className="pb-2 text-sm text-muted-foreground">{filtered.length} people</p>
+        </div>
+      </div>
+
       <div
         className={cn(
           "hidden gap-4 border-b border-border px-4 py-2 text-[0.8125rem] font-medium tracking-wide text-muted-foreground uppercase lg:grid",
@@ -948,45 +906,49 @@ function OnSiteTable({
         <span>Return</span>
         <span>Stay</span>
       </div>
-      <ul>
-        {rows.map((row) => (
-          <li key={row.personId}>
-            <button
-              type="button"
-              onClick={() => onOpen(row.rotationId, row.personId)}
-              className={cn(
-                "grid w-full grid-cols-1 gap-3 px-4 py-3 text-left transition hover:bg-muted/40 lg:items-center lg:gap-4",
-                cols,
-              )}
-            >
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">{row.name}</span>
-                <span className="block truncate text-xs text-muted-foreground">{row.role}</span>
-              </span>
-              <Labelled label="Location">
-                {row.site ? (
-                  <span className="inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-950">
-                    {row.site}
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">-</span>
+      {filtered.length ? (
+        <ul>
+          {filtered.map((row) => (
+            <li key={row.personId}>
+              <button
+                type="button"
+                onClick={() => onOpen(row.rotationId, row.personId)}
+                className={cn(
+                  "grid w-full grid-cols-1 gap-3 px-4 py-3 text-left transition hover:bg-muted/40 lg:items-center lg:gap-4",
+                  cols,
                 )}
-              </Labelled>
-              <TimeIn row={row} />
-              <ToGo row={row} />
-              <Labelled label="Outbound">
-                <Mark state={row.flightToSite} />
-              </Labelled>
-              <Labelled label="Return">
-                <Mark state={row.flightHome} />
-              </Labelled>
-              <Labelled label="Stay">
-                <Mark state={row.stay} />
-              </Labelled>
-            </button>
-          </li>
-        ))}
-      </ul>
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">{row.name}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{row.role}</span>
+                </span>
+                <Labelled label="Location">
+                  {row.site ? (
+                    <span className="inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-950">
+                      {row.site}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">-</span>
+                  )}
+                </Labelled>
+                <TimeIn row={row} />
+                <ToGo row={row} />
+                <Labelled label="Outbound">
+                  <Mark state={row.flightToSite} />
+                </Labelled>
+                <Labelled label="Return">
+                  <Mark state={row.flightHome} />
+                </Labelled>
+                <Labelled label="Stay">
+                  <Mark state={row.stay} />
+                </Labelled>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="px-4 py-7 text-sm text-muted-foreground">No one matches these filters.</p>
+      )}
     </div>
   );
 }
@@ -1071,101 +1033,3 @@ function Mark({ state }: { state: BookingState }) {
   );
 }
 
-/* ---------- Flights ---------- */
-
-function Movement({
-  arriving,
-  leaving,
-  onOpen,
-  planning = false,
-}: {
-  arriving: ArrivingRow[];
-  leaving: LeavingRow[];
-  onOpen: (rotationId: string) => void;
-  planning?: boolean;
-}) {
-  if (!arriving.length && !leaving.length) {
-    return (
-      <p className="px-4 py-7 text-sm text-muted-foreground">
-        {planning
-          ? "No arrivals or departures in this planning window yet."
-          : "Nobody arriving or leaving in this window."}
-      </p>
-    );
-  }
-  const whenText = (days: number) => (days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`);
-  return (
-    <div className="grid md:grid-cols-2">
-      <div className="border-b border-border md:border-r md:border-b-0">
-        <p className="flex items-center gap-2 border-b border-border/60 bg-teal-50/60 px-4 py-2.5 text-xs font-semibold tracking-wide text-teal-950 uppercase">
-          <PlaneLanding className="size-3.5 text-teal-700" />
-          Arrivals
-          <span className="ml-auto tabular-nums text-teal-800/80">{arriving.length}</span>
-        </p>
-        {arriving.length ? (
-          <ul>
-            {arriving.map((row) => (
-              <li key={row.rotationId}>
-                <button
-                  type="button"
-                  onClick={() => onOpen(row.rotationId)}
-                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{row.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {shortDate(row.inDate)} · {whenText(row.daysUntil)}
-                      {row.site ? ` · ${row.site}` : ""}
-                      {row.replacing ? ` · for ${row.replacing}` : ""}
-                    </span>
-                  </span>
-                  <Mark state={row.flightIn} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="px-4 py-4 text-sm text-muted-foreground">No arrivals</p>
-        )}
-      </div>
-      <div>
-        <p className="flex items-center gap-2 border-b border-border/60 bg-indigo-50/60 px-4 py-2.5 text-xs font-semibold tracking-wide text-indigo-950 uppercase">
-          <PlaneTakeoff className="size-3.5 text-indigo-700" />
-          Departures
-          <span className="ml-auto tabular-nums text-indigo-800/80">{leaving.length}</span>
-        </p>
-        {leaving.length ? (
-          <ul>
-            {leaving.map((row) => (
-              <li key={row.rotationId}>
-                <button
-                  type="button"
-                  onClick={() => onOpen(row.rotationId)}
-                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{row.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {shortDate(row.outDate)} · {whenText(row.daysUntil)}
-                      {row.site ? ` · ${row.site}` : ""}
-                      {row.replacement
-                        ? ` · ${row.replacement}`
-                        : row.replacementNeeded
-                          ? " · Extend stay or arrange replacement"
-                          : " · No replacement needed"}
-                    </span>
-                  </span>
-                  <Labelled label="Return">
-                    <Mark state={row.flightHome} />
-                  </Labelled>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="px-4 py-4 text-sm text-muted-foreground">No departures</p>
-        )}
-      </div>
-    </div>
-  );
-}

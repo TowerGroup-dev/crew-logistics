@@ -171,7 +171,9 @@ export function loadCrewOps(): CrewOpsBook {
 
 export function saveCrewOps(book: CrewOpsBook) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(book));
+  const next = JSON.stringify(book);
+  if (localStorage.getItem(STORAGE_KEY) === next) return;
+  localStorage.setItem(STORAGE_KEY, next);
 }
 
 export function opsFor(book: CrewOpsBook, personId: string) {

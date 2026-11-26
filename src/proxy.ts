@@ -7,6 +7,7 @@ export function proxy(request: NextRequest) {
     pathname === "/sign-in" ||
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/api/briefing/cron") ||
+    pathname.startsWith("/api/powerbi") ||
     pathname === "/icon" ||
     pathname.startsWith("/icon/") ||
     pathname === "/favicon.ico"

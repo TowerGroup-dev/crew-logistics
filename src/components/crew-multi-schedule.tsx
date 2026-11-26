@@ -79,9 +79,6 @@ export function CrewMultiSchedule({
               <Users className="size-4" />
               Schedule multiple people
             </p>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Choose people, camp, and dates, then add them to the Month calendar.
-            </p>
           </div>
           <button
             type="button"
