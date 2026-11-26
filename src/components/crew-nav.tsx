@@ -5,6 +5,7 @@ import { startTransition, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Bell,
+  Briefcase,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -30,6 +31,10 @@ type Section = {
   label: string;
   icon: typeof ListChecks;
   match: (path: string) => boolean;
+  /** Small line under the tab label (trial pages). */
+  subtitle?: string;
+  /** Visible trial marker — not Test Mode. */
+  trial?: boolean;
 };
 
 /** Primary work tabs, stay on the top bar. */
@@ -42,6 +47,15 @@ const PRIMARY: Section[] = [
     icon: CalendarDays,
     match: (path) =>
       path.startsWith("/month") || path.startsWith("/year") || path.startsWith("/list") || path.startsWith("/travel"),
+  },
+  {
+    key: "planning",
+    href: "/planning",
+    label: "Workforce Planning",
+    subtitle: "Project & crew planning",
+    trial: true,
+    icon: Briefcase,
+    match: (path) => path.startsWith("/planning"),
   },
 ];
 
@@ -59,7 +73,16 @@ const CALENDAR_VIEWS = [
 ] as const;
 
 function basePath(pathname: string) {
-  for (const prefix of ["/month", "/year", "/list", "/travel", "/employees", "/reports", "/settings"]) {
+  for (const prefix of [
+    "/month",
+    "/year",
+    "/list",
+    "/travel",
+    "/employees",
+    "/reports",
+    "/planning",
+    "/settings",
+  ]) {
     if (pathname.startsWith(prefix)) return prefix;
   }
   return "/";
@@ -73,7 +96,9 @@ export function CrewNav({
 }: {
   /** Optimistic board view — tabs highlight before the router finishes. */
   view?: string;
-  onNavigateView?: (view: "overview" | "month" | "year" | "list" | "employees" | "reports" | "settings") => void;
+  onNavigateView?: (
+    view: "overview" | "month" | "year" | "list" | "employees" | "reports" | "planning" | "settings",
+  ) => void;
   onOpenReminders?: () => void;
   reminderCount?: number;
 }) {
@@ -101,9 +126,11 @@ export function CrewNav({
             ? "employees"
             : pathname.startsWith("/reports")
               ? "reports"
-              : pathname.startsWith("/settings")
-                ? "settings"
-                : "overview"
+              : pathname.startsWith("/planning")
+                ? "planning"
+                : pathname.startsWith("/settings")
+                  ? "settings"
+                  : "overview"
   );
   const inCalendar = activeView === "month" || activeView === "year" || activeView === "list";
   const shownReminderCount = clientReady ? reminderCount : 0;
@@ -126,9 +153,13 @@ export function CrewNav({
     });
   }
 
-  function goTo(path: string, nextView: "overview" | "month" | "year" | "list" | "employees" | "reports" | "settings") {
+  function goTo(
+    path: string,
+    nextView: "overview" | "month" | "year" | "list" | "employees" | "reports" | "planning" | "settings",
+    forYear = year,
+  ) {
     onNavigateView?.(nextView);
-    router.push(hrefFor(path), { scroll: false });
+    router.push(hrefFor(path, forYear), { scroll: false });
   }
 
   useEffect(() => {
@@ -180,17 +211,24 @@ export function CrewNav({
                 ? inCalendar
                 : section.key === "overview"
                   ? activeView === "overview"
-                  : section.match(pathname);
+                  : section.key === "planning"
+                    ? activeView === "planning"
+                    : section.match(pathname);
             return (
               <NavTab
                 key={section.key}
                 section={section}
-                href={hrefFor(section.href)}
+                href={hrefFor(section.href, section.key === "planning" ? 2027 : year)}
                 active={active}
                 onNavigate={() =>
                   goTo(
                     section.href,
-                    section.key === "calendar" ? "month" : "overview",
+                    section.key === "calendar"
+                      ? "month"
+                      : section.key === "planning"
+                        ? "planning"
+                        : "overview",
+                    section.key === "planning" ? 2027 : year,
                   )
                 }
               />
@@ -394,7 +432,13 @@ export function CrewNav({
           const Icon = section.icon;
           const active =
             !moreOpen &&
-            (section.key === "calendar" ? inCalendar : activeView === "overview");
+            (section.key === "calendar"
+              ? inCalendar
+              : section.key === "planning"
+                ? activeView === "planning"
+                : activeView === "overview");
+          const nextView =
+            section.key === "calendar" ? "month" : section.key === "planning" ? "planning" : "overview";
           return (
             <button
               key={section.key}
@@ -404,16 +448,24 @@ export function CrewNav({
                 setMoreOpen(false);
                 goTo(
                   section.href,
-                  section.key === "calendar" ? "month" : "overview",
+                  nextView,
+                  section.key === "planning" ? 2027 : year,
                 );
               }}
               className={cn(
-                "flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium [@media(max-height:511px)]:h-10 [@media(max-height:511px)]:flex-row [@media(max-height:511px)]:gap-1.5 [@media(max-height:511px)]:text-xs",
+                "flex h-14 flex-col items-center justify-center gap-0.5 px-0.5 text-[10px] font-medium [@media(max-height:511px)]:h-10 [@media(max-height:511px)]:flex-row [@media(max-height:511px)]:gap-1.5 [@media(max-height:511px)]:text-xs",
                 active ? "text-primary" : "text-slate-500",
               )}
             >
               <Icon className={cn("size-5", active && "stroke-[2.25]")} />
-              {section.label}
+              <span className="max-w-full truncate text-center leading-tight">
+                {section.key === "planning" ? "Planning" : section.label}
+              </span>
+              {section.trial ? (
+                <span className="rounded bg-amber-50 px-1 text-[0.5rem] font-semibold tracking-wide text-amber-950 uppercase">
+                  Trial
+                </span>
+              ) : null}
             </button>
           );
         })}
@@ -487,13 +539,26 @@ function NavTab({
       }}
       className={cn(
         "flex items-center gap-2 border-b-[3px] px-3 py-2.5 text-sm font-medium",
+        section.subtitle ? "items-start py-1.5" : "",
         active
           ? "border-primary text-foreground"
           : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900",
       )}
     >
-      <Icon className="size-4" aria-hidden suppressHydrationWarning />
-      {section.label}
+      <Icon className="mt-0.5 size-4 shrink-0" aria-hidden suppressHydrationWarning />
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="flex flex-wrap items-center gap-1.5 leading-tight">
+          {section.label}
+          {section.trial ? (
+            <span className="rounded border border-amber-300 bg-amber-50 px-1 py-px text-[0.55rem] font-semibold tracking-wide text-amber-950 uppercase">
+              Trial page
+            </span>
+          ) : null}
+        </span>
+        {section.subtitle ? (
+          <span className="text-[0.65rem] font-normal text-muted-foreground">{section.subtitle}</span>
+        ) : null}
+      </span>
     </Link>
   );
 }

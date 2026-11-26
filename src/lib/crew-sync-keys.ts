@@ -18,6 +18,7 @@ export const SHARED_KEYS = [
   "tower-arctic-crew-checklist-done-v1",
   "tower-arctic-crew-activity-log-v1",
   "tower-arctic-crew-notify",
+  "tower-arctic-crew-workforce-planning-v1",
 ] as const;
 
 export type SharedKey = (typeof SHARED_KEYS)[number];

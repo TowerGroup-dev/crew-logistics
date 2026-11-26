@@ -24,6 +24,7 @@ function viewFromPath(pathname: string): CrewBoardView {
   if (pathname.startsWith("/list")) return "list";
   if (pathname.startsWith("/employees")) return "employees";
   if (pathname.startsWith("/reports")) return "reports";
+  if (pathname.startsWith("/planning")) return "planning";
   if (pathname.startsWith("/settings")) return "settings";
   // Old Travel page → Month (travel is painted on the calendar).
   if (pathname.startsWith("/travel")) return "month";

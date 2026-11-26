@@ -26,11 +26,15 @@ export type CrewPersonOps = {
   outboundBookTo: string | null;
   /** True when the yellow outbound booking window was painted on the month grid. */
   outboundWindowPainted: boolean;
+  /** User cleared the outbound window; do not auto-seed it back on refresh. */
+  outboundWindowCleared?: boolean;
   /** Katrina books inbound / return between these dates (inclusive). */
   returnBookFrom: string | null;
   returnBookTo: string | null;
   /** True when the yellow return booking window was painted on the month grid. */
   returnWindowPainted: boolean;
+  /** User cleared the return window; do not auto-seed it back on refresh. */
+  returnWindowCleared?: boolean;
   flightNotes: string;
   accommodation: CrewBookingStatus;
   accommodationNotes: string;
@@ -90,6 +94,7 @@ export function clearReturnWindowIfConfirmed(ops: CrewPersonOps): CrewPersonOps 
     returnBookFrom: null,
     returnBookTo: null,
     returnWindowPainted: false,
+    returnWindowCleared: true,
   };
 }
 
@@ -129,9 +134,11 @@ export function readCrewOps(value: unknown): CrewOpsBook {
       outboundBookFrom: typeof row.outboundBookFrom === "string" ? row.outboundBookFrom.slice(0, 10) : null,
       outboundBookTo: typeof row.outboundBookTo === "string" ? row.outboundBookTo.slice(0, 10) : null,
       outboundWindowPainted: row.outboundWindowPainted === true,
+      outboundWindowCleared: row.outboundWindowCleared === true,
       returnBookFrom: typeof row.returnBookFrom === "string" ? row.returnBookFrom.slice(0, 10) : null,
       returnBookTo: typeof row.returnBookTo === "string" ? row.returnBookTo.slice(0, 10) : null,
       returnWindowPainted: row.returnWindowPainted === true,
+      returnWindowCleared: row.returnWindowCleared === true,
       flightNotes: typeof row.flightNotes === "string" ? row.flightNotes : "",
       accommodation: isStatus(row.accommodation) ? row.accommodation : "not_started",
       accommodationNotes: typeof row.accommodationNotes === "string" ? row.accommodationNotes : "",

@@ -75,6 +75,10 @@ export function CrewRotationDrawer({
 }) {
   const siteOptions = sites?.length ? sites.map((row) => row.code) : ["IQA", "POND", "ALRT", "KUG"];
   const [draft, setDraft] = useState(rotation);
+  // Calendar edits (window, extend, site) must show here while the drawer stays open.
+  useEffect(() => {
+    setDraft(rotation);
+  }, [rotation]);
   const [section, setSection] = useState<"overview" | "travel" | "stay" | "replacement">(
     openTravel ? "travel" : "overview",
   );
@@ -203,6 +207,7 @@ export function CrewRotationDrawer({
                 rotation={draft}
                 outInclusive={outInclusive}
                 readiness={readiness}
+                personOps={personOps}
               />
               <StayNoteField
                 person={person}
@@ -279,6 +284,7 @@ export function CrewRotationDrawer({
                       returnBookFrom: from || null,
                       returnBookTo: to || null,
                       returnWindowPainted: Boolean(from && to),
+                      returnWindowCleared: !(from && to),
                       returnFlight:
                         from && to
                           ? current.returnFlight === "booked" || current.returnFlight === "confirmed"
@@ -620,20 +626,30 @@ function StayHappenings({
   rotation,
   outInclusive,
   readiness,
+  personOps,
 }: {
   rotation: CrewRotation;
   outInclusive: string;
   readiness: ReturnType<typeof evaluateReadiness>;
+  personOps?: CrewPersonOps | null;
 }) {
   const legs = staySiteLegs(rotation, outInclusive);
   const moves = [...(rotation.moves ?? [])].sort((a, b) => a.date.localeCompare(b.date));
   const outPath = travelPath(rotation.outbound, "", rotation.site);
   const homePath = travelPath(rotation.returnTravel, rotation.site, "");
+  const outboundWindow =
+    personOps?.outboundBookFrom && personOps?.outboundBookTo
+      ? `Window ${formatMedium(personOps.outboundBookFrom)} – ${formatMedium(personOps.outboundBookTo)}`
+      : "";
+  const returnWindow =
+    personOps?.returnBookFrom && personOps?.returnBookTo
+      ? `Window ${formatMedium(personOps.returnBookFrom)} – ${formatMedium(personOps.returnBookTo)}`
+      : "";
   const rows: { key: string; label: string; detail: string; state: string }[] = [
     {
       key: "out",
       label: "Coming to Site",
-      detail: [formatMedium(rotation.plannedIn), outPath || rotation.site || ""]
+      detail: [formatMedium(rotation.plannedIn), outPath || rotation.site || "", outboundWindow]
         .filter(Boolean)
         .join(" · "),
       state: readiness.travelOutbound ? "Booked" : "Not booked",
@@ -660,7 +676,7 @@ function StayHappenings({
     {
       key: "home",
       label: "Going Home",
-      detail: [formatMedium(outInclusive), homePath || rotation.site || ""]
+      detail: [formatMedium(outInclusive), homePath || rotation.site || "", returnWindow]
         .filter(Boolean)
         .join(" · "),
       state: readiness.travelReturn ? "Booked" : "Not booked",
@@ -708,10 +724,11 @@ function ChecklistHints({
 }) {
   const hints: { id: string; text: string }[] = [];
   const add = (id: string, text: string) => hints.push({ id, text });
+  // Same dates as the yellow calendar windows (painted or book-by range).
   if (
-    personOps?.outboundWindowPainted &&
-    personOps.outboundBookFrom &&
-    personOps.outboundBookTo &&
+    personOps?.outboundBookFrom &&
+    personOps?.outboundBookTo &&
+    !personOps.outboundWindowCleared &&
     personOps.outboundFlight !== "booked" &&
     personOps.outboundFlight !== "confirmed"
   ) {
@@ -721,9 +738,9 @@ function ChecklistHints({
     );
   }
   if (
-    personOps?.returnWindowPainted &&
-    personOps.returnBookFrom &&
-    personOps.returnBookTo &&
+    personOps?.returnBookFrom &&
+    personOps?.returnBookTo &&
+    !personOps.returnWindowCleared &&
     personOps.returnFlight !== "booked" &&
     personOps.returnFlight !== "confirmed"
   ) {

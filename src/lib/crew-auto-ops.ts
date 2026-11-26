@@ -31,7 +31,12 @@ export function autoSeedTravelOps(people: CrewPerson[], opsBook: CrewOpsBook, to
     }
 
     // Default booking windows (editable): outbound in the 2 weeks before IN; inbound from 4 weeks before OUT.
-    if (snap.plannedIn && (!patched.outboundBookFrom || !patched.outboundBookTo)) {
+    // Skip if the user cleared the window on purpose (must survive refresh).
+    if (
+      snap.plannedIn &&
+      !patched.outboundWindowCleared &&
+      (!patched.outboundBookFrom || !patched.outboundBookTo)
+    ) {
       patched = {
         ...patched,
         outboundBookFrom: patched.outboundBookFrom || addDays(snap.plannedIn, -RETURN_SOON_DAYS),
@@ -47,7 +52,12 @@ export function autoSeedTravelOps(people: CrewPerson[], opsBook: CrewOpsBook, to
       patched = { ...patched, returnBookFrom: null, returnBookTo: null };
       dirty = true;
     }
-    if (!openStay && snap.plannedOut && (!patched.returnBookFrom || !patched.returnBookTo)) {
+    if (
+      !openStay &&
+      snap.plannedOut &&
+      !patched.returnWindowCleared &&
+      (!patched.returnBookFrom || !patched.returnBookTo)
+    ) {
       patched = {
         ...patched,
         returnBookFrom: patched.returnBookFrom || addDays(snap.plannedOut, -FOUR_WEEK_TRACK_DAYS),

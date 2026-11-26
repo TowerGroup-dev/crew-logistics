@@ -87,6 +87,14 @@ import { CrewRoleHeader } from "@/components/crew-role-header";
 import { CrewConfirmDialog } from "@/components/crew-confirm-dialog";
 import { CrewRoleAddDialog } from "@/components/crew-role-add-dialog";
 import { CrewMonthlyReportPanel } from "@/components/crew-reports";
+import { CrewWorkforcePlanningPanel } from "@/components/crew-workforce-planning";
+import {
+  WORKFORCE_PLANNING_KEY,
+  ensureYearSeeded,
+  loadPlanningBook,
+  savePlanningBook,
+  type WorkforcePlanningBook,
+} from "@/lib/crew-workforce-planning";
 import { CrewAccommodationDesk } from "@/components/crew-accommodation-desk";
 import { CrewYearTape } from "@/components/crew-year-tape";
 import { CrewRotationDrawer } from "@/components/crew-rotation-drawer";
@@ -201,6 +209,7 @@ export type CrewBoardView =
   | "alerts"
   | "employees"
   | "reports"
+  | "planning"
   | "settings";
 
 function siteTone(site: string | null, sitesBook?: CrewSitesBook) {
@@ -274,6 +283,7 @@ export function CrewBoard({
   const [flightBook, setFlightBook] = useState<FlightBook>(() => loadFlights());
   const [stopoverBook, setStopoverBook] = useState<CrewStopoverBook>(() => loadStopovers());
   const [roster, setRoster] = useState<CrewRosterBook>(() => loadRoster());
+  const [planningBook, setPlanningBook] = useState<WorkforcePlanningBook>(() => loadPlanningBook());
   const [hydrated, setHydrated] = useState(false);
   const [role, setRole] = useState("");
   const [site, setSite] = useState("");
@@ -590,6 +600,22 @@ export function CrewBoard({
   // Stays from the Excel and the roster; booked moves between sites then reshape them for display.
   const basePeople = useMemo(() => mergePeople(CREW_SCHEDULE.people, roster), [roster]);
   const people = useMemo(() => applyRotationMoves(basePeople, rotationBook), [basePeople, rotationBook]);
+  /** Workforce Planning “available” = all active employees, not Calendar stays. */
+  const activeEmployeeCount = useMemo(
+    () => people.filter((person) => person.active !== false).length,
+    [people],
+  );
+
+  // Trial page: one-time 2027 starter when that year is still empty.
+  useEffect(() => {
+    if (boardView !== "planning") return;
+    setPlanningBook((current) => {
+      const { book, seeded } = ensureYearSeeded(current, scheduleYear);
+      if (seeded) savePlanningBook(book);
+      return seeded ? book : current;
+    });
+  }, [boardView, scheduleYear]);
+
   /** Overview / list / travel follow the selected year (live today inside the current year). */
   const asOf = useMemo(() => {
     const calendarYear = Number(today.slice(0, 4));
@@ -659,6 +685,7 @@ export function CrewBoard({
       if (keys.has("tower-arctic-crew-travel-hubs-v1")) setTravelHubsBook(loadTravelHubs());
       if (keys.has("tower-arctic-crew-roles-v1")) setRolesBook(loadRolesBook());
       if (keys.has("tower-arctic-crew-years")) setScheduleYears([...loadScheduleYears()]);
+      if (keys.has(WORKFORCE_PLANNING_KEY)) setPlanningBook(loadPlanningBook());
     }
     window.addEventListener(SYNC_CHANGE_EVENT, onShared);
     return () => window.removeEventListener(SYNC_CHANGE_EVENT, onShared);
@@ -1008,7 +1035,10 @@ export function CrewBoard({
           boardView === "overview" ? "" : "overflow-hidden rounded-2xl border border-border bg-card",
         )}
       >
-        {boardView !== "overview" && boardView !== "settings" && boardView !== "reports" ? (
+        {boardView !== "overview" &&
+        boardView !== "settings" &&
+        boardView !== "reports" &&
+        boardView !== "planning" ? (
           <div className="flex flex-wrap items-end gap-2 border-b border-border px-2 py-2 sm:gap-3 sm:px-4 sm:py-3">
             <label className="grid min-w-0 flex-1 gap-1 text-sm text-muted-foreground sm:flex-none">
               <span className="hidden sm:inline">Search</span>
@@ -1742,6 +1772,28 @@ export function CrewBoard({
               onOpen={openPersonRotation}
             />
           </div>
+          </KeepAlive>
+        ) : null}
+
+        {seenViews.planning ? (
+          <KeepAlive active={boardView === "planning"}>
+            <div
+              className={cn(
+                "overflow-y-auto",
+                boardView !== "planning" && "hidden",
+              )}
+              style={{ maxHeight: "var(--app-board-max-h)" }}
+            >
+              <CrewWorkforcePlanningPanel
+                year={scheduleYear}
+                book={planningBook}
+                availableHeadcount={activeEmployeeCount}
+                onChange={(next) => {
+                  setPlanningBook(next);
+                  savePlanningBook(next);
+                }}
+              />
+            </div>
           </KeepAlive>
         ) : null}
 

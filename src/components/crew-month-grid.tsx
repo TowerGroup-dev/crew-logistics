@@ -10,7 +10,26 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ChevronDown, ChevronRight, Eye, EyeOff, Pencil, Plus, Users } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarPlus,
+  CalendarRange,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Eraser,
+  Eye,
+  EyeOff,
+  MapPin,
+  Pencil,
+  PlaneLanding,
+  PlaneTakeoff,
+  Plus,
+  StickyNote,
+  Trash2,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import type { CalendarInteractionMode } from "@/lib/crew-schedule-view";
 import {
   CREW_CATEGORY_ORDER,
@@ -1961,6 +1980,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
         returnBookFrom: null,
         returnBookTo: null,
         returnWindowPainted: false,
+        returnWindowCleared: true,
         returnFlight:
           current.returnFlight === "booked" || current.returnFlight === "confirmed"
             ? current.returnFlight
@@ -2183,6 +2203,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
       returnBookFrom: from,
       returnBookTo: to,
       returnWindowPainted: true,
+      returnWindowCleared: false,
       returnFlight:
         current.returnFlight === "booked" || current.returnFlight === "confirmed"
           ? current.returnFlight
@@ -3388,18 +3409,17 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
           <div
             ref={cellMenuRef}
             role="menu"
-            className="absolute w-[15.5rem] overflow-hidden rounded-xl border border-border bg-card shadow-lg"
+            className="absolute w-[16rem] overflow-visible rounded-xl border border-border bg-card shadow-md"
             style={{
-              left: Math.min(cellMenu.x, typeof window !== "undefined" ? window.innerWidth - 260 : cellMenu.x),
+              left: Math.min(cellMenu.x, typeof window !== "undefined" ? window.innerWidth - 280 : cellMenu.x),
               top: Math.min(cellMenu.y, typeof window !== "undefined" ? window.innerHeight - 300 : cellMenu.y),
             }}
             onClick={(event) => event.stopPropagation()}
           >
             {(() => {
+              // Explorer-style: icon + label, chevron for folders.
               const row =
-                "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-[13px] text-foreground transition hover:bg-muted/50";
-              const fly =
-                "absolute top-0 left-full z-10 ml-1 min-w-[12rem] overflow-hidden rounded-xl border border-border bg-card p-1 shadow-lg";
+                "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-foreground transition hover:bg-muted/60";
               const person = peopleById.get(cellMenu.personId);
               const stint = person ? stayForCellMenu(person, cellMenu.iso) : null;
               const stayLast = stint ? stayLastInclusiveDay(stint, year) : null;
@@ -3441,57 +3461,93 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
 
               const toggle = (id: string) => setMenuFlyout((cur) => (cur === id ? null : id));
 
-              const Flyout = ({ id, children }: { id: string; children: ReactNode }) =>
-                menuFlyout === id ? (
-                  <div className={fly} role="menu">
-                    {children}
-                  </div>
-                ) : null;
-
-              const Parent = ({
+              const Branch = ({
                 id,
                 label,
-                danger,
+                icon,
+                children,
               }: {
                 id: string;
                 label: string;
-                danger?: boolean;
+                icon: LucideIcon;
+                children: ReactNode;
               }) => (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={cn(
-                    row,
-                    menuFlyout === id && "bg-muted/50",
-                    danger && "text-rose-800",
-                  )}
-                  onMouseEnter={() => setMenuFlyout(id)}
-                  onClick={() => toggle(id)}
+                <CellMenuFlyoutBranch
+                  id={id}
+                  label={label}
+                  icon={icon}
+                  open={menuFlyout === id}
+                  rowClass={row}
+                  onOpen={() => setMenuFlyout(id)}
+                  onToggle={() => toggle(id)}
                 >
-                  <span className="font-medium">{label}</span>
-                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-                </button>
+                  {children}
+                </CellMenuFlyoutBranch>
               );
 
               const Sub = ({
                 label,
                 onPick,
+                icon: Icon,
                 danger,
               }: {
                 label: string;
                 onPick: () => void;
+                icon?: LucideIcon;
                 danger?: boolean;
               }) => (
                 <button
                   type="button"
                   role="menuitem"
-                  className={cn(row, danger && "text-rose-800")}
+                  className={cn(row, danger && "text-rose-800 hover:bg-rose-50")}
                   onClick={() => {
                     onPick();
                     closeCellMenu();
                   }}
                 >
-                  <span className={cn(danger ? "font-medium" : "")}>{label}</span>
+                  {Icon ? (
+                    <Icon
+                      className={cn(
+                        "size-4 shrink-0",
+                        danger ? "text-rose-700" : "text-muted-foreground",
+                      )}
+                      aria-hidden
+                    />
+                  ) : (
+                    <span className="size-4 shrink-0" aria-hidden />
+                  )}
+                  <span className={cn("min-w-0 flex-1 truncate", danger && "font-medium")}>
+                    {label}
+                  </span>
+                </button>
+              );
+
+              const Action = ({
+                label,
+                onPick,
+                icon: Icon,
+                danger,
+              }: {
+                label: string;
+                onPick: () => void;
+                icon: LucideIcon;
+                danger?: boolean;
+              }) => (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={cn(row, danger && "text-rose-800 hover:bg-rose-50")}
+                  onMouseEnter={() => setMenuFlyout(null)}
+                  onClick={onPick}
+                >
+                  <Icon
+                    className={cn(
+                      "size-4 shrink-0",
+                      danger ? "text-rose-700" : "text-muted-foreground",
+                    )}
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
                 </button>
               );
 
@@ -3566,8 +3622,10 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
 
               const showAddStay = Boolean(canEdit && !cellMenu.hasSite && onAddRotation);
               const showTravel = Boolean(onApplyJourney && stint);
-              const showArrival = Boolean(stint && (onSetStayTentative || onConfirmStayArrival));
-              const showDepWindow = Boolean(cellMenu.hasSite || menuHasReturn);
+              const showArrivalWindow = Boolean(stint && (onSetStayTentative || onConfirmStayArrival));
+              const showArrival = showArrivalWindow || showTravel;
+              const showGoingHomeWindow = Boolean(cellMenu.hasSite || menuHasReturn);
+              const showGoingHome = showGoingHomeWindow || showTravel;
               const showExtend = Boolean(stint && onExtendStay);
               const showClear = Boolean(
                 cellMenu.hasSite &&
@@ -3576,11 +3634,13 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
               );
               const showNote = Boolean(onSetDateNote);
               const hasItemsBeforeNote =
-                showAddStay || showTravel || showArrival || showDepWindow || showExtend || showClear;
+                showAddStay || showArrival || showGoingHome || showExtend || showClear;
               const campChoices = (siteList.length ? siteList : DEFAULT_SITES).map((site) => ({
                 code: site.code,
                 name: site.name || site.code,
               }));
+              const placeLabel = (place: { code: string; name: string }) =>
+                place.name !== place.code ? `${place.code} · ${place.name}` : place.code;
 
               return (
                 <>
@@ -3595,12 +3655,11 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                   </div>
                   <div className="space-y-0.5 p-1.5">
                   {showAddStay ? (
-                    <div className="relative">
-                      <Parent id="add-stay" label="Add stay" />
-                      <Flyout id="add-stay">
+                    <Branch id="add-stay" label="Add stay" icon={CalendarPlus}>
                         {campChoices.map((site) => (
                           <Sub
                             key={site.code}
+                            icon={MapPin}
                             label={
                               site.name !== site.code
                                 ? `${site.code} · ${site.name}`
@@ -3613,60 +3672,14 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                             }}
                           />
                         ))}
-                      </Flyout>
-                    </div>
-                  ) : null}
-
-                  {showTravel ? (
-                    <div className="relative">
-                      <Parent id="travel" label="Departure location" />
-                      {menuFlyout === "travel" ? (
-                        <div className={`${fly} min-w-[13rem]`} role="menu">
-                          <div className="max-h-56 space-y-0.5 overflow-y-auto">
-                            {hasTravel ? (
-                              <Sub
-                                label="Edit travel"
-                                onPick={() => openTravelEditor(cellMenu.personId, cellMenu.iso)}
-                              />
-                            ) : null}
-                            {departurePlaces.map((place) => (
-                              <Sub
-                                key={place.code}
-                                label={
-                                  place.name !== place.code
-                                    ? `${place.code} · ${place.name}`
-                                    : place.code
-                                }
-                                onPick={() =>
-                                  openDepartureFromPlace(
-                                    cellMenu.personId,
-                                    cellMenu.iso,
-                                    place.code,
-                                  )
-                                }
-                              />
-                            ))}
-                            {startsHere && onMoveSite ? (
-                              <Sub
-                                label={`Undo ${startsHere.fromSite} → ${startsHere.toSite}`}
-                                onPick={() => {
-                                  onMoveSite(cellMenu.personId, cellMenu.iso, null);
-                                  showFlash("Transfer removed");
-                                }}
-                              />
-                            ) : null}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
+                    </Branch>
                   ) : null}
 
                   {showArrival && stint ? (
-                    <div className="relative">
-                      <Parent id="arrival" label="Planned arrival window" />
-                      <Flyout id="arrival">
-                        {isTentative && (onConfirmStayArrival || onSetStayTentative) ? (
+                    <Branch id="arrival" label="Arriving at site" icon={PlaneLanding}>
+                        {showArrivalWindow && isTentative && (onConfirmStayArrival || onSetStayTentative) ? (
                           <Sub
+                            icon={Check}
                             label={`Confirm arrival · ${formatMedium(
                               stayLast && click > stayLast
                                 ? stayLast
@@ -3687,17 +3700,14 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                               } else if (onSetStayTentative) {
                                 onSetStayTentative(cellMenu.personId, stint.from, false);
                               }
-                              showFlash(`Confirmed · Arrival ${formatMedium(confirmedIn)}`);
+                              showFlash(`Confirmed · Arriving ${formatMedium(confirmedIn)}`);
                             }}
                           />
                         ) : null}
-                        {onSetStayTentative ? (
+                        {showArrivalWindow && onSetStayTentative ? (
                           <Sub
-                            label={
-                              isTentative
-                                ? "Add day to window"
-                                : "Set planned arrival"
-                            }
+                            icon={CalendarClock}
+                            label={isTentative ? "Add day to window" : "Set arrival window"}
                             onPick={() => {
                               onSetStayTentative(cellMenu.personId, stint.from, {
                                 through: applyEnd,
@@ -3705,98 +3715,167 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                               });
                               showFlash(
                                 applyStart !== applyEnd
-                                  ? `Planned arrival · ${formatMedium(applyStart)} – ${formatMedium(applyEnd)}`
-                                  : `Planned arrival · ${formatMedium(applyStart)}`,
+                                  ? `Arrival window · ${formatMedium(applyStart)} – ${formatMedium(applyEnd)}`
+                                  : `Arrival window · ${formatMedium(applyStart)}`,
                               );
                             }}
                           />
                         ) : null}
-                        {isTentative && onSetStayTentative ? (
+                        {showArrivalWindow && isTentative && onSetStayTentative ? (
                           <Sub
-                            label="Clear window"
+                            icon={Eraser}
+                            label="Clear arrival window"
+                            danger
                             onPick={() => {
                               onSetStayTentative(cellMenu.personId, stint.from, false);
-                              showFlash("Planned arrival cleared");
+                              showFlash("Arrival window cleared");
                             }}
                           />
                         ) : null}
-                      </Flyout>
-                    </div>
+                        {showTravel ? (
+                          <>
+                            {showArrivalWindow ? (
+                              <div className="mx-1 my-1 border-t border-border" role="separator" />
+                            ) : null}
+                            <p className="px-2.5 py-1 text-[0.65rem] font-semibold tracking-wide text-muted-foreground uppercase">
+                              Coming from
+                            </p>
+                            {hasTravel ? (
+                              <Sub
+                                icon={Pencil}
+                                label="Edit travel"
+                                onPick={() => openTravelEditor(cellMenu.personId, cellMenu.iso)}
+                              />
+                            ) : null}
+                            {departurePlaces.map((place) => (
+                              <Sub
+                                key={`in-${place.code}`}
+                                icon={MapPin}
+                                label={placeLabel(place)}
+                                onPick={() =>
+                                  // Arrival day so this always means “coming from”, not leaving.
+                                  openDepartureFromPlace(
+                                    cellMenu.personId,
+                                    stint.from,
+                                    place.code,
+                                  )
+                                }
+                              />
+                            ))}
+                          </>
+                        ) : null}
+                    </Branch>
                   ) : null}
 
-                  {showDepWindow ? (
-                    <div className="relative">
-                      <Parent id="dep-window" label="Expected departure window" />
-                      <Flyout id="dep-window">
-                        {cellMenu.hasSite ? (
+                  {showGoingHome ? (
+                    <Branch id="departure" label="Departure from site" icon={PlaneTakeoff}>
+                        {showGoingHomeWindow && cellMenu.hasSite ? (
                           <Sub
-                            label="Set window"
+                            icon={CalendarRange}
+                            label="Set departure window"
                             onPick={() => addReturnWindowAt(cellMenu.personId, cellMenu.iso)}
                           />
                         ) : null}
-                        {menuHasReturn ? (
+                        {stint && onExtendStay ? (
                           <Sub
-                            label="Clear window"
+                            icon={CalendarClock}
+                            label={`Confirm leave · ${formatMedium(click)}`}
+                            onPick={() => {
+                              setStayLastInclusiveDay(cellMenu.personId, cellMenu.iso, stint.from);
+                              closeCellMenu();
+                            }}
+                          />
+                        ) : null}
+                        {showGoingHomeWindow && menuHasReturn ? (
+                          <Sub
+                            icon={Eraser}
+                            label="Clear departure window"
+                            danger
                             onPick={() => {
                               onSetBookWindow(cellMenu.personId, (current) => ({
                                 ...current,
                                 returnBookFrom: null,
                                 returnBookTo: null,
                                 returnWindowPainted: false,
+                                returnWindowCleared: true,
                                 returnFlight:
                                   current.returnFlight === "booked" ||
                                   current.returnFlight === "confirmed"
                                     ? current.returnFlight
                                     : "not_started",
                               }));
-                              showFlash("Cleared departure window");
+                              showFlash("Departure window cleared");
                             }}
                           />
                         ) : null}
-                      </Flyout>
-                    </div>
+                        {showTravel ? (
+                          <>
+                            {showGoingHomeWindow || stint ? (
+                              <div className="mx-1 my-1 border-t border-border" role="separator" />
+                            ) : null}
+                            <p className="px-2.5 py-1 text-[0.65rem] font-semibold tracking-wide text-muted-foreground uppercase">
+                              Going to
+                            </p>
+                            {hasTravel ? (
+                              <Sub
+                                icon={Pencil}
+                                label="Edit travel"
+                                onPick={() => openTravelEditor(cellMenu.personId, cellMenu.iso)}
+                              />
+                            ) : null}
+                            {departurePlaces.map((place) => (
+                              <Sub
+                                key={`home-${place.code}`}
+                                icon={MapPin}
+                                label={placeLabel(place)}
+                                onPick={() =>
+                                  openDepartureFromPlace(
+                                    cellMenu.personId,
+                                    // Last stay day so picker sets home destination.
+                                    stayLast || cellMenu.iso,
+                                    place.code,
+                                  )
+                                }
+                              />
+                            ))}
+                            {startsHere && onMoveSite ? (
+                              <Sub
+                                icon={Eraser}
+                                label={`Undo ${startsHere.fromSite} → ${startsHere.toSite}`}
+                                onPick={() => {
+                                  onMoveSite(cellMenu.personId, cellMenu.iso, null);
+                                  showFlash("Transfer removed");
+                                }}
+                              />
+                            ) : null}
+                          </>
+                        ) : null}
+                    </Branch>
                   ) : null}
 
                   {showExtend && stint ? (
                     <>
-                      {(showAddStay || showTravel || showArrival || showDepWindow) ? (
+                      {(showAddStay || showArrival || showGoingHome) ? (
                         <div className="mx-1 my-1.5 border-t border-border" role="separator" />
                       ) : null}
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className={row}
-                        onMouseEnter={() => setMenuFlyout(null)}
-                        onClick={() => {
+                      <Action
+                        icon={CalendarPlus}
+                        label="Extend stay"
+                        onPick={() => {
                           setPickStayOut({ personId: cellMenu.personId, stintFrom: stint.from });
                           closeCellMenu();
                           showFlash("Click the new last day · Esc to cancel");
                         }}
-                      >
-                        <span className="font-medium">Extend stay</span>
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className={row}
-                        onMouseEnter={() => setMenuFlyout(null)}
-                        onClick={() => {
-                          setStayLastInclusiveDay(cellMenu.personId, cellMenu.iso, stint.from);
-                          closeCellMenu();
-                        }}
-                      >
-                        <span className="font-medium">Set departure date</span>
-                      </button>
+                      />
                     </>
                   ) : null}
 
                   {showClear && stint ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={cn(row, "text-rose-800 hover:bg-rose-50")}
-                      onMouseEnter={() => setMenuFlyout(null)}
-                      onClick={() => {
+                    <Action
+                      icon={Trash2}
+                      label="Clear stay dates"
+                      danger
+                      onPick={() => {
                         const plan =
                           cellMenu.plan ||
                           (roster
@@ -3826,20 +3905,18 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                           },
                         });
                       }}
-                    >
-                      <span className="font-medium">Clear stay dates</span>
-                    </button>
+                    />
                   ) : null}
 
                   {showNote ? (
-                    <div className="relative">
+                    <>
                       {hasItemsBeforeNote ? (
                         <div className="mx-1 my-1.5 border-t border-border" role="separator" />
                       ) : null}
-                      <Parent id="note" label="Operational note" />
-                      <Flyout id="note">
+                      <Branch id="note" label="Operational note" icon={StickyNote}>
                         {stayNoteText && menuStay ? (
                           <Sub
+                            icon={Pencil}
                             label="Edit stay note"
                             onPick={() => {
                               setDateNoteDraft({
@@ -3856,6 +3933,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                         {dayNotes.map((noteRow) => (
                           <Sub
                             key={noteRow.id}
+                            icon={Pencil}
                             label={`Edit · ${noteRow.note}`}
                             onPick={() => {
                               setDateNoteDraft({
@@ -3869,6 +3947,7 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                           />
                         ))}
                         <Sub
+                          icon={Plus}
                           label="Add note"
                           onPick={() => {
                             if (canWholeStay && menuStay) {
@@ -3888,8 +3967,8 @@ export const CrewMonthGrid = memo(function CrewMonthGrid({
                             setMenuFlyout(null);
                           }}
                         />
-                      </Flyout>
-                    </div>
+                      </Branch>
+                    </>
                   ) : null}
                   </div>
                 </>
@@ -4180,6 +4259,110 @@ function DateNoteEditor({
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Submenu pinned to its row; measures the viewport and only flips/scrolls when needed. */
+function CellMenuFlyoutBranch({
+  id,
+  label,
+  icon: Icon,
+  open,
+  rowClass,
+  onOpen,
+  onToggle,
+  children,
+}: {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  open: boolean;
+  rowClass: string;
+  onOpen: () => void;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setBox(null);
+      return;
+    }
+    const update = () => {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const pad = 8;
+      const gap = 4;
+      const width = 210;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let left = rect.right + gap;
+      if (left + width > vw - pad) left = Math.max(pad, rect.left - width - gap);
+
+      const ideal = 22 * 16;
+      const spaceBelow = vh - pad - rect.top;
+      const spaceAbove = rect.bottom - pad;
+
+      let top: number;
+      let maxHeight: number;
+
+      if (spaceBelow >= Math.min(ideal, 220) || spaceBelow >= spaceAbove) {
+        // Line up with the row, then slide up if the panel would clip the bottom.
+        maxHeight = Math.min(ideal, Math.max(spaceBelow, spaceAbove));
+        top = rect.top;
+        if (top + maxHeight > vh - pad) {
+          top = Math.max(pad, vh - pad - maxHeight);
+        }
+        maxHeight = Math.min(maxHeight, vh - pad - top);
+      } else {
+        // More room above — grow upward from the row.
+        maxHeight = Math.min(ideal, spaceAbove);
+        top = rect.bottom - maxHeight;
+        if (top < pad) {
+          top = pad;
+          maxHeight = Math.min(maxHeight, rect.bottom - pad);
+        }
+      }
+      maxHeight = Math.max(120, maxHeight);
+      setBox({ top, left, maxHeight });
+    };
+    update();
+    const raf = requestAnimationFrame(update);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open, id]);
+
+  return (
+    <div ref={anchorRef} className="relative">
+      <button
+        type="button"
+        role="menuitem"
+        className={cn(rowClass, open && "bg-muted/60")}
+        onMouseEnter={onOpen}
+        onClick={onToggle}
+      >
+        <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+      </button>
+      {open && box ? (
+        <div
+          role="menu"
+          className="fixed z-[70] flex min-w-[12.5rem] flex-col overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-1 shadow-md"
+          style={{ top: box.top, left: box.left, maxHeight: box.maxHeight }}
+        >
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }
