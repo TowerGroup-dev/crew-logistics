@@ -1032,7 +1032,9 @@ export function CrewBoard({
 
       <section
         className={cn(
-          boardView === "overview" ? "" : "overflow-hidden rounded-2xl border border-border bg-card",
+          boardView === "overview" || boardView === "planning"
+            ? ""
+            : "overflow-hidden rounded-2xl border border-border bg-card",
         )}
       >
         {boardView !== "overview" &&
@@ -1777,16 +1779,11 @@ export function CrewBoard({
 
         {seenViews.planning ? (
           <KeepAlive active={boardView === "planning"}>
-            <div
-              className={cn(
-                "overflow-y-auto",
-                boardView !== "planning" && "hidden",
-              )}
-              style={{ maxHeight: "var(--app-board-max-h)" }}
-            >
+            <div className={cn(boardView !== "planning" && "hidden")}>
               <CrewWorkforcePlanningPanel
                 year={scheduleYear}
                 book={planningBook}
+                people={people}
                 availableHeadcount={activeEmployeeCount}
                 onChange={(next) => {
                   setPlanningBook(next);

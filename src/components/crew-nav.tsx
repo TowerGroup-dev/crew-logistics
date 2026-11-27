@@ -51,8 +51,7 @@ const PRIMARY: Section[] = [
   {
     key: "planning",
     href: "/planning",
-    label: "Workforce Planning",
-    subtitle: "Project & crew planning",
+    label: "Crew-Project Overlook",
     trial: true,
     icon: Briefcase,
     match: (path) => path.startsWith("/planning"),
@@ -459,7 +458,7 @@ export function CrewNav({
             >
               <Icon className={cn("size-5", active && "stroke-[2.25]")} />
               <span className="max-w-full truncate text-center leading-tight">
-                {section.key === "planning" ? "Planning" : section.label}
+                {section.key === "planning" ? "Overlook" : section.label}
               </span>
               {section.trial ? (
                 <span className="rounded bg-amber-50 px-1 text-[0.5rem] font-semibold tracking-wide text-amber-950 uppercase">
@@ -551,7 +550,7 @@ function NavTab({
           {section.label}
           {section.trial ? (
             <span className="rounded border border-amber-300 bg-amber-50 px-1 py-px text-[0.55rem] font-semibold tracking-wide text-amber-950 uppercase">
-              Trial page
+              Trial
             </span>
           ) : null}
         </span>

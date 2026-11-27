@@ -21,11 +21,72 @@ export type PlanningProject = {
   year: number;
   name: string;
   site: string;
+  /** Camp, hub, or place note — shown next to the name. */
+  location: string;
   workType: PlanningWorkType;
   status: PlanningStatus;
   phases: PlanningPhase[];
   notes: string;
+  /** People we plan to send (whole job). Planning only: never written to the Calendar. */
+  crew: PlanningCrewMember[];
 };
+
+export type PlanningCrewMember = {
+  personId: string;
+  /** Name at the time they were added (kept if the person later leaves the roster). */
+  name: string;
+  /** Role on this job (Foreman, Operator, Labourer…); defaults to their usual role. */
+  role: string;
+};
+
+export const PLANNING_ROLE_SUGGESTIONS = [
+  "Foreman",
+  "Superintendent",
+  "Operator",
+  "Labourer",
+  "Mechanic",
+  "Surveyor",
+  "Pile driver",
+  "Carpenter",
+  "Driver",
+];
+
+function readCrewMember(value: unknown): PlanningCrewMember | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as PlanningCrewMember;
+  if (typeof row.personId !== "string" || !row.personId) return null;
+  return {
+    personId: row.personId,
+    name: typeof row.name === "string" ? row.name : "",
+    role: typeof row.role === "string" ? row.role.trim() : "",
+  };
+}
+
+/** Most people the job needs in any one week (the number to name). */
+export function projectPeakCrew(project: PlanningProject): number {
+  let peak = 0;
+  for (const phase of project.phases) peak = Math.max(peak, phase.crew);
+  return peak;
+}
+
+/** Mondays on which this person is planned on 2+ jobs that run that week (Lost ignored). */
+export function crewClashWeeks(
+  projects: PlanningProject[],
+  personId: string,
+  weeks: string[],
+): Set<string> {
+  const mine = projects.filter(
+    (row) => row.status !== "Lost" && row.crew.some((member) => member.personId === personId),
+  );
+  const out = new Set<string>();
+  if (mine.length < 2) return out;
+  for (const week of weeks) {
+    let count = 0;
+    for (const project of mine) if (crewForWeek(project, week) > 0) count += 1;
+    if (count >= 2) out.add(week);
+  }
+  return out;
+}
 
 export type WorkforcePlanningBook = {
   projects: PlanningProject[];
@@ -39,7 +100,7 @@ export const PLANNING_STATUSES: PlanningStatus[] = [
   "Lost",
 ];
 
-/** Statuses that contribute to needed headcount. */
+/** Statuses that feed “people needed”. Contracted = real need; Pending is shown separately on top. */
 export function statusCountsInDemand(status: PlanningStatus): boolean {
   return status === "Contracted" || status === "Pending";
 }
@@ -79,10 +140,17 @@ function readProject(value: unknown): PlanningProject | null {
     year,
     name: row.name.trim() || "Untitled",
     site: typeof row.site === "string" ? row.site.trim() : "",
+    location: typeof row.location === "string" ? row.location.trim() : "",
     workType,
     status,
     phases,
     notes: typeof row.notes === "string" ? row.notes : "",
+    crew: Array.isArray(row.crew)
+      ? row.crew
+          .map(readCrewMember)
+          .filter((item): item is PlanningCrewMember => Boolean(item))
+          .filter((item, index, all) => all.findIndex((other) => other.personId === item.personId) === index)
+      : [],
   };
 }
 
@@ -178,6 +246,34 @@ function statusInMode(status: PlanningStatus, mode: DemandMode) {
   if (status === "Early-stage" || status === "Lost") return false;
   if (mode === "contracted") return status === "Contracted";
   return status === "Contracted" || status === "Pending";
+}
+
+/**
+ * Colour = status; shade = work type, like the 2027 Workload Forecast sheet.
+ * Contracted: Piling green, Civil / Install / blank lighter green.
+ * Pending: Piling orange (#FFC000), others light orange (#FFE389).
+ * Early-stage red. Lost grey (lost bid, not counted).
+ */
+export const PLANNING_COLOURS = {
+  contractedPiling: "#4EA72E",
+  contractedOther: "#B5DFA0",
+  pendingPiling: "#FFC000",
+  pendingOther: "#FFE389",
+  earlyStage: "#FF5050",
+  lost: "#D6D3D1",
+} as const;
+
+/** Fill + text colour for a bar (inline style, so it never depends on CSS being rebuilt). */
+export function planningColour(
+  workType: PlanningWorkType,
+  status: PlanningStatus,
+): { bg: string; fg: string } {
+  const c = PLANNING_COLOURS;
+  if (status === "Lost") return { bg: c.lost, fg: "#57534e" };
+  if (status === "Early-stage") return { bg: c.earlyStage, fg: "#ffffff" };
+  const piling = workType === "Piling";
+  if (status === "Pending") return { bg: piling ? c.pendingPiling : c.pendingOther, fg: "#1c1917" };
+  return piling ? { bg: c.contractedPiling, fg: "#ffffff" } : { bg: c.contractedOther, fg: "#1c1917" };
 }
 
 /** Sum crew across projects for one Monday week. */
@@ -425,10 +521,12 @@ function seed2027(): PlanningProject[] {
     year,
     name: spec.name,
     site: spec.site,
+    location: "",
     workType: spec.workType,
     status: spec.status,
     phases: spec.phases,
     notes: "",
+    crew: [],
   }));
 }
 

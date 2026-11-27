@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Workforce Planning",
+  title: "Crew-Project Overlook",
 };
 
 export default function PlanningPage() {

@@ -46,7 +46,7 @@ describe("crew-workforce-planning", () => {
     ]);
   });
 
-  it("excludes Lost and Early-stage from totals", () => {
+  it("excludes Lost and Early-stage from totals; pending stacks separately", () => {
     const { book } = ensureYearSeeded(emptyPlanningBook(), 2027);
     const projects = projectsForYear(book, 2027);
     const week = "2027-06-14";
@@ -54,12 +54,11 @@ describe("crew-workforce-planning", () => {
     const withPending = neededForWeek(projects, week, "contracted_pending");
     const lost = projects.find((row) => row.status === "Lost")!;
     expect(crewForWeek(lost, "2027-05-03")).toBe(6);
-    // Lost must not appear in demand modes.
     expect(contracted).toBe(22);
     expect(withPending).toBe(32);
   });
 
-  it("14 Jun 2027 is 22 contracted and 32 with pending", () => {
+  it("14 Jun 2027 is 22 contracted and +10 pending", () => {
     const { book } = ensureYearSeeded(emptyPlanningBook(), 2027);
     const projects = projectsForYear(book, 2027);
     expect(neededForWeek(projects, "2027-06-14", "contracted")).toBe(22);
@@ -71,9 +70,8 @@ describe("crew-workforce-planning", () => {
     const projects = projectsForYear(book, 2027);
     const contracted = personWeeksForYear(projects, 2027, "contracted");
     const withPending = personWeeksForYear(projects, 2027, "contracted_pending");
-    const pendingOnly = withPending - contracted;
     expect(contracted).toBe(416);
-    expect(pendingOnly).toBe(130);
+    expect(withPending - contracted).toBe(130);
   });
 
   it("readPlanningBook ignores bad rows", () => {

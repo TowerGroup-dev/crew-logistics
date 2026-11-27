@@ -8,10 +8,14 @@ function personWithStay(out: string | null): CrewPerson {
     id: "p1",
     name: "Test",
     role: "Labourer",
+    roles: ["Labourer"],
+    inDate: null,
+    outDate: null,
+    rotationDays: null,
     homeSites: ["IQA"],
     projectIds: [],
     events: [],
-    stints: [{ from: "2026-10-01", out, site: "IQA", sites: ["IQA"] }],
+    stints: [{ from: "2026-10-01", out, site: "IQA", sites: ["IQA"], arrival: "2026-10-01", departure: out, tentative: false }],
     active: true,
   };
 }
